@@ -1,0 +1,1990 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { DatePicker, dateToISO, isoToDate } from '@/components/ui/date-picker'
+import { Separator } from '@/components/ui/separator'
+import { useSession } from '@/hooks/use-session'
+import { formatCLP, HORAS_OPTIONS } from '@/lib/utils'
+import { 
+  Plus, Pencil, Trash2, Search, Printer, Clock, Users, 
+  Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
+  Calendar, Lock, Download, Camera, Image, X
+} from 'lucide-react'
+
+// Interfaces
+interface OTMaterial {
+  id: string
+  descripcion: string
+  cantidad: number
+  unidad: string
+  precioUnit: number
+  total: number
+}
+
+interface OTHerramienta {
+  id: string
+  nombre: string
+  cantidad: number
+}
+
+interface OTTarea {
+  id: string
+  descripcion: string
+  cantidad: number
+  estado: string
+  cumple: boolean | null
+}
+
+interface OTPersonalOT {
+  id: string
+  nombre: string
+  tipo: string
+  cantidad: number
+  precioUnit: number
+  horasTrabajadas: number
+  total: number
+  cumple: boolean | null
+  observaciones?: string
+}
+
+interface OrdenTrabajo {
+  id: string
+  otNum: string
+  titulo: string
+  tipo: string
+  prioridad: string
+  estado: string
+  ubicacion: string | null
+  fechaInicio: string | null
+  fechaLimite: string | null
+  fechaInicioReal: string | null
+  fechaFinReal: string | null
+  costoEstimado: number
+  costoReal: number
+  progreso: number
+  descripcion: string | null
+  centroCostoId: string | null
+  centroCosto?: { id: string; codigo: string; nombre: string } | null
+  tiempoEst: number
+  tiempoReal: number
+  valorHora: number
+  notas: string | null
+  esRecurrente: boolean
+  formaPago: string | null
+  materiales: OTMaterial[]
+  herramientas: OTHerramienta[]
+  tareas: OTTarea[]
+  personalOT: OTPersonalOT[]
+  asignado: { id: string; nombre: string; sueldoBase: number } | null
+  propiedad: { id: string; nombre: string } | null
+  fotosAntes?: string[]
+  fotosDespues?: string[]
+}
+
+interface Personal {
+  id: string
+  nombre: string
+  cargo: string | null
+  sueldoBase: number
+}
+
+// Catalog interfaces
+interface CentroCosto {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  responsable: string | null
+  tipoGasto: string
+  presupuestoMens: number
+}
+
+interface CatMaterial {
+  id: string
+  codigo: string | null
+  nombre: string
+  unidad: string
+  precioUnit: number
+  categoria: string
+  stockMinimo: number
+  stockActual: number
+  ubicacion: string | null
+  centroCosto?: CentroCosto | null
+}
+
+interface CatHerramienta {
+  id: string
+  codigo: string | null
+  nombre: string
+  marca: string | null
+  cantidad: number
+  ubicacion: string | null
+  estado: string
+  valorReposicion: number
+  centroCosto?: CentroCosto | null
+}
+
+interface CatTarea {
+  id: string
+  codigo: string | null
+  nombre: string
+  categoria: string
+  sistema: string | null
+  tipoMantencion: string
+  frecuencia: string | null
+  responsable: string | null
+  tiempoEstimado: number
+  centroCosto?: CentroCosto | null
+  esRecurrente: boolean
+}
+
+const formatDate = (d: string | null) => {
+  if (!d) return '–'
+  try {
+    const date = new Date(d)
+    return date.toLocaleDateString('es-CL')
+  } catch {
+    return d
+  }
+}
+
+const formatMinutes = (mins: number) => {
+  if (!mins) return '0 min'
+  const hours = Math.floor(mins / 60)
+  const minutes = mins % 60
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}min`
+  if (hours > 0) return `${hours}h`
+  return `${minutes}min`
+}
+
+// Calcular valor hora desde sueldo mensual (22 días, 8 horas)
+const calcularValorHora = (sueldoBase: number) => {
+  return sueldoBase / (22 * 8) // 176 horas al mes
+}
+
+const tipoColors: Record<string, string> = {
+  'Correctivo': 'bg-orange-100 text-orange-700',
+  'Preventivo': 'bg-blue-100 text-blue-700',
+  'Mejora': 'bg-purple-100 text-purple-700',
+  'Emergencia': 'bg-red-100 text-red-700',
+}
+
+const prioridadColors: Record<string, string> = {
+  'Urgente': 'bg-red-100 text-red-700',
+  'Alta': 'bg-orange-100 text-orange-700',
+  'Media': 'bg-yellow-100 text-yellow-700',
+  'Baja': 'bg-green-100 text-green-700',
+}
+
+const estadoColors: Record<string, string> = {
+  'Pendiente': 'bg-yellow-100 text-yellow-700',
+  'En Progreso': 'bg-blue-100 text-blue-700',
+  'Completado': 'bg-green-100 text-green-700',
+  'Cancelado': 'bg-red-100 text-red-700',
+}
+
+export function OrdenesTrabajoModule() {
+  const { isPersonal, canEditProgress } = useSession()
+  const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([])
+  const [personal, setPersonal] = useState<Personal[]>([])
+  const [propiedades, setPropiedades] = useState<{ id: string; nombre: string }[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [selectedOT, setSelectedOT] = useState<OrdenTrabajo | null>(null)
+  const [editingOT, setEditingOT] = useState<OrdenTrabajo | null>(null)
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false)
+  const [progressOT, setProgressOT] = useState<OrdenTrabajo | null>(null)
+  
+  // Catalogs state
+  const [centrosCosto, setCentrosCosto] = useState<CentroCosto[]>([])
+  const [catMateriales, setCatMateriales] = useState<CatMaterial[]>([])
+  const [catHerramientas, setCatHerramientas] = useState<CatHerramienta[]>([])
+  const [catTareas, setCatTareas] = useState<CatTarea[]>([])
+  const [catalogsLoaded, setCatalogsLoaded] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    titulo: '',
+    tipo: 'Correctivo',
+    prioridad: 'Media',
+    estado: 'Pendiente',
+    ubicacion: '',
+    fechaInicio: null as Date | null,
+    fechaLimite: null as Date | null,
+    fechaInicioReal: null as Date | null,
+    fechaFinReal: null as Date | null,
+    costoEstimado: 0,
+    costoReal: 0,
+    progreso: 0,
+    descripcion: '',
+    centroCostoId: 'none',
+    asignadoId: 'none',
+    propiedadId: 'none',
+    tiempoEst: 0,
+    tiempoReal: 0,
+    notas: '',
+    esRecurrente: false,
+    formaPago: 'Gasto Común Mensual',
+  })
+
+  // Resources state
+  const [materiales, setMateriales] = useState<OTMaterial[]>([])
+  const [herramientas, setHerramientas] = useState<OTHerramienta[]>([])
+  const [tareas, setTareas] = useState<OTTarea[]>([])
+  const [personalOT, setPersonalOT] = useState<OTPersonalOT[]>([])
+  const [fotosAntes, setFotosAntes] = useState<string[]>([])
+  const [fotosDespues, setFotosDespues] = useState<string[]>([])
+
+  const fetchOrdenes = async (searchTerm = '') => {
+    setLoading(true)
+    try {
+      const url = searchTerm ? `/api/ordenes-trabajo?search=${encodeURIComponent(searchTerm)}` : '/api/ordenes-trabajo'
+      const res = await fetch(url)
+      const data = await res.json()
+      setOrdenes(data)
+    } catch (error) {
+      console.error('Error fetching ordenes:', error)
+    }
+    setLoading(false)
+  }
+
+  const fetchCatalogs = async () => {
+    try {
+      const res = await fetch('/api/seed-catalogos')
+      const data = await res.json()
+      if (data.herramientas && data.tareas && data.materiales && data.centrosCosto) {
+        setCentrosCosto(data.centrosCosto)
+        setCatHerramientas(data.herramientas)
+        setCatTareas(data.tareas)
+        setCatMateriales(data.materiales)
+        setCatalogsLoaded(true)
+      }
+    } catch (error) {
+      console.error('Error fetching catalogs:', error)
+    }
+  }
+
+  const seedCatalogs = async () => {
+    try {
+      const res = await fetch('/api/seed-catalogos', { method: 'POST' })
+      const data = await res.json()
+      alert(`Catálogos cargados:\n- ${data.centrosCosto || 0} centros de costo\n- ${data.tareas} tareas\n- ${data.herramientas} herramientas\n- ${data.materiales} materiales`)
+      fetchCatalogs()
+    } catch (error) {
+      console.error('Error seeding catalogs:', error)
+      alert('Error al cargar catálogos')
+    }
+  }
+
+  useEffect(() => {
+    void (async () => {
+      await fetchOrdenes()
+    })()
+    fetch('/api/personal').then(res => res.json()).then(setPersonal)
+    fetch('/api/propiedades').then(res => res.json()).then(setPropiedades)
+    void (async () => {
+      await fetchCatalogs()
+    })()
+  }, [])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => fetchOrdenes(search), 300)
+    return () => clearTimeout(timeout)
+  }, [search])
+
+  const openDialog = (ot?: OrdenTrabajo) => {
+    if (ot) {
+      setEditingOT(ot)
+      setFormData({
+        titulo: ot.titulo,
+        tipo: ot.tipo,
+        prioridad: ot.prioridad,
+        estado: ot.estado,
+        ubicacion: ot.ubicacion || '',
+        fechaInicio: ot.fechaInicio ? isoToDate(ot.fechaInicio) || null : null,
+        fechaLimite: ot.fechaLimite ? isoToDate(ot.fechaLimite) || null : null,
+        fechaInicioReal: ot.fechaInicioReal ? isoToDate(ot.fechaInicioReal) || null : null,
+        fechaFinReal: ot.fechaFinReal ? isoToDate(ot.fechaFinReal) || null : null,
+        costoEstimado: ot.costoEstimado,
+        costoReal: ot.costoReal,
+        progreso: ot.progreso,
+        descripcion: ot.descripcion || '',
+        centroCostoId: ot.centroCostoId || 'none',
+        asignadoId: ot.asignado?.id || 'none',
+        propiedadId: ot.propiedad?.id || 'none',
+        tiempoEst: ot.tiempoEst,
+        tiempoReal: ot.tiempoReal,
+        notas: ot.notas || '',
+        esRecurrente: ot.esRecurrente || false,
+        formaPago: ot.formaPago || 'Gasto Común Mensual',
+      })
+      setMateriales(ot.materiales || [])
+      setHerramientas(ot.herramientas || [])
+      setTareas(ot.tareas || [])
+      setPersonalOT(ot.personalOT || [])
+      setFotosAntes(ot.fotosAntes || [])
+      setFotosDespues(ot.fotosDespues || [])
+    } else {
+      setEditingOT(null)
+      setFormData({
+        titulo: '',
+        tipo: 'Correctivo',
+        prioridad: 'Media',
+        estado: 'Pendiente',
+        ubicacion: '',
+        fechaInicio: null,
+        fechaLimite: null,
+        fechaInicioReal: null,
+        fechaFinReal: null,
+        costoEstimado: 0,
+        costoReal: 0,
+        progreso: 0,
+        descripcion: '',
+        centroCostoId: 'none',
+        asignadoId: 'none',
+        propiedadId: 'none',
+        tiempoEst: 0,
+        tiempoReal: 0,
+        notas: '',
+        esRecurrente: false,
+        formaPago: 'Gasto Común Mensual',
+      })
+      setMateriales([])
+      setHerramientas([])
+      setTareas([])
+      setPersonalOT([])
+      setFotosAntes([])
+      setFotosDespues([])
+    }
+    setDialogOpen(true)
+  }
+
+  const openDetailDialog = (ot: OrdenTrabajo) => {
+    setSelectedOT(ot)
+    setDetailDialogOpen(true)
+  }
+
+  const openProgressDialog = (ot: OrdenTrabajo) => {
+    setProgressOT(ot)
+    setProgressFormData({
+      progreso: ot.progreso,
+      tiempoReal: ot.tiempoReal,
+      estado: ot.estado,
+      tareas: ot.tareas.map(t => ({
+        id: t.id,
+        descripcion: t.descripcion,
+        estado: t.estado,
+        cumple: t.cumple,
+      })),
+    })
+    setProgressDialogOpen(true)
+  }
+
+  const [progressFormData, setProgressFormData] = useState({
+    progreso: 0,
+    tiempoReal: 0,
+    estado: 'Pendiente',
+    tareas: [] as { id: string; descripcion: string; estado: string; cumple: boolean | null }[],
+  })
+
+  const handleSaveProgress = async () => {
+    if (!progressOT) return
+
+    try {
+      await fetch(`/api/ordenes-trabajo/${progressOT.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          progreso: progressFormData.progreso,
+          tiempoReal: progressFormData.tiempoReal,
+          estado: progressFormData.estado,
+          tareas: progressFormData.tareas.map(t => ({
+            id: t.id,
+            estado: t.estado,
+            cumple: t.cumple,
+          })),
+        }),
+      })
+      setProgressDialogOpen(false)
+      fetchOrdenes(search)
+    } catch (error) {
+      console.error('Error updating progress:', error)
+    }
+  }
+
+  const handleSave = async () => {
+    if (!formData.titulo.trim()) return
+
+    // Calcular costo real basado en materiales y personal
+    const costoMateriales = materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0)
+    const costoPersonal = personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+    const costoRealCalculado = costoMateriales + costoPersonal
+
+    // Calcular tiempo total de tareas del catálogo
+    const tiempoTareas = tareas.reduce((sum, t) => {
+      const catTarea = catTareas.find(ct => ct.nombre === t.descripcion || ct.nombre === t.descripcion.replace(/^\[[^\]]+\]\s*/, '').replace(/\s*\(CC:.*\)$/, ''))
+      return sum + (catTarea?.tiempoEstimado || 0) * t.cantidad
+    }, 0)
+
+    const dataToSend = {
+      ...formData,
+      fechaInicio: formData.fechaInicio ? dateToISO(formData.fechaInicio) : null,
+      fechaLimite: formData.fechaLimite ? dateToISO(formData.fechaLimite) : null,
+      fechaInicioReal: formData.fechaInicioReal ? dateToISO(formData.fechaInicioReal) : null,
+      fechaFinReal: formData.fechaFinReal ? dateToISO(formData.fechaFinReal) : null,
+      centroCostoId: formData.centroCostoId === 'none' ? null : formData.centroCostoId,
+      asignadoId: formData.asignadoId === 'none' ? null : formData.asignadoId,
+      propiedadId: formData.propiedadId === 'none' ? null : formData.propiedadId,
+      costoReal: costoRealCalculado,
+      tiempoEst: formData.tiempoEst || tiempoTareas,
+      materiales,
+      herramientas,
+      tareas,
+      personalOT,
+      fotosAntes,
+      fotosDespues,
+    }
+
+    try {
+      if (editingOT) {
+        await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dataToSend),
+        })
+      } else {
+        await fetch('/api/ordenes-trabajo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dataToSend),
+        })
+      }
+      setDialogOpen(false)
+      fetchOrdenes(search)
+    } catch (error) {
+      console.error('Error saving OT:', error)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Eliminar esta orden de trabajo?')) return
+    try {
+      await fetch(`/api/ordenes-trabajo/${id}`, { method: 'DELETE' })
+      fetchOrdenes(search)
+    } catch (error) {
+      console.error('Error deleting OT:', error)
+    }
+  }
+
+  // Material handlers
+  const addMaterial = () => {
+    setMateriales([...materiales, {
+      id: `temp-${Date.now()}`,
+      descripcion: '',
+      cantidad: 1,
+      unidad: 'unidad',
+      precioUnit: 0,
+      total: 0
+    }])
+  }
+
+  const addMaterialFromCatalog = (catMat: CatMaterial) => {
+    setMateriales([...materiales, {
+      id: `temp-${Date.now()}`,
+      descripcion: `${catMat.codigo ? `[${catMat.codigo}] ` : ''}${catMat.nombre}${catMat.centroCosto ? ` (CC: ${catMat.centroCosto.codigo})` : ''}`,
+      cantidad: 1,
+      unidad: catMat.unidad,
+      precioUnit: catMat.precioUnit,
+      total: catMat.precioUnit
+    }])
+  }
+
+  const updateMaterial = (index: number, field: string, value: any) => {
+    const updated = [...materiales]
+    updated[index] = { ...updated[index], [field]: value }
+    if (field === 'cantidad' || field === 'precioUnit') {
+      updated[index].total = updated[index].cantidad * updated[index].precioUnit
+    }
+    setMateriales(updated)
+  }
+
+  const removeMaterial = (index: number) => {
+    setMateriales(materiales.filter((_, i) => i !== index))
+  }
+
+  // Herramienta handlers
+  const addHerramienta = () => {
+    setHerramientas([...herramientas, {
+      id: `temp-${Date.now()}`,
+      nombre: '',
+      cantidad: 1
+    }])
+  }
+
+  const addHerramientaFromCatalog = (catHerr: CatHerramienta) => {
+    setHerramientas([...herramientas, {
+      id: `temp-${Date.now()}`,
+      nombre: `${catHerr.codigo ? `[${catHerr.codigo}] ` : ''}${catHerr.nombre}${catHerr.marca ? ` (${catHerr.marca})` : ''}${catHerr.centroCosto ? ` [CC: ${catHerr.centroCosto.codigo}]` : ''}`,
+      cantidad: 1
+    }])
+  }
+
+  const updateHerramienta = (index: number, field: string, value: any) => {
+    const updated = [...herramientas]
+    updated[index] = { ...updated[index], [field]: value }
+    setHerramientas(updated)
+  }
+
+  const removeHerramienta = (index: number) => {
+    setHerramientas(herramientas.filter((_, i) => i !== index))
+  }
+
+  // Tarea handlers
+  const addTarea = () => {
+    setTareas([...tareas, {
+      id: `temp-${Date.now()}`,
+      descripcion: '',
+      cantidad: 1,
+      estado: 'Pendiente',
+      cumple: null
+    }])
+  }
+
+  const addTareaFromCatalog = (catTar: CatTarea) => {
+    setTareas([...tareas, {
+      id: `temp-${Date.now()}`,
+      descripcion: `${catTar.codigo ? `[${catTar.codigo}] ` : ''}${catTar.nombre}${catTar.centroCosto ? ` (CC: ${catTar.centroCosto.codigo})` : ''}`,
+      cantidad: 1,
+      estado: 'Pendiente',
+      cumple: null
+    }])
+  }
+
+  const updateTarea = (index: number, field: string, value: any) => {
+    const updated = [...tareas]
+    updated[index] = { ...updated[index], [field]: value }
+    setTareas(updated)
+  }
+
+  const removeTarea = (index: number) => {
+    setTareas(tareas.filter((_, i) => i !== index))
+  }
+
+  // Personal handlers
+  const addPersonalOT = () => {
+    setPersonalOT([...personalOT, {
+      id: `temp-${Date.now()}`,
+      nombre: '',
+      tipo: 'Interno',
+      cantidad: 1,
+      precioUnit: 0,
+      horasTrabajadas: 0,
+      total: 0,
+      cumple: null
+    }])
+  }
+
+  const addPersonalFromEmployee = (emp: Personal) => {
+    const valorHora = Math.round(calcularValorHora(emp.sueldoBase))
+    setPersonalOT([...personalOT, {
+      id: `temp-${Date.now()}`,
+      nombre: emp.nombre,
+      tipo: 'Interno',
+      cantidad: 1,
+      precioUnit: valorHora,
+      horasTrabajadas: 0,
+      total: 0,
+      cumple: null
+    }])
+  }
+
+  const updatePersonalOT = (index: number, field: string, value: any) => {
+    const updated = [...personalOT]
+    updated[index] = { ...updated[index], [field]: value }
+    
+    // Si selecciona personal interno, obtener valor hora del sueldo
+    if (field === 'nombre' && updated[index].tipo === 'Interno') {
+      const p = personal.find(per => per.nombre === value)
+      if (p) {
+        updated[index].precioUnit = Math.round(calcularValorHora(p.sueldoBase))
+      }
+    }
+    
+    // Calcular total
+    updated[index].total = updated[index].precioUnit * updated[index].horasTrabajadas * updated[index].cantidad
+    setPersonalOT(updated)
+  }
+
+  const removePersonalOT = (index: number) => {
+    setPersonalOT(personalOT.filter((_, i) => i !== index))
+  }
+
+  // Calcular totales
+  const totalMateriales = materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0)
+  const totalPersonal = personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+  const granTotal = totalMateriales + totalPersonal
+  
+  // Calcular tiempo total estimado
+  const tiempoEstimadoTareas = tareas.reduce((sum, t) => {
+    const catTarea = catTareas.find(ct => ct.nombre === t.descripcion || ct.nombre === t.descripcion.replace(/^\[[^\]]+\]\s*/, '').replace(/\s*\(CC:.*\)$/, ''))
+    return sum + (catTarea?.tiempoEstimado || 0) * t.cantidad
+  }, 0)
+  
+  // Calcular diferencia de tiempo
+  const diferenciaTiempo = formData.tiempoReal - (formData.tiempoEst || tiempoEstimadoTareas)
+
+  // Exportar a CSV
+  const exportToCSV = () => {
+    const headers = ['N° OT', 'Título', 'Tipo', 'Prioridad', 'Estado', 'Ubicación', 'Centro Costo', 'Fecha Inicio', 'Fecha Límite', 'Tiempo Estimado', 'Tiempo Real', 'Costo Estimado', 'Costo Real', 'Progreso', 'Asignado']
+    
+    const rows = ordenes.map(ot => [
+      ot.otNum,
+      `"${ot.titulo.replace(/"/g, '""')}"`,
+      ot.tipo,
+      ot.prioridad,
+      ot.estado,
+      `"${(ot.ubicacion || '').replace(/"/g, '""')}"`,
+      ot.centroCosto?.codigo || '',
+      ot.fechaInicio || '',
+      ot.fechaLimite || '',
+      formatMinutes(ot.tiempoEst),
+      formatMinutes(ot.tiempoReal),
+      ot.costoEstimado,
+      ot.costoReal,
+      `${ot.progreso}%`,
+      ot.asignado?.nombre || ''
+    ])
+    
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `ordenes_trabajo_${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    URL.revokeObjectURL(link.href)
+  }
+
+  const stats = {
+    Pendiente: ordenes.filter(o => o.estado === 'Pendiente').length,
+    'En Progreso': ordenes.filter(o => o.estado === 'En Progreso').length,
+    Completado: ordenes.filter(o => o.estado === 'Completado').length,
+    Cancelado: ordenes.filter(o => o.estado === 'Cancelado').length,
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3">
+        {Object.entries(stats).map(([estado, count]) => (
+          <Card key={estado} className="p-3">
+            <div className="text-[10px] text-slate-500 font-semibold uppercase">{estado}</div>
+            <div className="text-xl font-bold text-[#0f2040]">{count}</div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Buscar OT..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Button variant="outline" onClick={seedCatalogs} className="flex items-center gap-2">
+          <Database className="w-4 h-4" />
+          Cargar Catálogos
+        </Button>
+        <Button variant="outline" onClick={exportToCSV}>
+          <Download className="w-4 h-4 mr-1" /> Exportar CSV
+        </Button>
+        <Button onClick={() => openDialog()}>
+          <Plus className="w-4 h-4 mr-1" /> Nueva OT
+        </Button>
+      </div>
+
+      {/* Catalog status */}
+      {catalogsLoaded && (
+        <div className="flex gap-4 text-xs text-slate-500 bg-slate-50 p-2 rounded flex-wrap">
+          <span><Building2 className="w-3 h-3 inline mr-1" />{centrosCosto.length} centros de costo</span>
+          <span><Wrench className="w-3 h-3 inline mr-1" />{catHerramientas.length} herramientas</span>
+          <span><CheckSquare className="w-3 h-3 inline mr-1" />{catTareas.length} tareas</span>
+          <span><Package className="w-3 h-3 inline mr-1" />{catMateriales.length} materiales</span>
+        </div>
+      )}
+
+      {/* Table */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm">Órdenes de Trabajo ({ordenes.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-slate-50">
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">N° OT</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Título</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Tipo</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Prioridad</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Centro Costo</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Tiempo</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Costo Real</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Progreso</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                ) : ordenes.length === 0 ? (
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Sin órdenes de trabajo</td></tr>
+                ) : (
+                  ordenes.map((ot) => (
+                    <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
+                      <td className="p-3 font-mono text-xs font-bold text-[#0f2040]">
+                        {ot.otNum}
+                        {ot.esRecurrente && <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />}
+                      </td>
+                      <td className="p-3 font-semibold">{ot.titulo}</td>
+                      <td className="p-3">
+                        <Badge className={tipoColors[ot.tipo] || 'bg-slate-100'}>{ot.tipo}</Badge>
+                      </td>
+                      <td className="p-3">
+                        <Badge className={prioridadColors[ot.prioridad] || 'bg-slate-100'}>{ot.prioridad}</Badge>
+                      </td>
+                      <td className="p-3">
+                        <Badge className={estadoColors[ot.estado] || 'bg-slate-100'}>{ot.estado}</Badge>
+                      </td>
+                      <td className="p-3 text-xs font-mono">{ot.centroCosto?.codigo || '–'}</td>
+                      <td className="p-3 text-xs">
+                        <div className="flex flex-col">
+                          <span>Est: {formatMinutes(ot.tiempoEst)}</span>
+                          <span className={ot.tiempoReal > ot.tiempoEst ? 'text-red-600' : 'text-green-600'}>
+                            Real: {formatMinutes(ot.tiempoReal)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-mono text-xs font-bold text-red-600">{formatCLP(ot.costoReal)}</td>
+                      <td className="p-3 min-w-[100px]">
+                        <div className="flex items-center gap-2">
+                          <Progress value={ot.progreso} className="h-1.5 flex-1" />
+                          <span className="text-[10px] text-slate-500">{ot.progreso}%</span>
+                        </div>
+                      </td>
+                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-center gap-1">
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-7 w-7 text-slate-600 hover:text-slate-700" 
+                            title="Descargar PDF"
+                            onClick={() => {
+                              window.open(`/api/pdf/orden-trabajo/${ot.id}`, '_blank')
+                            }}
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                          {isPersonal() ? (
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 text-green-600 hover:text-green-700" 
+                              title="Actualizar Progreso"
+                              onClick={() => openProgressDialog(ot)}
+                            >
+                              <CheckSquare className="w-3.5 h-3.5" />
+                            </Button>
+                          ) : (
+                            <>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(ot)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => handleDelete(ot.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Edit/Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">{editingOT ? 'Editar' : 'Nueva'} Orden de Trabajo</DialogTitle>
+          </DialogHeader>
+          
+          <Tabs defaultValue="general" className="w-full">
+            <TabsList className="grid grid-cols-6 w-full h-9">
+              <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
+              <TabsTrigger value="materiales" className="text-xs">Materiales</TabsTrigger>
+              <TabsTrigger value="herramientas" className="text-xs">Herramientas</TabsTrigger>
+              <TabsTrigger value="tareas" className="text-xs">Tareas</TabsTrigger>
+              <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
+              <TabsTrigger value="fotos" className="text-xs">Fotos</TabsTrigger>
+            </TabsList>
+            
+            <div className="py-4">
+              {/* General Tab */}
+              <TabsContent value="general" className="space-y-4 mt-0">
+                {/* Sección: Información Básica */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">1</span>
+                    Información Básica
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Título *</Label>
+                      <Input value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} placeholder="Título de la OT" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Ubicación</Label>
+                      <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} placeholder="Ubicación del trabajo" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Descripción</Label>
+                    <Textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} placeholder="Descripción detallada..." rows={2} />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sección: Clasificación */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">2</span>
+                    Clasificación
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['Correctivo', 'Preventivo', 'Mejora', 'Emergencia'].map(t => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Prioridad</Label>
+                      <Select value={formData.prioridad} onValueChange={(v) => setFormData({...formData, prioridad: v})}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['Urgente', 'Alta', 'Media', 'Baja'].map(p => (
+                            <SelectItem key={p} value={p}>{p}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Estado</Label>
+                      <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['Pendiente', 'En Progreso', 'Completado', 'Cancelado'].map(s => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Progreso (%)</Label>
+                      <Input type="number" min="0" max="100" value={formData.progreso} onChange={(e) => setFormData({...formData, progreso: parseInt(e.target.value) || 0})} className="h-9" />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sección: Centro de Costo */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">3</span>
+                    <Building2 className="w-4 h-4" /> Centro de Costo e Imputación
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Centro de Costo</Label>
+                      <Select value={formData.centroCostoId} onValueChange={(v) => setFormData({...formData, centroCostoId: v})}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin centro de costo</SelectItem>
+                          {centrosCosto.map(cc => (
+                            <SelectItem key={cc.id} value={cc.id}>
+                              {cc.codigo} - {cc.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.centroCostoId && formData.centroCostoId !== 'none' && (
+                        <p className="text-[10px] text-slate-500">
+                          Presupuesto: {formatCLP(centrosCosto.find(cc => cc.id === formData.centroCostoId)?.presupuestoMens || 0)}/mes
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Forma de Pago</Label>
+                      <Select value={formData.formaPago} onValueChange={(v) => setFormData({...formData, formaPago: v})}>
+                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Gasto Común Mensual">Gasto Común Mensual</SelectItem>
+                          <SelectItem value="Fondo de Reserva">Fondo de Reserva</SelectItem>
+                          <SelectItem value="Gasto Extraordinario">Gasto Extraordinario</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Recurrente */}
+                  <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    <Checkbox 
+                      id="esRecurrente"
+                      checked={formData.esRecurrente}
+                      onCheckedChange={(checked) => setFormData({...formData, esRecurrente: checked as boolean})}
+                    />
+                    <label htmlFor="esRecurrente" className="text-sm cursor-pointer flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-blue-500" />
+                      Tarea Recurrente (generar automáticamente)
+                    </label>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sección: Fechas */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">4</span>
+                    <Calendar className="w-4 h-4" /> Fechas
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Inicio Planificado</Label>
+                      <DatePicker
+                        date={formData.fechaInicio}
+                        onDateChange={(d) => setFormData({...formData, fechaInicio: d || null})}
+                        placeholder="Seleccionar..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Fecha Límite</Label>
+                      <DatePicker
+                        date={formData.fechaLimite}
+                        onDateChange={(d) => setFormData({...formData, fechaLimite: d || null})}
+                        placeholder="Seleccionar..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Inicio Real</Label>
+                      <DatePicker
+                        date={formData.fechaInicioReal}
+                        onDateChange={(d) => setFormData({...formData, fechaInicioReal: d || null})}
+                        placeholder="Seleccionar..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Fin Real</Label>
+                      <DatePicker
+                        date={formData.fechaFinReal}
+                        onDateChange={(d) => setFormData({...formData, fechaFinReal: d || null})}
+                        placeholder="Seleccionar..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sección: Asignación */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">5</span>
+                    <Users className="w-4 h-4" /> Asignación
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Asignado a</Label>
+                      <Select value={formData.asignadoId} onValueChange={(v) => setFormData({...formData, asignadoId: v})}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin asignar</SelectItem>
+                          {personal.map(p => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.nombre} {p.sueldoBase > 0 ? `(${formatCLP(calcularValorHora(p.sueldoBase))}/hr)` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Propiedad</Label>
+                      <Select value={formData.propiedadId} onValueChange={(v) => setFormData({...formData, propiedadId: v})}>
+                        <SelectTrigger className="h-9"><SelectValue placeholder="Sin propiedad" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin propiedad</SelectItem>
+                          {propiedades.map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Sección: Control de Tiempo */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">6</span>
+                    <Clock className="w-4 h-4" /> Control de Tiempo
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Tiempo Estimado (min)</Label>
+                      <Input 
+                        type="number" 
+                        value={formData.tiempoEst || tiempoEstimadoTareas} 
+                        onChange={(e) => setFormData({...formData, tiempoEst: parseInt(e.target.value) || 0})} 
+                        className="h-9"
+                      />
+                      {tiempoEstimadoTareas > 0 && (
+                        <p className="text-[10px] text-blue-600">De tareas: {formatMinutes(tiempoEstimadoTareas)}</p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Tiempo Real (min)</Label>
+                      <Input type="number" value={formData.tiempoReal} onChange={(e) => setFormData({...formData, tiempoReal: parseInt(e.target.value) || 0})} className="h-9" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Diferencia</Label>
+                      <div className={`h-9 px-3 rounded border flex items-center text-sm font-semibold ${
+                        diferenciaTiempo > 0 ? 'bg-red-50 border-red-200 text-red-700' : 
+                        diferenciaTiempo < 0 ? 'bg-green-50 border-green-200 text-green-700' : 'bg-slate-50'
+                      }`}>
+                        {diferenciaTiempo > 0 ? '+' : ''}{formatMinutes(diferenciaTiempo)}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Costo Estimado</Label>
+                      <Input type="number" value={formData.costoEstimado} onChange={(e) => setFormData({...formData, costoEstimado: parseFloat(e.target.value) || 0})} className="h-9" />
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Notas */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Notas adicionales</Label>
+                  <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} placeholder="Notas u observaciones..." rows={2} />
+                </div>
+              </TabsContent>
+              
+              {/* Materials Tab */}
+              <TabsContent value="materiales" className="space-y-4 mt-0">
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <h3 className="font-semibold text-sm">Materiales ({materiales.length})</h3>
+                  <div className="flex gap-2">
+                    {catMateriales.length > 0 && (
+                      <Select onValueChange={(v) => {
+                        const mat = catMateriales.find(m => m.id === v)
+                        if (mat) addMaterialFromCatalog(mat)
+                      }}>
+                        <SelectTrigger className="w-[250px] h-8">
+                          <SelectValue placeholder="Agregar del catálogo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catMateriales.map(m => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.codigo ? `[${m.codigo}] ` : ''}{m.nombre} - {formatCLP(m.precioUnit)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button size="sm" onClick={addMaterial}><Plus className="w-3.5 h-3.5 mr-1" /> Manual</Button>
+                  </div>
+                </div>
+                
+                {materiales.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin materiales - seleccione del catálogo o agregue manualmente</div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2 text-xs">Descripción</th>
+                          <th className="text-center p-2 w-20 text-xs">Cant.</th>
+                          <th className="text-center p-2 w-24 text-xs">Unidad</th>
+                          <th className="text-right p-2 w-28 text-xs">P. Unit.</th>
+                          <th className="text-right p-2 w-28 text-xs">Total</th>
+                          <th className="p-2 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {materiales.map((m, i) => (
+                          <tr key={m.id} className="border-t">
+                            <td className="p-2">
+                              <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8" />
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-2">
+                              <Select value={m.unidad} onValueChange={(v) => updateMaterial(i, 'unidad', v)}>
+                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['unidad', 'metro', 'm²', 'm³', 'kilo', 'saco', 'litro', 'galón', 'caja', 'bolsa'].map(u => (
+                                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 text-right" />
+                            </td>
+                            <td className="p-2 text-right font-mono font-semibold">{formatCLP(m.total)}</td>
+                            <td className="p-2 text-center">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeMaterial(i)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                <div className="flex justify-end font-semibold text-sm">
+                  Total Materiales: <span className="ml-2 text-red-600">{formatCLP(totalMateriales)}</span>
+                </div>
+              </TabsContent>
+              
+              {/* Tools Tab */}
+              <TabsContent value="herramientas" className="space-y-4 mt-0">
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <h3 className="font-semibold text-sm">Herramientas ({herramientas.length})</h3>
+                  <div className="flex gap-2">
+                    {catHerramientas.length > 0 && (
+                      <Select onValueChange={(v) => {
+                        const herr = catHerramientas.find(h => h.id === v)
+                        if (herr) addHerramientaFromCatalog(herr)
+                      }}>
+                        <SelectTrigger className="w-[250px] h-8">
+                          <SelectValue placeholder="Agregar del catálogo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catHerramientas.map(h => (
+                            <SelectItem key={h.id} value={h.id}>
+                              {h.codigo ? `[${h.codigo}] ` : ''}{h.nombre} ({h.estado})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button size="sm" onClick={addHerramienta}><Plus className="w-3.5 h-3.5 mr-1" /> Manual</Button>
+                  </div>
+                </div>
+                
+                {herramientas.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin herramientas - seleccione del catálogo o agregue manualmente</div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2 text-xs">Herramienta</th>
+                          <th className="text-center p-2 w-20 text-xs">Cantidad</th>
+                          <th className="p-2 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {herramientas.map((h, i) => (
+                          <tr key={h.id} className="border-t">
+                            <td className="p-2">
+                              <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8" placeholder="Nombre de herramienta" />
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-2 text-center">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeHerramienta(i)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Tasks Tab */}
+              <TabsContent value="tareas" className="space-y-4 mt-0">
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <h3 className="font-semibold text-sm">Tareas ({tareas.length})</h3>
+                  <div className="flex gap-2">
+                    {catTareas.length > 0 && (
+                      <Select onValueChange={(v) => {
+                        const tar = catTareas.find(t => t.id === v)
+                        if (tar) addTareaFromCatalog(tar)
+                      }}>
+                        <SelectTrigger className="w-[280px] h-8">
+                          <SelectValue placeholder="Agregar del catálogo..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catTareas.map(t => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.codigo ? `[${t.codigo}] ` : ''}{t.nombre} ({t.frecuencia || t.tipoMantencion})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button size="sm" onClick={addTarea}><Plus className="w-3.5 h-3.5 mr-1" /> Manual</Button>
+                  </div>
+                </div>
+                
+                {tareas.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin tareas - seleccione del catálogo o agregue manualmente</div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2 text-xs">Tarea</th>
+                          <th className="text-center p-2 w-20 text-xs">Cant.</th>
+                          <th className="text-center p-2 w-28 text-xs">Estado</th>
+                          <th className="text-center p-2 w-16 text-xs">Cumple</th>
+                          <th className="p-2 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tareas.map((t, i) => (
+                          <tr key={t.id} className="border-t">
+                            <td className="p-2">
+                              <Input value={t.descripcion} onChange={(e) => updateTarea(i, 'descripcion', e.target.value)} className="h-8" />
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={t.cantidad} onChange={(e) => updateTarea(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-2">
+                              <Select value={t.estado} onValueChange={(v) => updateTarea(i, 'estado', v)}>
+                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['Pendiente', 'En Progreso', 'Completado'].map(s => (
+                                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2 text-center">
+                              <Checkbox 
+                                checked={t.cumple === true} 
+                                onCheckedChange={(checked) => updateTarea(i, 'cumple', checked ? true : null)}
+                              />
+                            </td>
+                            <td className="p-2 text-center">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeTarea(i)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                {tiempoEstimadoTareas > 0 && (
+                  <div className="bg-slate-50 p-3 rounded text-sm">
+                    <Clock className="w-4 h-4 inline mr-1" />
+                    Tiempo total estimado de tareas: <strong>{formatMinutes(tiempoEstimadoTareas)}</strong>
+                  </div>
+                )}
+              </TabsContent>
+              
+              {/* Personnel Tab */}
+              <TabsContent value="personal" className="space-y-4 mt-0">
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <h3 className="font-semibold text-sm">Personal ({personalOT.length})</h3>
+                  <div className="flex gap-2">
+                    {personal.length > 0 && (
+                      <Select onValueChange={(v) => {
+                        const emp = personal.find(p => p.id === v)
+                        if (emp) addPersonalFromEmployee(emp)
+                      }}>
+                        <SelectTrigger className="w-[200px] h-8">
+                          <SelectValue placeholder="Agregar empleado..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {personal.map(p => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.nombre} - {formatCLP(calcularValorHora(p.sueldoBase))}/hr
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button size="sm" onClick={addPersonalOT}><Plus className="w-3.5 h-3.5 mr-1" /> Externo</Button>
+                  </div>
+                </div>
+                
+                {personalOT.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin personal asignado - seleccione un empleado o agregue personal externo</div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2 text-xs">Nombre</th>
+                          <th className="text-center p-2 w-20 text-xs">Tipo</th>
+                          <th className="text-center p-2 w-16 text-xs">Cant.</th>
+                          <th className="text-right p-2 w-24 text-xs">$ Hora</th>
+                          <th className="text-right p-2 w-16 text-xs">Hrs</th>
+                          <th className="text-right p-2 w-24 text-xs">Total</th>
+                          <th className="p-2 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {personalOT.map((p, i) => (
+                          <tr key={p.id} className="border-t">
+                            <td className="p-2">
+                              <Input 
+                                value={p.nombre} 
+                                onChange={(e) => updatePersonalOT(i, 'nombre', e.target.value)} 
+                                className="h-8" 
+                                placeholder="Nombre"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <Select value={p.tipo} onValueChange={(v) => updatePersonalOT(i, 'tipo', v)}>
+                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Interno">Interno</SelectItem>
+                                  <SelectItem value="Externo">Externo</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={p.cantidad} onChange={(e) => updatePersonalOT(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                            </td>
+                            <td className="p-2">
+                              <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonalOT(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 text-right" />
+                            </td>
+                            <td className="p-2">
+                              <Select value={String(p.horasTrabajadas)} onValueChange={(v) => updatePersonalOT(i, 'horasTrabajadas', parseFloat(v) || 0)}>
+                                <SelectTrigger className="h-8 w-20">
+                                  <SelectValue placeholder="Hrs" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {HORAS_OPTIONS.map(opt => (
+                                    <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2 text-right font-mono font-semibold">{formatCLP(p.total)}</td>
+                            <td className="p-2 text-center">
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removePersonalOT(i)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                <div className="flex justify-end font-semibold text-sm">
+                  Total Mano de Obra: <span className="ml-2 text-red-600">{formatCLP(totalPersonal)}</span>
+                </div>
+              </TabsContent>
+              
+              {/* Photos Tab */}
+              <TabsContent value="fotos" className="space-y-4 mt-0">
+                {/* Fotos Antes */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-orange-500" /> Fotos ANTES ({fotosAntes.length})
+                    </h3>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = e.target.files
+                          if (files) {
+                            Array.from(files).forEach(file => {
+                              const reader = new FileReader()
+                              reader.onloadend = () => {
+                                setFotosAntes(prev => [...prev, reader.result as string])
+                              }
+                              reader.readAsDataURL(file)
+                            })
+                          }
+                          e.target.value = ''
+                        }}
+                      />
+                      <Button size="sm" variant="outline" asChild>
+                        <span><Plus className="w-3.5 h-3.5 mr-1" /> Agregar Foto</span>
+                      </Button>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                    {fotosAntes.map((foto, i) => (
+                      <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                        <img src={foto} alt={`Antes ${i+1}`} className="w-full h-full object-cover" />
+                        <div className="absolute top-1 left-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                          ANTES
+                        </div>
+                        <button
+                          onClick={() => setFotosAntes(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {fotosAntes.length === 0 && (
+                      <div className="col-span-full py-8 text-center text-slate-400 border-2 border-dashed rounded-lg">
+                        <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Sin fotos antes del trabajo</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <Separator />
+                
+                {/* Fotos Después */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-sm flex items-center gap-2">
+                      <Camera className="w-4 h-4 text-green-500" /> Fotos DESPUÉS ({fotosDespues.length})
+                    </h3>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = e.target.files
+                          if (files) {
+                            Array.from(files).forEach(file => {
+                              const reader = new FileReader()
+                              reader.onloadend = () => {
+                                setFotosDespues(prev => [...prev, reader.result as string])
+                              }
+                              reader.readAsDataURL(file)
+                            })
+                          }
+                          e.target.value = ''
+                        }}
+                      />
+                      <Button size="sm" variant="outline" asChild>
+                        <span><Plus className="w-3.5 h-3.5 mr-1" /> Agregar Foto</span>
+                      </Button>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                    {fotosDespues.map((foto, i) => (
+                      <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-green-200">
+                        <img src={foto} alt={`Después ${i+1}`} className="w-full h-full object-cover" />
+                        <div className="absolute top-1 left-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                          DESPUÉS
+                        </div>
+                        <button
+                          onClick={() => setFotosDespues(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {fotosDespues.length === 0 && (
+                      <div className="col-span-full py-8 text-center text-slate-400 border-2 border-dashed rounded-lg">
+                        <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">Sin fotos después del trabajo</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </TabsContent>
+            </div>
+          </Tabs>
+          
+          <DialogFooter className="flex justify-between border-t pt-4">
+            <div className="text-lg font-bold flex items-center gap-4">
+              <span>Total OT: <span className="text-red-600">{formatCLP(granTotal)}</span></span>
+              <span className="text-xs font-normal text-slate-500">
+                (Materiales: {formatCLP(totalMateriales)} + Personal: {formatCLP(totalPersonal)})
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleSave}>Guardar OT</Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          {selectedOT && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-lg">
+                  {selectedOT.otNum} - {selectedOT.titulo}
+                  <Badge className={estadoColors[selectedOT.estado]}>{selectedOT.estado}</Badge>
+                  {selectedOT.esRecurrente && (
+                    <Badge className="bg-blue-100 text-blue-700 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3" /> Recurrente
+                    </Badge>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                {/* General info */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
+                  <div><span className="text-slate-500 text-xs">Prioridad:</span> <Badge className={prioridadColors[selectedOT.prioridad]}>{selectedOT.prioridad}</Badge></div>
+                  <div><span className="text-slate-500 text-xs">Progreso:</span> {selectedOT.progreso}%</div>
+                  <div><span className="text-slate-500 text-xs">Ubicación:</span> {selectedOT.ubicacion || selectedOT.propiedad?.nombre || '–'}</div>
+                  <div><span className="text-slate-500 text-xs">Centro Costo:</span> {selectedOT.centroCosto?.codigo || '–'}</div>
+                  <div><span className="text-slate-500 text-xs">Forma de Pago:</span> {selectedOT.formaPago || '–'}</div>
+                </div>
+                
+                {/* Time tracking */}
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    <Clock className="w-4 h-4" /> Control de Tiempo
+                  </h4>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-slate-500 text-xs">Estimado:</span>
+                      <span className="ml-2 font-semibold">{formatMinutes(selectedOT.tiempoEst)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-xs">Real:</span>
+                      <span className="ml-2 font-semibold">{formatMinutes(selectedOT.tiempoReal)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-xs">Diferencia:</span>
+                      <span className={`ml-2 font-semibold ${selectedOT.tiempoReal - selectedOT.tiempoEst > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {selectedOT.tiempoReal - selectedOT.tiempoEst > 0 ? '+' : ''}{formatMinutes(selectedOT.tiempoReal - selectedOT.tiempoEst)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {selectedOT.descripcion && (
+                  <div className="text-sm">
+                    <span className="text-slate-500 text-xs">Descripción:</span>
+                    <p className="mt-1">{selectedOT.descripcion}</p>
+                  </div>
+                )}
+                
+                {/* Materials */}
+                {selectedOT.materiales.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Package className="w-4 h-4" /> Materiales ({selectedOT.materiales.length})
+                    </h4>
+                    <table className="w-full text-xs border">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2">Descripción</th>
+                          <th className="text-center p-2">Cant.</th>
+                          <th className="text-center p-2">Unidad</th>
+                          <th className="text-right p-2">P. Unit.</th>
+                          <th className="text-right p-2">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedOT.materiales.map(m => (
+                          <tr key={m.id} className="border-t">
+                            <td className="p-2">{m.descripcion}</td>
+                            <td className="p-2 text-center">{m.cantidad}</td>
+                            <td className="p-2 text-center">{m.unidad}</td>
+                            <td className="p-2 text-right">{formatCLP(m.precioUnit)}</td>
+                            <td className="p-2 text-right font-semibold">{formatCLP(m.total || m.cantidad * m.precioUnit)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-yellow-50">
+                        <tr>
+                          <td colSpan={4} className="p-2 text-right font-semibold">Total Materiales:</td>
+                          <td className="p-2 text-right font-bold text-red-600">
+                            {formatCLP(selectedOT.materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+                
+                {/* Tools */}
+                {selectedOT.herramientas.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Wrench className="w-4 h-4" /> Herramientas ({selectedOT.herramientas.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOT.herramientas.map(h => (
+                        <Badge key={h.id} variant="outline">{h.nombre} ({h.cantidad})</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Tasks */}
+                {selectedOT.tareas.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <CheckSquare className="w-4 h-4" /> Tareas ({selectedOT.tareas.length})
+                    </h4>
+                    <table className="w-full text-xs border">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2">Tarea</th>
+                          <th className="text-center p-2 w-16">Cant.</th>
+                          <th className="text-center p-2 w-24">Estado</th>
+                          <th className="text-center p-2 w-16">Cumple</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedOT.tareas.map(t => (
+                          <tr key={t.id} className="border-t">
+                            <td className="p-2">{t.descripcion}</td>
+                            <td className="p-2 text-center">{t.cantidad}</td>
+                            <td className="p-2 text-center">
+                              <Badge className={t.estado === 'Completado' ? 'bg-green-100 text-green-700' : t.estado === 'En Progreso' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}>
+                                {t.estado}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-center">
+                              {t.cumple !== null ? (t.cumple ? '✓' : '✗') : '–'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                {/* Personnel */}
+                {selectedOT.personalOT.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                      <Users className="w-4 h-4" /> Personal ({selectedOT.personalOT.length})
+                    </h4>
+                    <table className="w-full text-xs border">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2">Nombre</th>
+                          <th className="text-center p-2">Tipo</th>
+                          <th className="text-center p-2">Cant.</th>
+                          <th className="text-right p-2">$ Hora</th>
+                          <th className="text-right p-2">Horas</th>
+                          <th className="text-right p-2">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedOT.personalOT.map(p => (
+                          <tr key={p.id} className="border-t">
+                            <td className="p-2">{p.nombre}</td>
+                            <td className="p-2 text-center">{p.tipo}</td>
+                            <td className="p-2 text-center">{p.cantidad}</td>
+                            <td className="p-2 text-right">{formatCLP(p.precioUnit)}</td>
+                            <td className="p-2 text-right">{p.horasTrabajadas || 0}</td>
+                            <td className="p-2 text-right font-semibold">{formatCLP(p.total || p.precioUnit * p.horasTrabajadas * p.cantidad)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-yellow-50">
+                        <tr>
+                          <td colSpan={5} className="p-2 text-right font-semibold">Total Mano de Obra:</td>
+                          <td className="p-2 text-right font-bold text-red-600">
+                            {formatCLP(selectedOT.personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+                
+                {/* Fotos Antes/Después */}
+                {((selectedOT.fotosAntes && selectedOT.fotosAntes.length > 0) || (selectedOT.fotosDespues && selectedOT.fotosDespues.length > 0)) && (
+                  <div>
+                    <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
+                      <Image className="w-4 h-4" /> Fotos del Trabajo
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Fotos Antes */}
+                      {selectedOT.fotosAntes && selectedOT.fotosAntes.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-orange-600 mb-2">ANTES ({selectedOT.fotosAntes.length})</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {selectedOT.fotosAntes.map((foto, i) => (
+                              <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                                <img src={foto} alt={`Antes ${i+1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {/* Fotos Después */}
+                      {selectedOT.fotosDespues && selectedOT.fotosDespues.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-green-600 mb-2">DESPUÉS ({selectedOT.fotosDespues.length})</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {selectedOT.fotosDespues.map((foto, i) => (
+                              <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-green-200">
+                                <img src={foto} alt={`Después ${i+1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Total */}
+                <div className="bg-red-50 p-4 rounded-lg text-right">
+                  <span className="text-lg font-bold">TOTAL OT: </span>
+                  <span className="text-xl font-bold text-red-600">
+                    {formatCLP(selectedOT.costoReal || 
+                      selectedOT.materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
+                      selectedOT.personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+                    )}
+                  </span>
+                </div>
+                
+                {selectedOT.notas && (
+                  <div className="text-sm bg-slate-50 p-3 rounded">
+                    <span className="text-slate-500 font-semibold text-xs">Notas:</span>
+                    <p className="mt-1">{selectedOT.notas}</p>
+                  </div>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
+                <Button variant="outline" onClick={() => window.open(`/api/pdf/orden-trabajo/${selectedOT.id}`, '_blank')}>
+                  <Printer className="w-4 h-4 mr-1" /> PDF
+                </Button>
+                <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
+                  <Pencil className="w-4 h-4 mr-1" /> Editar
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Progress Update Dialog (for Personal role) */}
+      <Dialog open={progressDialogOpen} onOpenChange={setProgressDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4" />
+              Actualizar Progreso
+            </DialogTitle>
+          </DialogHeader>
+          {progressOT && (
+            <div className="space-y-4 py-4">
+              {/* OT Info - Read Only */}
+              <div className="bg-slate-50 p-3 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-mono text-xs font-bold text-[#0f2040]">{progressOT.otNum}</span>
+                  <Badge className={estadoColors[progressOT.estado]}>{progressOT.estado}</Badge>
+                </div>
+                <h3 className="font-semibold">{progressOT.titulo}</h3>
+                <p className="text-xs text-slate-500 mt-1">{progressOT.descripcion || 'Sin descripción'}</p>
+              </div>
+
+              {/* Progress */}
+              <div className="space-y-2">
+                <Label>Progreso (%)</Label>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={progressFormData.progreso}
+                    onChange={(e) => setProgressFormData({...progressFormData, progreso: parseInt(e.target.value) || 0})}
+                    className="w-24"
+                  />
+                  <Progress value={progressFormData.progreso} className="flex-1 h-2" />
+                </div>
+              </div>
+
+              {/* Estado */}
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <Select 
+                  value={progressFormData.estado} 
+                  onValueChange={(v) => setProgressFormData({...progressFormData, estado: v})}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pendiente">Pendiente</SelectItem>
+                    <SelectItem value="En Progreso">En Progreso</SelectItem>
+                    <SelectItem value="Completado">Completado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Tiempo Real */}
+              <div className="space-y-2">
+                <Label>Tiempo Real (minutos)</Label>
+                <Input
+                  type="number"
+                  value={progressFormData.tiempoReal}
+                  onChange={(e) => setProgressFormData({...progressFormData, tiempoReal: parseInt(e.target.value) || 0})}
+                />
+                <p className="text-xs text-slate-500">
+                  Tiempo estimado: {formatMinutes(progressOT.tiempoEst)}
+                </p>
+              </div>
+
+              {/* Tareas */}
+              {progressFormData.tareas.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Estado de Tareas</Label>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2">Tarea</th>
+                          <th className="text-center p-2 w-24">Estado</th>
+                          <th className="text-center p-2 w-12">Cumple</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {progressFormData.tareas.map((tarea, index) => (
+                          <tr key={tarea.id} className="border-t">
+                            <td className="p-2">{tarea.descripcion}</td>
+                            <td className="p-2">
+                              <Select 
+                                value={tarea.estado} 
+                                onValueChange={(v) => {
+                                  const updated = [...progressFormData.tareas]
+                                  updated[index] = {...updated[index], estado: v}
+                                  setProgressFormData({...progressFormData, tareas: updated})
+                                }}
+                              >
+                                <SelectTrigger className="h-7 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Pendiente">Pendiente</SelectItem>
+                                  <SelectItem value="En Progreso">En Progreso</SelectItem>
+                                  <SelectItem value="Completado">Completado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-2 text-center">
+                              <Checkbox 
+                                checked={tarea.cumple === true}
+                                onCheckedChange={(checked) => {
+                                  const updated = [...progressFormData.tareas]
+                                  updated[index] = {...updated[index], cumple: checked ? true : null}
+                                  setProgressFormData({...progressFormData, tareas: updated})
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Verification Checkbox */}
+              <div className="flex items-center gap-2 bg-green-50 p-3 rounded-lg border border-green-200">
+                <Checkbox 
+                  id="verificacion"
+                  checked={progressFormData.progreso === 100 && progressFormData.estado === 'Completado'}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setProgressFormData({
+                        ...progressFormData, 
+                        progreso: 100, 
+                        estado: 'Completado'
+                      })
+                    }
+                  }}
+                />
+                <label htmlFor="verificacion" className="text-sm font-medium cursor-pointer">
+                  Marcar como completado y verificar
+                </label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProgressDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveProgress}>Guardar Progreso</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

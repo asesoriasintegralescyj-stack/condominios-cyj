@@ -1,0 +1,622 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { 
+  Plus, Pencil, Trash2, Search, Wrench, 
+  CheckCircle, AlertCircle, XCircle, Settings,
+  Upload, Download, FileSpreadsheet
+} from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { useSession } from '@/hooks/use-session'
+
+interface CentroCosto {
+  id: string
+  codigo: string
+  nombre: string
+}
+
+interface Herramienta {
+  id: string
+  codigo: string | null
+  nombre: string
+  marca: string | null
+  modelo: string | null
+  cantidad: number
+  ubicacion: string | null
+  estado: string
+  valorReposicion: number
+  fechaAdquisicion: string | null
+  descripcion: string | null
+  centroCosto: CentroCosto | null
+}
+
+const formatCLP = (n: number) => 
+  '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
+
+const estadoColors: Record<string, string> = {
+  'Bueno': 'bg-green-100 text-green-700',
+  'Regular': 'bg-yellow-100 text-yellow-700',
+  'Malo': 'bg-red-100 text-red-700',
+  'En reparación': 'bg-blue-100 text-blue-700',
+}
+
+const estadoIcons: Record<string, React.ReactNode> = {
+  'Bueno': <CheckCircle className="w-3 h-3 mr-1" />,
+  'Regular': <AlertCircle className="w-3 h-3 mr-1" />,
+  'Malo': <XCircle className="w-3 h-3 mr-1" />,
+  'En reparación': <Settings className="w-3 h-3 mr-1" />,
+}
+
+const estadosOptions = ['Bueno', 'Regular', 'Malo', 'En reparación']
+
+export function HerramientasModule() {
+  const [herramientas, setHerramientas] = useState<Herramienta[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filterEstado, setFilterEstado] = useState('todos')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [selectedHerramienta, setSelectedHerramienta] = useState<Herramienta | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [formData, setFormData] = useState({
+    codigo: '',
+    nombre: '',
+    marca: '',
+    modelo: '',
+    cantidad: 1,
+    ubicacion: '',
+    estado: 'Bueno',
+    valorReposicion: 0,
+    fechaAdquisicion: '',
+    descripcion: '',
+  })
+
+  // Bulk upload
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
+  const [bulkData, setBulkData] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<{success: number, errors: string[]} | null>(null)
+  
+  const { hasPermission } = useSession()
+  const canEdit = hasPermission('catalogos.editar')
+
+  const fetchHerramientas = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/catalogos/herramientas')
+      const data = await res.json()
+      setHerramientas(data)
+    } catch (error) {
+      console.error('Error fetching herramientas:', error)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    void (async () => {
+      await fetchHerramientas()
+    })()
+  }, [])
+
+  // Filtrar herramientas
+  const filteredHerramientas = herramientas.filter(h => {
+    const matchSearch = !search || 
+      h.nombre.toLowerCase().includes(search.toLowerCase()) ||
+      (h.codigo && h.codigo.toLowerCase().includes(search.toLowerCase())) ||
+      (h.marca && h.marca.toLowerCase().includes(search.toLowerCase())) ||
+      (h.modelo && h.modelo.toLowerCase().includes(search.toLowerCase()))
+    
+    const matchEstado = filterEstado === 'todos' || h.estado === filterEstado
+    
+    return matchSearch && matchEstado
+  })
+
+  // Estadísticas
+  const stats = {
+    total: herramientas.length,
+    bueno: herramientas.filter(h => h.estado === 'Bueno').length,
+    regular: herramientas.filter(h => h.estado === 'Regular').length,
+    malo: herramientas.filter(h => h.estado === 'Malo').length,
+    enReparacion: herramientas.filter(h => h.estado === 'En reparación').length,
+    valorTotal: herramientas.reduce((sum, h) => sum + (h.cantidad * h.valorReposicion), 0),
+  }
+
+  const openCreateDialog = () => {
+    setIsEditing(false)
+    setSelectedHerramienta(null)
+    setFormData({
+      codigo: '',
+      nombre: '',
+      marca: '',
+      modelo: '',
+      cantidad: 1,
+      ubicacion: '',
+      estado: 'Bueno',
+      valorReposicion: 0,
+      fechaAdquisicion: '',
+      descripcion: '',
+    })
+    setDialogOpen(true)
+  }
+
+  const openEditDialog = (herramienta: Herramienta) => {
+    setIsEditing(true)
+    setSelectedHerramienta(herramienta)
+    setFormData({
+      codigo: herramienta.codigo || '',
+      nombre: herramienta.nombre,
+      marca: herramienta.marca || '',
+      modelo: herramienta.modelo || '',
+      cantidad: herramienta.cantidad,
+      ubicacion: herramienta.ubicacion || '',
+      estado: herramienta.estado,
+      valorReposicion: herramienta.valorReposicion,
+      fechaAdquisicion: herramienta.fechaAdquisicion || '',
+      descripcion: herramienta.descripcion || '',
+    })
+    setDialogOpen(true)
+  }
+
+  const openDeleteDialog = (herramienta: Herramienta) => {
+    setSelectedHerramienta(herramienta)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleSave = async () => {
+    try {
+      if (isEditing && selectedHerramienta) {
+        await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        })
+      } else {
+        await fetch('/api/catalogos/herramientas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        })
+      }
+      setDialogOpen(false)
+      fetchHerramientas()
+    } catch (error) {
+      console.error('Error saving herramienta:', error)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!selectedHerramienta) return
+    
+    try {
+      await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
+        method: 'DELETE',
+      })
+      setDeleteDialogOpen(false)
+      fetchHerramientas()
+    } catch (error) {
+      console.error('Error deleting herramienta:', error)
+    }
+  }
+
+  // Bulk upload
+  const handleBulkUpload = async () => {
+    if (!bulkData.trim()) return
+    setUploading(true)
+    setUploadResult(null)
+    
+    try {
+      const res = await fetch('/api/catalogos/herramientas/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: bulkData }),
+      })
+      const result = await res.json()
+      setUploadResult(result)
+      if (result.success > 0) {
+        fetchHerramientas()
+      }
+    } catch (error) {
+      console.error('Error uploading herramientas:', error)
+      setUploadResult({ success: 0, errors: ['Error de conexión'] })
+    }
+    setUploading(false)
+  }
+
+  // Export
+  const exportHerramientas = () => {
+    const header = 'codigo,nombre,marca,modelo,cantidad,ubicacion,estado,valorReposicion,fechaAdquisicion\n'
+    const rows = herramientas.map(h => 
+      `"${h.codigo || ''}","${h.nombre}","${h.marca || ''}","${h.modelo || ''}",${h.cantidad},"${h.ubicacion || ''}","${h.estado}",${h.valorReposicion},"${h.fechaAdquisicion || ''}"`
+    ).join('\n')
+    
+    const blob = new Blob([header + rows], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'herramientas.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Card className="p-3">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-5 h-5 text-slate-500" />
+            <div>
+              <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Herramientas</div>
+              <div className="text-xl font-bold text-[#0f2040]">{stats.total}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3 border-green-200 bg-green-50">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-green-500" />
+            <div>
+              <div className="text-[10px] text-green-600 font-semibold uppercase">Bueno</div>
+              <div className="text-xl font-bold text-green-600">{stats.bueno}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3 border-yellow-200 bg-yellow-50">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-yellow-500" />
+            <div>
+              <div className="text-[10px] text-yellow-600 font-semibold uppercase">Regular</div>
+              <div className="text-xl font-bold text-yellow-600">{stats.regular}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3 border-red-200 bg-red-50">
+          <div className="flex items-center gap-2">
+            <XCircle className="w-5 h-5 text-red-500" />
+            <div>
+              <div className="text-[10px] text-red-600 font-semibold uppercase">Malo</div>
+              <div className="text-xl font-bold text-red-600">{stats.malo}</div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-3 border-blue-200 bg-blue-50">
+          <div className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-blue-500" />
+            <div>
+              <div className="text-[10px] text-blue-600 font-semibold uppercase">En Reparación</div>
+              <div className="text-xl font-bold text-blue-600">{stats.enReparacion}</div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Buscar herramienta..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={filterEstado} onValueChange={setFilterEstado}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los estados</SelectItem>
+            {estadosOptions.map(estado => (
+              <SelectItem key={estado} value={estado}>{estado}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {canEdit && (
+          <div className="flex gap-2 ml-auto">
+            <Button variant="outline" onClick={exportHerramientas}>
+              <Download className="w-4 h-4 mr-2" />
+              Exportar
+            </Button>
+            <Button variant="outline" onClick={() => { setBulkData(''); setUploadResult(null); setBulkDialogOpen(true) }}>
+              <Upload className="w-4 h-4 mr-2" />
+              Carga Masiva
+            </Button>
+            <Button onClick={openCreateDialog}>
+              <Plus className="w-4 h-4 mr-2" />
+              Nueva Herramienta
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm">Catálogo de Herramientas ({filteredHerramientas.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white">
+                <tr className="border-b bg-slate-50">
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Marca</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Modelo</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Cantidad</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                  <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
+                  {canEdit && <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                ) : filteredHerramientas.length === 0 ? (
+                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
+                ) : (
+                  filteredHerramientas.map((herr) => (
+                    <tr key={herr.id} className="border-b last:border-0 hover:bg-slate-50">
+                      <td className="p-3 font-mono text-xs font-semibold text-[#0f2040]">
+                        {herr.codigo || '–'}
+                      </td>
+                      <td className="p-3">
+                        <div className="font-semibold">{herr.nombre}</div>
+                        {herr.descripcion && (
+                          <div className="text-xs text-slate-500 truncate max-w-[200px]">{herr.descripcion}</div>
+                        )}
+                      </td>
+                      <td className="p-3 text-xs">{herr.marca || '–'}</td>
+                      <td className="p-3 text-xs">{herr.modelo || '–'}</td>
+                      <td className="p-3 text-center font-semibold">{herr.cantidad}</td>
+                      <td className="p-3 text-xs">{herr.ubicacion || '–'}</td>
+                      <td className="p-3 text-center">
+                        <Badge className={estadoColors[herr.estado] || estadoColors['Bueno']}>
+                          {estadoIcons[herr.estado]}
+                          {herr.estado}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(herr.valorReposicion)}</td>
+                      {canEdit && (
+                        <td className="p-3">
+                          <div className="flex justify-center gap-1">
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7" 
+                              onClick={() => openEditDialog(herr)}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-7 w-7 text-red-500 hover:text-red-700" 
+                              onClick={() => openDeleteDialog(herr)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isEditing ? 'Editar Herramienta' : 'Nueva Herramienta'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Código</Label>
+                <Input 
+                  value={formData.codigo} 
+                  onChange={(e) => setFormData({...formData, codigo: e.target.value})} 
+                  placeholder="Ej: HERR-01"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input 
+                  value={formData.nombre} 
+                  onChange={(e) => setFormData({...formData, nombre: e.target.value})} 
+                  placeholder="Nombre de la herramienta"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Marca</Label>
+                <Input 
+                  value={formData.marca} 
+                  onChange={(e) => setFormData({...formData, marca: e.target.value})} 
+                  placeholder="Ej: Bosch, Makita"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Modelo</Label>
+                <Input 
+                  value={formData.modelo} 
+                  onChange={(e) => setFormData({...formData, modelo: e.target.value})} 
+                  placeholder="Modelo del equipo"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Cantidad</Label>
+                <Input 
+                  type="number" 
+                  value={formData.cantidad} 
+                  onChange={(e) => setFormData({...formData, cantidad: parseInt(e.target.value) || 1})} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estado</Label>
+                <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {estadosOptions.map(estado => (
+                      <SelectItem key={estado} value={estado}>{estado}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Ubicación</Label>
+                <Input 
+                  value={formData.ubicacion} 
+                  onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} 
+                  placeholder="Ej: Bodega A, Estante 2"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha Adquisición</Label>
+                <Input 
+                  type="date" 
+                  value={formData.fechaAdquisicion} 
+                  onChange={(e) => setFormData({...formData, fechaAdquisicion: e.target.value})} 
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor Reposición</Label>
+              <Input 
+                type="number" 
+                value={formData.valorReposicion} 
+                onChange={(e) => setFormData({...formData, valorReposicion: parseFloat(e.target.value) || 0})} 
+                placeholder="Valor en CLP"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Descripción</Label>
+              <Textarea 
+                value={formData.descripcion} 
+                onChange={(e) => setFormData({...formData, descripcion: e.target.value})} 
+                placeholder="Notas adicionales..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={!formData.nombre}>
+              {isEditing ? 'Guardar Cambios' : 'Crear Herramienta'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar herramienta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente la herramienta
+              {selectedHerramienta && <strong> {selectedHerramienta.nombre}</strong>}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Upload Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5" />
+              Carga Masiva de Herramientas
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-slate-50 p-3 rounded-lg text-sm">
+              <p className="font-semibold mb-2">Formato CSV (una línea por herramienta):</p>
+              <code className="text-xs bg-white p-2 rounded block">
+                codigo,nombre,marca,modelo,cantidad,ubicacion,estado,valorReposicion
+              </code>
+              <p className="text-xs text-slate-500 mt-2">
+                Ejemplo: HERR-01,Taladro Percutor,Bosch,GBH-2000,2,Bodega A,Bueno,85000
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Datos CSV</Label>
+              <Textarea 
+                value={bulkData} 
+                onChange={(e) => setBulkData(e.target.value)}
+                placeholder="codigo,nombre,marca,modelo,cantidad,ubicacion,estado,valorReposicion&#10;HERR-01,Taladro Percutor,Bosch,GBH-2000,2,Bodega A,Bueno,85000&#10;HERR-02,Amoladora,Makita,9557HP,1,Bodega A,Bueno,45000"
+                rows={10}
+                className="font-mono text-sm"
+              />
+            </div>
+            {uploadResult && (
+              <div className={`p-3 rounded ${uploadResult.success > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                <p className="font-semibold">{uploadResult.success} herramientas importadas correctamente</p>
+                {uploadResult.errors.length > 0 && (
+                  <ul className="text-sm mt-1">
+                    {uploadResult.errors.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cerrar</Button>
+            <Button onClick={handleBulkUpload} disabled={uploading || !bulkData.trim()}>
+              {uploading ? 'Importando...' : 'Importar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

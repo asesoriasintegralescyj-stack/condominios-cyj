@@ -1,0 +1,41 @@
+/**
+ * API para obtener sesión actual
+ * Condominio Laguna Norte - Sistema de Gestión v2
+ */
+
+import { NextResponse } from 'next/server';
+import { getCurrentSession, getPermissions } from '@/lib/auth';
+
+export async function GET() {
+  try {
+    const session = await getCurrentSession();
+    
+    if (!session) {
+      return NextResponse.json(
+        { authenticated: false },
+        { status: 401 }
+      );
+    }
+    
+    const permisos = getPermissions(session.user.rol);
+    
+    return NextResponse.json({
+      authenticated: true,
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        nombre: session.user.nombre,
+        apellido: session.user.apellido,
+        rol: session.user.rol,
+        permisos,
+      },
+    });
+    
+  } catch (error) {
+    console.error('Error obteniendo sesión:', error);
+    return NextResponse.json(
+      { error: 'Error al obtener sesión' },
+      { status: 500 }
+    );
+  }
+}
