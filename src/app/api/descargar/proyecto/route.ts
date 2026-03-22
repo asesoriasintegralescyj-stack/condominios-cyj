@@ -4,13 +4,13 @@ import path from 'path'
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), 'public', 'PROYECTO_COMPLETO_VERCEL.zip')
+    const filePath = path.join(process.cwd(), 'public', 'SISTEMA_CYJ_NUEVO.zip')
     const fileBuffer = await readFile(filePath)
 
     return new NextResponse(fileBuffer, {
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="PROYECTO_COMPLETO_VERCEL.zip"',
+        'Content-Disposition': 'attachment; filename="SISTEMA_CYJ_NUEVO.zip"',
         'Content-Length': fileBuffer.length.toString()
       }
     })
