@@ -1,23 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
 import { formatCLP } from '@/lib/utils'
 import {
-  Home,
   Wrench,
-  AlertTriangle,
-  Shield,
-  CheckCircle,
   Clock,
-  FileWarning,
-  FileText,
-  ArrowRight,
+  CheckCircle,
+  AlertTriangle,
   ShoppingCart,
-  Mail,
+  Shield,
+  FileCheck,
+  Users,
+  Package,
+  DollarSign,
+  ArrowRight,
 } from 'lucide-react'
 
 interface DashboardStats {
@@ -25,14 +22,12 @@ interface DashboardStats {
   totalActivos: number
   valorActivos: number
   saldoCaja: number
-  saldoInicialCaja: number
   otPendientes: number
   otEnProgreso: number
   otCompletadas: number
   otPendientesAprobacion: number
   otAprobadas: number
   otRechazadas: number
-  // Solicitudes de Compra (reemplaza a Propiedades/Unidades)
   scTotal: number
   scSolicitadas: number
   scEnProceso: number
@@ -62,14 +57,6 @@ interface OrdenTrabajo {
   fechaLimite: string | null
 }
 
-interface CumplimientoItem {
-  id: string
-  titulo: string
-  fechaVencimiento: string | null
-  categoria: string
-  estado: string
-}
-
 interface CumplimientoStats {
   total: number
   completados: number
@@ -77,72 +64,82 @@ interface CumplimientoStats {
   enProceso: number
   vencidos: number
   porVencer: number
-  obligatorios: number
-  opcionales: number
   porcentajeGeneral: number
-  porCategoria: {
-    Legal: CumplimientoItem[]
-    Seguridad: CumplimientoItem[]
-    Reglamentario: CumplimientoItem[]
-    Interno: CumplimientoItem[]
-    Financiero: CumplimientoItem[]
-  }
-  proximosVencer: CumplimientoItem[]
-  itemsVencidos: CumplimientoItem[]
 }
 
 interface DashboardData {
   stats: DashboardStats
   solicitudesRecientes: SolicitudReciente[]
   recentOT: OrdenTrabajo[]
-  centrosConGasto: Array<{
-    id: string
-    nombre: string
-    presupuesto: number
-    gastado: number
-    porcentaje: number
-  }>
   cumplimientoStats: CumplimientoStats
 }
 
-const formatDate = (d: string | null) => {
-  if (!d) return '–'
-  try {
-    const [y, m, dd] = d.split('-')
-    return `${dd}/${m}/${y}`
-  } catch {
-    return d
-  }
+// ====== STYLES ======
+const colors = {
+  azul: '#0d6efd',
+  verde: '#198754',
+  naranja: '#fd7e14',
+  rojo: '#dc3545',
+  grisOscuro: '#212529',
+  grisMedio: '#6c757d',
+  grisClaro: '#e9ecef',
+  fondoGris: '#f8f9fa',
+  blanco: '#ffffff',
 }
 
-const getDaysUntilExpiry = (fechaVencimiento: string | null) => {
-  if (!fechaVencimiento) return null
-  const hoy = new Date()
-  const vencimiento = new Date(fechaVencimiento)
-  const diff = Math.ceil((vencimiento.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
-  return diff
+interface CardConfig {
+  titulo: string
+  numero: number | string
+  icon: React.ReactNode
+  color: string
+  subtitulo?: string
+  onClick?: () => void
 }
 
-const priorityColors: Record<string, string> = {
-  'Urgente': 'bg-red-100 text-red-700',
-  'Alta': 'bg-orange-100 text-orange-700',
-  'Media': 'bg-yellow-100 text-yellow-700',
-  'Baja': 'bg-green-100 text-green-700',
+function MetricCard({ titulo, numero, icon, color, subtitulo, onClick }: CardConfig) {
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-lg border p-5 transition-all hover:shadow-md hover:border-current/30 cursor-pointer group"
+      style={{ borderColor: colors.grisClaro }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span style={{ color }} className="shrink-0">{icon}</span>
+        <span className="text-sm font-normal" style={{ color: colors.grisMedio }}>{titulo}</span>
+      </div>
+      <div className="text-3xl font-bold" style={{ color }}>
+        {numero}
+      </div>
+      {subtitulo && (
+        <div className="text-xs mt-1" style={{ color: colors.grisMedio }}>{subtitulo}</div>
+      )}
+      {onClick && (
+        <div className="flex items-center gap-1 mt-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>
+          Ver detalles <ArrowRight className="w-3 h-3" />
+        </div>
+      )}
+    </div>
+  )
 }
 
-const estadoColors: Record<string, string> = {
-  'Pendiente': 'bg-yellow-100 text-yellow-700',
-  'En Progreso': 'bg-blue-100 text-blue-700',
-  'Completado': 'bg-green-100 text-green-700',
-  'Cancelado': 'bg-red-100 text-red-700',
-}
-
-const categoriaColors: Record<string, string> = {
-  'Legal': 'bg-rose-100 text-rose-700',
-  'Seguridad': 'bg-amber-100 text-amber-700',
-  'Reglamentario': 'bg-blue-100 text-blue-700',
-  'Interno': 'bg-slate-100 text-slate-700',
-  'Financiero': 'bg-green-100 text-green-700',
+function ProgressBar({ completadas, total, label }: { completadas: number; total: number; label: string }) {
+  const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
+  return (
+    <div className="bg-white rounded-lg border p-5" style={{ borderColor: colors.grisClaro }}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm" style={{ color: colors.grisMedio }}>
+          {completadas} de {total} {label}
+        </span>
+        <span className="text-sm font-bold" style={{ color: colors.azul }}>{pct}%</span>
+      </div>
+      <div className="w-full rounded-full h-2" style={{ backgroundColor: colors.grisClaro }}>
+        <div
+          className="h-2 rounded-full transition-all"
+          style={{ width: `${pct}%`, backgroundColor: colors.grisOscuro }}
+        />
+      </div>
+    </div>
+  )
 }
 
 export function Dashboard() {
@@ -153,23 +150,18 @@ export function Dashboard() {
   useEffect(() => {
     fetch('/api/dashboard')
       .then(res => res.json())
-      .then(d => {
-        setData(d)
-        setLoading(false)
-      })
+      .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {[...Array(6)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
-            <CardContent className="p-4">
-              <div className="h-4 bg-slate-200 rounded w-1/2 mb-2"></div>
-              <div className="h-8 bg-slate-200 rounded w-3/4"></div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="bg-white rounded-lg border p-5 animate-pulse" style={{ borderColor: colors.grisClaro }}>
+            <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+            <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+          </div>
         ))}
       </div>
     )
@@ -177,361 +169,246 @@ export function Dashboard() {
 
   if (!data) return null
 
-  const { stats, solicitudesRecientes, recentOT, centrosConGasto, cumplimientoStats } = data
+  const { stats, solicitudesRecientes, recentOT, cumplimientoStats } = data
+
+  const totalOT = stats.otPendientes + stats.otEnProgreso + stats.otCompletadas
+  const totalSC = stats.scTotal || 1
 
   return (
     <div className="space-y-5">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card className={`${stats.scSolicitadas > 0 ? 'border-blue-300 bg-blue-50' : ''}`}>
-          <CardContent className="p-4">
-            <div className="text-2xl mb-1">🛒</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Solicitudes Compra</div>
-            <div className="text-2xl font-bold text-blue-600">{stats.scTotal}</div>
-            <div className="text-[9px] text-slate-400 mt-0.5">{stats.scSolicitadas} solicitadas</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl mb-1">🔧</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">OT Pendientes</div>
-            <div className="text-2xl font-bold text-amber-600">{stats.otPendientes}</div>
-          </CardContent>
-        </Card>
-        <Card className={`${stats.otPendientesAprobacion > 0 ? 'border-orange-300 bg-orange-50' : ''}`}>
-          <CardContent className="p-4">
-            <div className="text-2xl mb-1">✅</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Por Aprobar</div>
-            <div className="text-2xl font-bold text-orange-600">{stats.otPendientesAprobacion}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl mb-1">💰</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Caja Chica</div>
-            <div className="text-base font-bold text-[#0f2040]">{formatCLP(stats.saldoCaja)}</div>
-          </CardContent>
-        </Card>
+      {/* Título */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold" style={{ color: colors.azul }}>
+          Panel de Control — LAGUNA NORTE
+        </h1>
       </div>
 
-      {/* OT Stats - Segunda fila */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-yellow-600" />
-              <div>
-                <div className="text-[10px] text-yellow-600 font-semibold uppercase">OT Pendientes</div>
-                <div className="text-xl font-bold text-yellow-700">{stats.otPendientes}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <Wrench className="w-5 h-5 text-blue-600" />
-              <div>
-                <div className="text-[10px] text-blue-600 font-semibold uppercase">En Progreso</div>
-                <div className="text-xl font-bold text-blue-700">{stats.otEnProgreso}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-orange-50 border-orange-200 cursor-pointer hover:bg-orange-100 transition-colors" onClick={() => setCurrentModule('aprobaciones')}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-orange-600" />
-              <div>
-                <div className="text-[10px] text-orange-600 font-semibold uppercase">Por Aprobar</div>
-                <div className="text-xl font-bold text-orange-700">{stats.otPendientesAprobacion}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <div>
-                <div className="text-[10px] text-green-600 font-semibold uppercase">Aprobadas</div>
-                <div className="text-xl font-bold text-green-700">{stats.otAprobadas}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Fila 1: Órdenes de Trabajo (4 cards clickeables) */}
+      <div>
+        <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>ÓRDENES DE TRABAJO</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            titulo="Total OT"
+            numero={totalOT}
+            icon={<Wrench className="w-4 h-4" />}
+            color={colors.grisOscuro}
+            subtitulo="Todas las órdenes"
+            onClick={() => setCurrentModule('ot')}
+          />
+          <MetricCard
+            titulo="Pendientes"
+            numero={stats.otPendientes}
+            icon={<AlertTriangle className="w-4 h-4" />}
+            color={colors.naranja}
+            subtitulo={`${stats.otPendientesAprobacion} por aprobar`}
+            onClick={() => setCurrentModule('ot')}
+          />
+          <MetricCard
+            titulo="En Progreso"
+            numero={stats.otEnProgreso}
+            icon={<Clock className="w-4 h-4" />}
+            color={colors.azul}
+            subtitulo="En ejecución"
+            onClick={() => setCurrentModule('ot')}
+          />
+          <MetricCard
+            titulo="Completadas"
+            numero={stats.otCompletadas}
+            icon={<CheckCircle className="w-4 h-4" />}
+            color={colors.verde}
+            subtitulo="Terminadas"
+            onClick={() => setCurrentModule('ot')}
+          />
+        </div>
       </div>
 
-      {/* Cumplimiento Legal - Resumen */}
-      <Card className="border-l-4 border-l-amber-500">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-bold flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-amber-600" />
-              Cumplimiento Legal (Ley 21.442)
-            </span>
-            <button 
-              onClick={() => setCurrentModule('cumplimiento')}
-              className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1"
-            >
-              Ver todo <ArrowRight className="w-3 h-3" />
-            </button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Porcentaje General */}
-            <div className="flex flex-col items-center justify-center p-4 bg-slate-50 rounded-lg">
-              <div className="text-4xl font-bold mb-1" style={{
-                color: cumplimientoStats.porcentajeGeneral >= 80 ? '#16a34a' :
-                       cumplimientoStats.porcentajeGeneral >= 50 ? '#ca8a04' : '#dc2626'
-              }}>
-                {cumplimientoStats.porcentajeGeneral}%
-              </div>
-              <div className="text-xs text-slate-500 font-medium">Cumplimiento General</div>
-              <Progress 
-                value={cumplimientoStats.porcentajeGeneral} 
-                className="h-2 w-full mt-2"
-              />
-            </div>
+      {/* Fila 2: Solicitudes de Compra (4 cards clickeables) */}
+      <div>
+        <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>SOLICITUDES DE COMPRA</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            titulo="Total Solicitudes"
+            numero={stats.scTotal}
+            icon={<ShoppingCart className="w-4 h-4" />}
+            color={colors.grisOscuro}
+            subtitulo={`Monto: ${formatCLP(stats.scMontoTotal)}`}
+            onClick={() => setCurrentModule('solicitudescompra')}
+          />
+          <MetricCard
+            titulo="Solicitadas"
+            numero={stats.scSolicitadas}
+            icon={<Clock className="w-4 h-4" />}
+            color={colors.naranja}
+            subtitulo={`${Math.round(stats.scSolicitadas / totalSC * 100)}% del total`}
+            onClick={() => setCurrentModule('solicitudescompra')}
+          />
+          <MetricCard
+            titulo="En Proceso"
+            numero={stats.scEnProceso}
+            icon={<AlertTriangle className="w-4 h-4" />}
+            color={colors.azul}
+            subtitulo={`${Math.round(stats.scEnProceso / totalSC * 100)}% del total`}
+            onClick={() => setCurrentModule('solicitudescompra')}
+          />
+          <MetricCard
+            titulo="Compradas"
+            numero={stats.scCompradas}
+            icon={<CheckCircle className="w-4 h-4" />}
+            color={colors.verde}
+            subtitulo={`${Math.round(stats.scCompradas / totalSC * 100)}% del total`}
+            onClick={() => setCurrentModule('solicitudescompra')}
+          />
+        </div>
+      </div>
 
-            {/* Estados */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 bg-green-50 rounded">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
-                  <span className="text-sm">Completados</span>
-                </div>
-                <span className="font-bold text-green-700">{cumplimientoStats.completados}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-yellow-50 rounded">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-yellow-600" />
-                  <span className="text-sm">Pendientes</span>
-                </div>
-                <span className="font-bold text-yellow-700">{cumplimientoStats.pendientes}</span>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm">En Proceso</span>
-                </div>
-                <span className="font-bold text-blue-700">{cumplimientoStats.enProceso}</span>
-              </div>
-            </div>
+      {/* Fila 3: Recursos y Cumplimiento (4 cards clickeables) */}
+      <div>
+        <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>RECURSOS Y CUMPLIMIENTO</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <MetricCard
+            titulo="Personal Activo"
+            numero={stats.totalPersonal}
+            icon={<Users className="w-4 h-4" />}
+            color={colors.azul}
+            subtitulo="Empleados"
+            onClick={() => setCurrentModule('personal')}
+          />
+          <MetricCard
+            titulo="Activos"
+            numero={stats.totalActivos}
+            icon={<Package className="w-4 h-4" />}
+            color={colors.grisOscuro}
+            subtitulo={`Valor: ${formatCLP(stats.valorActivos)}`}
+            onClick={() => setCurrentModule('activos')}
+          />
+          <MetricCard
+            titulo="Cumplimiento Legal"
+            numero={`${cumplimientoStats.porcentajeGeneral}%`}
+            icon={<Shield className="w-4 h-4" />}
+            color={cumplimientoStats.porcentajeGeneral >= 80 ? colors.verde : colors.naranja}
+            subtitulo={`${cumplimientoStats.completados} de ${cumplimientoStats.total} documentos`}
+            onClick={() => setCurrentModule('cumplimiento')}
+          />
+          <MetricCard
+            titulo="Caja Chica"
+            numero={formatCLP(stats.saldoCaja)}
+            icon={<DollarSign className="w-4 h-4" />}
+            color={colors.verde}
+            subtitulo="Saldo disponible"
+            onClick={() => setCurrentModule('centrocostos')}
+          />
+        </div>
+      </div>
 
-            {/* Alertas */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 bg-red-50 rounded border border-red-200">
-                <div className="flex items-center gap-2">
-                  <FileWarning className="w-4 h-4 text-red-600" />
-                  <span className="text-sm font-medium">Vencidos</span>
-                </div>
-                <Badge className="bg-red-100 text-red-700">{cumplimientoStats.vencidos}</Badge>
-              </div>
-              <div className="flex items-center justify-between p-2 bg-orange-50 rounded border border-orange-200">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-orange-600" />
-                  <span className="text-sm font-medium">Por Vencer (30 días)</span>
-                </div>
-                <Badge className="bg-orange-100 text-orange-700">{cumplimientoStats.porVencer}</Badge>
-              </div>
-              {cumplimientoStats.itemsVencidos.length > 0 && (
-                <div className="text-xs text-red-600 mt-1">
-                  ⚠️ {cumplimientoStats.itemsVencidos.length} items requieren atención urgente
-                </div>
-              )}
-            </div>
+      {/* Barra de progreso OT */}
+      <ProgressBar
+        completadas={stats.otCompletadas}
+        total={totalOT}
+        label="OT completadas"
+      />
 
-            {/* Por Categoría */}
-            <div className="space-y-1">
-              {Object.entries(cumplimientoStats.porCategoria).map(([cat, items]) => {
-                const itemsList = items as CumplimientoItem[]
-                if (itemsList.length === 0) return null
-                const completados = itemsList.filter(i => i.estado === 'Completado').length
-                const pct = itemsList.length > 0 ? Math.round(completados / itemsList.length * 100) : 0
-                return (
-                  <div key={cat} className="flex items-center justify-between text-xs p-1.5 bg-slate-50 rounded">
-                    <div className="flex items-center gap-2">
-                      <Badge className={categoriaColors[cat] || 'bg-slate-100'} variant="outline">
-                        {cat}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Progress value={pct} className="h-1.5 w-10" />
-                      <span className="font-medium w-8 text-right">{pct}%</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+      {/* Barra de progreso Cumplimiento */}
+      <ProgressBar
+        completadas={cumplimientoStats.completados}
+        total={cumplimientoStats.total}
+        label="documentos cumplidos"
+      />
 
-          {/* Items próximos a vencer */}
-          {cumplimientoStats.proximosVencer.length > 0 && (
-            <div className="mt-4 pt-4 border-t">
-              <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Próximos a Vencer
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {cumplimientoStats.proximosVencer.slice(0, 4).map(item => {
-                  const dias = getDaysUntilExpiry(item.fechaVencimiento)
-                  return (
-                    <div key={item.id} className="flex items-center gap-2 text-xs bg-amber-50 px-2 py-1 rounded border border-amber-200">
-                      <Badge className={categoriaColors[item.categoria] || 'bg-slate-100'} variant="outline">
-                        {item.categoria}
-                      </Badge>
-                      <span className="font-medium">{item.titulo}</span>
-                      <span className="text-amber-700 font-bold">
-                        {dias !== null ? `${dias} días` : ''}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Sección: OT Recientes + Solicitudes Recientes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* OT Recientes */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
+        <div className="bg-white rounded-lg border p-5" style={{ borderColor: colors.grisClaro }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.grisOscuro }}>
               <Wrench className="w-4 h-4" /> OT Recientes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">N° OT</th>
-                    <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Título</th>
-                    <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Prioridad</th>
-                    <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
-                    <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">F. Límite</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOT.length > 0 ? (
-                    recentOT.map((ot) => (
-                      <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50">
-                        <td className="p-3 font-mono text-xs font-bold text-[#0f2040]">{ot.otNum}</td>
-                        <td className="p-3 font-medium">{ot.titulo}</td>
-                        <td className="p-3">
-                          <Badge className={priorityColors[ot.prioridad] || 'bg-slate-100'}>
-                            {ot.prioridad}
-                          </Badge>
-                        </td>
-                        <td className="p-3">
-                          <Badge className={estadoColors[ot.estado] || 'bg-slate-100'}>
-                            {ot.estado}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-xs text-slate-600">{formatDate(ot.fechaLimite)}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        Sin órdenes de trabajo
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Right Side */}
-        <div className="space-y-5">
-          {/* Solicitudes de Compra Recientes */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra Recientes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {solicitudesRecientes.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No hay solicitudes de compra</p>
-              ) : (
-                <div className="space-y-2">
-                  {solicitudesRecientes.map((sc) => (
-                    <div key={sc.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono font-bold text-[#0f2040]">{sc.codigo}</span>
-                          <Badge className={
-                            sc.estado === 'Solicitado' ? 'bg-blue-100 text-blue-700' :
-                            sc.estado === 'En Proceso' ? 'bg-yellow-100 text-yellow-700' :
-                            sc.estado === 'Comprado' ? 'bg-green-100 text-green-700' :
-                            sc.estado === 'Rechazado' ? 'bg-red-100 text-red-700' :
-                            'bg-slate-100 text-slate-700'
-                          }>
-                            {sc.estado}
-                          </Badge>
-                          {sc.emailEnviado && (
-                            <Mail className="w-3 h-3 text-green-600" />
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-600 mt-0.5 truncate">
-                          {sc.titulo}
-                        </div>
-                        {sc.origenCodigo && (
-                          <div className="text-[10px] text-slate-400">
-                            Origen: {sc.origenCodigo}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0 ml-2">
-                        <div className="text-sm font-bold text-[#0f2040]">
-                          {formatCLP(sc.totalEstimado)}
-                        </div>
-                        <Badge variant="outline" className={
-                          sc.prioridad === 'Urgente' ? 'text-red-600 border-red-300' :
-                          sc.prioridad === 'Alta' ? 'text-orange-600 border-orange-300' :
-                          sc.prioridad === 'Media' ? 'text-yellow-600 border-yellow-300' :
-                          'text-green-600 border-green-300'
-                        }>
-                          {sc.prioridad}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                <span className="text-xs text-slate-500">Monto total estimado:</span>
-                <span className="text-sm font-bold text-[#0f2040]">{formatCLP(stats.scMontoTotal)}</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Centro de Costos */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold">Centros de Costo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {centrosConGasto.slice(0, 4).map((cc) => (
-                <div key={cc.id} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium">{cc.nombre}</span>
-                    <span className={cc.porcentaje > 90 ? 'text-red-600 font-bold' : 'text-slate-600'}>
-                      {cc.porcentaje}%
+            </h3>
+            <button
+              onClick={() => setCurrentModule('ot')}
+              className="text-xs font-medium flex items-center gap-1 hover:underline"
+              style={{ color: colors.azul }}
+            >
+              Ver todas <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {recentOT.slice(0, 5).map((ot) => (
+              <div key={ot.id} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-bold" style={{ color: colors.grisOscuro }}>{ot.otNum}</span>
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      style={{
+                        backgroundColor: ot.estado === 'Completado' ? '#d1e7dd' : ot.estado === 'Pendiente' ? '#fff3cd' : '#cfe2ff',
+                        color: ot.estado === 'Completado' ? colors.verde : ot.estado === 'Pendiente' ? colors.naranja : colors.azul,
+                      }}
+                    >
+                      {ot.estado}
                     </span>
                   </div>
-                  <Progress value={cc.porcentaje} className="h-1.5" />
+                  <div className="text-xs text-slate-600 mt-0.5 truncate">{ot.titulo}</div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{
+                  backgroundColor: ot.prioridad === 'Urgente' ? '#f8d7da' : ot.prioridad === 'Alta' ? '#fff3cd' : '#e2e3e5',
+                  color: ot.prioridad === 'Urgente' ? colors.rojo : ot.prioridad === 'Alta' ? colors.naranja : colors.grisMedio,
+                }}>
+                  {ot.prioridad}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
+
+        {/* Solicitudes de Compra Recientes */}
+        <div className="bg-white rounded-lg border p-5" style={{ borderColor: colors.grisClaro }}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.grisOscuro }}>
+              <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra Recientes
+            </h3>
+            <button
+              onClick={() => setCurrentModule('solicitudescompra')}
+              className="text-xs font-medium flex items-center gap-1 hover:underline"
+              style={{ color: colors.azul }}
+            >
+              Ver todas <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {solicitudesRecientes.length === 0 ? (
+              <p className="text-xs text-center py-4" style={{ color: colors.grisMedio }}>No hay solicitudes</p>
+            ) : (
+              solicitudesRecientes.map((sc) => (
+                <div key={sc.id} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold" style={{ color: colors.grisOscuro }}>{sc.codigo}</span>
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                        style={{
+                          backgroundColor: sc.estado === 'Solicitado' ? '#cfe2ff' : sc.estado === 'Comprado' ? '#d1e7dd' : '#f8d7da',
+                          color: sc.estado === 'Solicitado' ? colors.azul : sc.estado === 'Comprado' ? colors.verde : colors.rojo,
+                        }}
+                      >
+                        {sc.estado}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-600 mt-0.5 truncate">{sc.titulo}</div>
+                  </div>
+                  <div className="text-right shrink-0 ml-2">
+                    <div className="text-sm font-bold" style={{ color: colors.grisOscuro }}>
+                      {formatCLP(sc.totalEstimado)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer info */}
+      <div className="text-xs text-center" style={{ color: colors.grisMedio }}>
+        Condominio LAGUNA NORTE · Sistema de Gestión · Asesorías Integrales CyJ
       </div>
     </div>
   )
