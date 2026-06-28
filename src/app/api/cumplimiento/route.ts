@@ -148,13 +148,22 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // Update summary if condominioId exists
-      if (data.condominioId) {
-        await actualizarResumen(data.condominioId, tx)
-      }
-
       return created
+    }, {
+      // Timeout amplio: el cálculo del resumen puede ser lento con muchos documentos
+      maxWait: 15_000,
+      timeout: 30_000,
     })
+
+    // Actualizar resumen FUERA de la transacción principal (no requiere atomicidad
+    // con la creación del documento; si falla, no afecta al documento ya creado)
+    if (data.condominioId) {
+      try {
+        await actualizarResumen(data.condominioId)
+      } catch (e) {
+        console.warn('No se pudo actualizar resumen (no crítico):', e)
+      }
+    }
 
     return NextResponse.json(documento)
   } catch (error) {
@@ -229,13 +238,20 @@ export async function PUT(request: NextRequest) {
         }
       })
 
-      // Update summary
-      if (updated.condominioId) {
-        await actualizarResumen(updated.condominioId, tx)
-      }
-
       return updated
+    }, {
+      maxWait: 15_000,
+      timeout: 30_000,
     })
+
+    // Actualizar resumen FUERA de la transacción principal
+    if (documento.condominioId) {
+      try {
+        await actualizarResumen(documento.condominioId)
+      } catch (e) {
+        console.warn('No se pudo actualizar resumen (no crítico):', e)
+      }
+    }
 
     return NextResponse.json(documento)
   } catch (error) {
@@ -277,12 +293,19 @@ export async function DELETE(request: NextRequest) {
       await tx.documentoCumplimiento.delete({
         where: { id }
       })
-
-      // Update summary
-      if (documento.condominioId) {
-        await actualizarResumen(documento.condominioId, tx)
-      }
+    }, {
+      maxWait: 15_000,
+      timeout: 30_000,
     })
+
+    // Actualizar resumen FUERA de la transacción principal
+    if (documento.condominioId) {
+      try {
+        await actualizarResumen(documento.condominioId)
+      } catch (e) {
+        console.warn('No se pudo actualizar resumen (no crítico):', e)
+      }
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

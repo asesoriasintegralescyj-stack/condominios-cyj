@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog'
 import {
   Select,
@@ -39,6 +40,7 @@ import {
   FileCheck, FileWarning, FileX, Info, Calendar
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
+import { toast } from 'sonner'
 
 // ============================================
 // INTERFACES
@@ -158,6 +160,7 @@ export function CumplimientoModule() {
   const [documentosProximosVencer, setDocumentosProximosVencer] = useState<DocumentoCumplimiento[]>([])
   const [documentosVencidos, setDocumentosVencidos] = useState<DocumentoCumplimiento[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   
   // Filters
   const [search, setSearch] = useState('')
@@ -204,15 +207,20 @@ export function CumplimientoModule() {
   // ============================================
   // FETCH FUNCTIONS
   // ============================================
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!currentCondominio?.id) {
       setLoading(false)
       return
     }
     
     try {
+      setLoading(true)
       // Fetch categories with createDefaults=true to populate initial categories
       const catRes = await fetch(`/api/cumplimiento/categorias?condominioId=${currentCondominio.id}&createDefaults=true`)
+      if (!catRes.ok) {
+        const err = await catRes.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${catRes.status} al cargar categorías`)
+      }
       const catData = await catRes.json()
       // Asegurar que categorias sea siempre un array
       setCategorias(Array.isArray(catData) ? catData : [])
@@ -226,17 +234,28 @@ export function CumplimientoModule() {
       if (filterCategoria !== 'todos') params.append('categoriaId', filterCategoria)
       
       const docRes = await fetch(`/api/cumplimiento?${params.toString()}`)
+      if (!docRes.ok) {
+        const err = await docRes.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${docRes.status} al cargar documentos`)
+      }
       const docData = await docRes.json()
       setDocumentos(Array.isArray(docData?.documentos) ? docData.documentos : [])
       setResumen(docData?.resumen || null)
       
-      // Fetch summary
-      const resumenRes = await fetch(`/api/cumplimiento/resumen?condominioId=${currentCondominio.id}`)
-      const resumenData = await resumenRes.json()
-      setDocumentosProximosVencer(Array.isArray(resumenData?.documentosProximosVencer) ? resumenData.documentosProximosVencer : [])
-      setDocumentosVencidos(Array.isArray(resumenData?.documentosVencidos) ? resumenData.documentosVencidos : [])
+      // Fetch summary (opcional - no fallar si no carga)
+      try {
+        const resumenRes = await fetch(`/api/cumplimiento/resumen?condominioId=${currentCondominio.id}`)
+        if (resumenRes.ok) {
+          const resumenData = await resumenRes.json()
+          setDocumentosProximosVencer(Array.isArray(resumenData?.documentosProximosVencer) ? resumenData.documentosProximosVencer : [])
+          setDocumentosVencidos(Array.isArray(resumenData?.documentosVencidos) ? resumenData.documentosVencidos : [])
+        }
+      } catch (e) {
+        console.warn('No se pudo cargar resumen:', e)
+      }
     } catch (error) {
       console.error('Error fetching cumplimiento data:', error)
+      toast.error('Error al cargar datos: ' + (error instanceof Error ? error.message : 'desconocido'))
       // Asegurar que los arrays estén vacíos en caso de error
       setCategorias([])
       setDocumentos([])
@@ -245,18 +264,18 @@ export function CumplimientoModule() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [currentCondominio, search, filterTipo, filterEstado, filterCategoria])
 
   useEffect(() => {
     void (async () => {
       await fetchData()
     })()
-  }, [currentCondominio])
+  }, [fetchData])
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchData(), 300)
     return () => clearTimeout(timeout)
-  }, [search, filterTipo, filterEstado, filterCategoria])
+  }, [fetchData])
 
   // ============================================
   // COMPUTED VALUES
@@ -354,79 +373,125 @@ export function CumplimientoModule() {
   }
 
   const handleSaveDocumento = async () => {
-    if (!documentoForm.titulo.trim()) return
+    if (!documentoForm.titulo.trim()) {
+      toast.error('El título es obligatorio')
+      return
+    }
+    if (!currentCondominio?.id) {
+      toast.error('No hay condominio seleccionado')
+      return
+    }
     
+    setSaving(true)
     try {
       const data = {
         ...documentoForm,
-        condominioId: currentCondominio?.id,
+        condominioId: currentCondominio.id,
       }
       
+      let response
       if (editingDocumento) {
-        await fetch(`/api/cumplimiento/${editingDocumento.id}`, {
+        response = await fetch(`/api/cumplimiento/${editingDocumento.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         })
       } else {
-        await fetch('/api/cumplimiento', {
+        response = await fetch('/api/cumplimiento', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         })
       }
       
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${response.status} al guardar documento`)
+      }
+      
+      toast.success(editingDocumento ? 'Documento actualizado' : 'Documento creado')
       setDocumentoDialogOpen(false)
-      fetchData()
+      await fetchData()
     } catch (error) {
       console.error('Error saving documento:', error)
+      toast.error('Error al guardar documento: ' + (error instanceof Error ? error.message : 'desconocido'))
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleSaveCategoria = async () => {
-    if (!categoriaForm.nombre.trim()) return
+    if (!categoriaForm.nombre.trim()) {
+      toast.error('El nombre de la categoría es obligatorio')
+      return
+    }
+    if (!currentCondominio?.id) {
+      toast.error('No hay condominio seleccionado')
+      return
+    }
     
+    setSaving(true)
     try {
       const data = {
         ...categoriaForm,
         obligatorio: categoriaForm.obligatorio,
         fechaLimiteDias: categoriaForm.fechaLimiteDias ? parseInt(categoriaForm.fechaLimiteDias) : null,
-        condominioId: currentCondominio?.id,
+        condominioId: currentCondominio.id,
       }
       
+      let response
       if (editingCategoria) {
-        await fetch(`/api/cumplimiento/categorias`, {
+        response = await fetch(`/api/cumplimiento/categorias`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...data, id: editingCategoria.id }),
         })
       } else {
-        await fetch('/api/cumplimiento/categorias', {
+        response = await fetch('/api/cumplimiento/categorias', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         })
       }
       
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${response.status} al guardar categoría`)
+      }
+      
+      toast.success(editingCategoria ? 'Categoría actualizada' : 'Categoría creada')
       setCategoriaDialogOpen(false)
-      fetchData()
+      await fetchData()
     } catch (error) {
       console.error('Error saving categoria:', error)
+      toast.error('Error al guardar categoría: ' + (error instanceof Error ? error.message : 'desconocido'))
+    } finally {
+      setSaving(false)
     }
   }
 
   const handleDelete = async () => {
+    setSaving(true)
     try {
+      let response
       if (deleteType === 'documento') {
-        await fetch(`/api/cumplimiento?id=${deleteId}`, { method: 'DELETE' })
+        response = await fetch(`/api/cumplimiento?id=${deleteId}`, { method: 'DELETE' })
       } else {
-        await fetch(`/api/cumplimiento/categorias?id=${deleteId}`, { method: 'DELETE' })
+        response = await fetch(`/api/cumplimiento/categorias?id=${deleteId}`, { method: 'DELETE' })
       }
-      fetchData()
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || `Error ${response.status} al eliminar`)
+      }
+      toast.success(deleteType === 'documento' ? 'Documento eliminado' : 'Categoría eliminada')
+      await fetchData()
     } catch (error) {
       console.error('Error deleting:', error)
+      toast.error('Error al eliminar: ' + (error instanceof Error ? error.message : 'desconocido'))
+    } finally {
+      setSaving(false)
+      setDeleteDialogOpen(false)
     }
-    setDeleteDialogOpen(false)
   }
 
   const openDeleteDialog = (type: 'documento' | 'categoria', id: string) => {
@@ -454,6 +519,40 @@ export function CumplimientoModule() {
   // ============================================
   // RENDER
   // ============================================
+
+  // Mostrar mensaje si no hay condominio seleccionado
+  if (!currentCondominio?.id && !loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center">
+            <Building2 className="w-16 h-16 mx-auto text-slate-400 mb-4" />
+            <h2 className="text-xl font-bold text-slate-700 mb-2">No hay condominio seleccionado</h2>
+            <p className="text-slate-500 text-sm">
+              Para gestionar el cumplimiento legal primero debe seleccionar un condominio.
+              Si no aparece automáticamente, recargue la página o cree un condominio en el módulo de Configuración.
+            </p>
+            <Button className="mt-4" onClick={() => fetchData()}>
+              Reintentar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Mostrar loading inicial
+  if (loading && categorias.length === 0 && documentos.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-[#0A1172] rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Cargando datos de cumplimiento...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* Summary Cards */}
@@ -923,6 +1022,7 @@ export function CumplimientoModule() {
         <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingDocumento ? 'Editar' : 'Nuevo'} Documento de Cumplimiento</DialogTitle>
+            <DialogDescription>Complete los datos del documento y adjunte el archivo si corresponde.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
@@ -1049,7 +1149,7 @@ export function CumplimientoModule() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDocumentoDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveDocumento}>Guardar</Button>
+            <Button onClick={handleSaveDocumento} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1059,6 +1159,7 @@ export function CumplimientoModule() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingCategoria ? 'Editar' : 'Nueva'} Categoría de Cumplimiento</DialogTitle>
+            <DialogDescription>Configure los datos de la categoría de cumplimiento legal.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -1139,7 +1240,7 @@ export function CumplimientoModule() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCategoriaDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveCategoria}>Guardar</Button>
+            <Button onClick={handleSaveCategoria} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1149,6 +1250,7 @@ export function CumplimientoModule() {
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{viewingDocumento?.titulo}</DialogTitle>
+            <DialogDescription>Vista previa del documento adjunto</DialogDescription>
           </DialogHeader>
           <div className="py-4">
             {viewingDocumento?.archivoTipo?.startsWith('image/') ? (
@@ -1202,8 +1304,8 @@ export function CumplimientoModule() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              Eliminar
+            <AlertDialogAction onClick={handleDelete} disabled={saving} className="bg-red-600 hover:bg-red-700">
+              {saving ? 'Eliminando...' : 'Eliminar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

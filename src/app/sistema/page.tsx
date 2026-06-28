@@ -3,12 +3,14 @@
 import { Sidebar } from '@/components/Sidebar'
 import { MainContent } from '@/components/MainContent'
 import { useSession } from '@/hooks/use-session'
+import { useAutoCondominio } from '@/hooks/use-auto-condominio'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 
 export default function SistemaPage() {
   const { authenticated, loading } = useSession()
+  const { status: condominioStatus } = useAutoCondominio()
   const router = useRouter()
 
   useEffect(() => {
@@ -32,6 +34,20 @@ export default function SistemaPage() {
   // Si no está autenticado, no mostrar nada (ya se está redirigiendo)
   if (!authenticated) {
     return null
+  }
+
+  // Mostrar loading mientras se carga el condominio principal en background.
+  // El sistema es para un solo condominio; una vez cargado, todos los módulos
+  // pueden usarlo vía useAppStore().currentCondominio
+  if (condominioStatus === 'loading') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">Cargando condominio...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
