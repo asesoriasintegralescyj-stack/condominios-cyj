@@ -1,9 +1,11 @@
 /**
  * API Dashboard - Sistema CYJ Condominios
  *
- * Dashboard simplificado: muestra solo métricas de los módulos activos.
- * Módulos eliminados (residentes, gastos, gastos-comunes, morosidad,
- * contabilidad, comite, reservas) no se muestran en el dashboard.
+ * Dashboard con métricas de los módulos activos:
+ * - Personal, Activos, Caja Chica
+ * - Órdenes de Trabajo (con estados y aprobaciones)
+ * - Solicitudes de Compra (reemplaza a Propiedades/Unidades)
+ * - Cumplimiento Legal
  */
 
 import { NextResponse } from 'next/server'
@@ -18,7 +20,6 @@ export async function GET() {
 
   try {
     const [
-      totalPropiedades,
       totalPersonal,
       totalActivos,
       valorActivosAgg,
@@ -30,8 +31,12 @@ export async function GET() {
       recentOT,
       documentosCumplimiento,
       resumenCumplimiento,
+      // Solicitudes de Compra
+      scGroupByEstado,
+      scTotal,
+      scMontoAgg,
+      scRecent,
     ] = await Promise.all([
-      db.propiedad.count(),
       db.personal.count(),
       db.activo.count(),
       db.activo.aggregate({ _sum: { valorActual: true } }),
@@ -72,6 +77,32 @@ export async function GET() {
         },
       }),
       db.resumenCumplimiento.findFirst(),
+      // === SOLICITUDES DE COMPRA ===
+      // Agrupadas por estado
+      db.solicitudCompra.groupBy({
+        by: ['estado'],
+        _count: true,
+      }),
+      // Total
+      db.solicitudCompra.count(),
+      // Monto total estimado
+      db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } }),
+      // Últimas 5 solicitudes
+      db.solicitudCompra.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          codigo: true,
+          titulo: true,
+          estado: true,
+          prioridad: true,
+          totalEstimado: true,
+          emailEnviado: true,
+          createdAt: true,
+          origenCodigo: true,
+        },
+      }),
     ]);
 
     const countByEstado = (estado: string): number =>
@@ -80,9 +111,12 @@ export async function GET() {
     const countByAprobacion = (estado: string): number =>
       otGroupByAprobacion.find(g => g.estadoAprobacion === estado)?._count ?? 0;
 
-    // Stats (sin métricas de residentes/gastos que fueron eliminados)
+    // Helper para solicitudes de compra
+    const scByEstado = (estado: string): number =>
+      scGroupByEstado.find(g => g.estado === estado)?._count ?? 0;
+
+    // Stats principales
     const stats = {
-      totalPropiedades,
       totalPersonal,
       totalActivos,
       valorActivos: valorActivosAgg._sum.valorActual ?? 0,
@@ -94,24 +128,17 @@ export async function GET() {
       otPendientesAprobacion: countByAprobacion('Pendiente') + countByAprobacion('') + countByAprobacion(null as unknown as string),
       otAprobadas: countByAprobacion('Aprobada'),
       otRechazadas: countByAprobacion('Rechazada'),
+      // Solicitudes de Compra (reemplaza a Propiedades/Unidades)
+      scTotal,
+      scSolicitadas: scByEstado('Solicitado'),
+      scEnProceso: scByEstado('En Proceso'),
+      scCompradas: scByEstado('Comprado'),
+      scRechazadas: scByEstado('Rechazado'),
+      scMontoTotal: scMontoAgg._sum.totalEstimado ?? 0,
     };
 
-    // Estado de propiedades
-    const [ocupado, disponible, arriendo, venta, mantenimiento] = await Promise.all([
-      db.propiedad.count({ where: { estado: 'Ocupado' } }),
-      db.propiedad.count({ where: { estado: 'Disponible' } }),
-      db.propiedad.count({ where: { estado: 'Arriendo' } }),
-      db.propiedad.count({ where: { estado: 'Venta' } }),
-      db.propiedad.count({ where: { estado: 'Mantenimiento' } }),
-    ]);
-
-    const estadoPropiedades = {
-      Ocupado: ocupado,
-      Disponible: disponible,
-      Arriendo: arriendo,
-      Venta: venta,
-      Mantenimiento: mantenimiento,
-    };
+    // Solicitudes de Compra recientes (reemplaza a "Estado de Propiedades")
+    const solicitudesRecientes = scRecent;
 
     // Centros de costo (sin gastos, que fueron eliminados)
     const centros = await db.centroCostoMaster.findMany();
@@ -200,7 +227,7 @@ export async function GET() {
 
     return NextResponse.json({
       stats,
-      estadoPropiedades,
+      solicitudesRecientes,
       recentOT,
       centrosConGasto,
       cumplimientoStats,

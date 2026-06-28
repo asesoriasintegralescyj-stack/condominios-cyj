@@ -15,11 +15,12 @@ import {
   Clock,
   FileWarning,
   FileText,
-  ArrowRight
+  ArrowRight,
+  ShoppingCart,
+  Mail,
 } from 'lucide-react'
 
 interface DashboardStats {
-  totalPropiedades: number
   totalPersonal: number
   totalActivos: number
   valorActivos: number
@@ -31,14 +32,25 @@ interface DashboardStats {
   otPendientesAprobacion: number
   otAprobadas: number
   otRechazadas: number
+  // Solicitudes de Compra (reemplaza a Propiedades/Unidades)
+  scTotal: number
+  scSolicitadas: number
+  scEnProceso: number
+  scCompradas: number
+  scRechazadas: number
+  scMontoTotal: number
 }
 
-interface EstadoPropiedades {
-  Ocupado: number
-  Disponible: number
-  Arriendo: number
-  Venta: number
-  Mantenimiento: number
+interface SolicitudReciente {
+  id: string
+  codigo: string
+  titulo: string
+  estado: string
+  prioridad: string
+  totalEstimado: number
+  emailEnviado: boolean
+  createdAt: string
+  origenCodigo: string | null
 }
 
 interface OrdenTrabajo {
@@ -81,7 +93,7 @@ interface CumplimientoStats {
 
 interface DashboardData {
   stats: DashboardStats
-  estadoPropiedades: EstadoPropiedades
+  solicitudesRecientes: SolicitudReciente[]
   recentOT: OrdenTrabajo[]
   centrosConGasto: Array<{
     id: string
@@ -165,17 +177,18 @@ export function Dashboard() {
 
   if (!data) return null
 
-  const { stats, estadoPropiedades, recentOT, centrosConGasto, cumplimientoStats } = data
+  const { stats, solicitudesRecientes, recentOT, centrosConGasto, cumplimientoStats } = data
 
   return (
     <div className="space-y-5">
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Card>
+        <Card className={`${stats.scSolicitadas > 0 ? 'border-blue-300 bg-blue-50' : ''}`}>
           <CardContent className="p-4">
-            <div className="text-2xl mb-1">🏠</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Unidades</div>
-            <div className="text-2xl font-bold text-[#0f2040]">{stats.totalPropiedades}</div>
+            <div className="text-2xl mb-1">🛒</div>
+            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Solicitudes Compra</div>
+            <div className="text-2xl font-bold text-blue-600">{stats.scTotal}</div>
+            <div className="text-[9px] text-slate-400 mt-0.5">{stats.scSolicitadas} solicitadas</div>
           </CardContent>
         </Card>
         <Card>
@@ -436,30 +449,66 @@ export function Dashboard() {
 
         {/* Right Side */}
         <div className="space-y-5">
-          {/* Estado Unidades */}
+          {/* Solicitudes de Compra Recientes */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Home className="w-4 h-4" /> Estado Unidades
+                <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra Recientes
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {Object.entries(estadoPropiedades).map(([estado, count]) => 
-                count > 0 && (
-                  <div key={estado} className="flex items-center justify-between py-1 border-b last:border-0">
-                    <Badge className={
-                      estado === 'Ocupado' ? 'bg-red-100 text-red-700' :
-                      estado === 'Disponible' ? 'bg-green-100 text-green-700' :
-                      estado === 'Arriendo' ? 'bg-purple-100 text-purple-700' :
-                      estado === 'Venta' ? 'bg-orange-100 text-orange-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }>
-                      {estado}
-                    </Badge>
-                    <span className="font-bold text-[#0f2040]">{count}</span>
-                  </div>
-                )
+            <CardContent>
+              {solicitudesRecientes.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">No hay solicitudes de compra</p>
+              ) : (
+                <div className="space-y-2">
+                  {solicitudesRecientes.map((sc) => (
+                    <div key={sc.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-mono font-bold text-[#0f2040]">{sc.codigo}</span>
+                          <Badge className={
+                            sc.estado === 'Solicitado' ? 'bg-blue-100 text-blue-700' :
+                            sc.estado === 'En Proceso' ? 'bg-yellow-100 text-yellow-700' :
+                            sc.estado === 'Comprado' ? 'bg-green-100 text-green-700' :
+                            sc.estado === 'Rechazado' ? 'bg-red-100 text-red-700' :
+                            'bg-slate-100 text-slate-700'
+                          }>
+                            {sc.estado}
+                          </Badge>
+                          {sc.emailEnviado && (
+                            <Mail className="w-3 h-3 text-green-600" />
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-600 mt-0.5 truncate">
+                          {sc.titulo}
+                        </div>
+                        {sc.origenCodigo && (
+                          <div className="text-[10px] text-slate-400">
+                            Origen: {sc.origenCodigo}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <div className="text-sm font-bold text-[#0f2040]">
+                          {formatCLP(sc.totalEstimado)}
+                        </div>
+                        <Badge variant="outline" className={
+                          sc.prioridad === 'Urgente' ? 'text-red-600 border-red-300' :
+                          sc.prioridad === 'Alta' ? 'text-orange-600 border-orange-300' :
+                          sc.prioridad === 'Media' ? 'text-yellow-600 border-yellow-300' :
+                          'text-green-600 border-green-300'
+                        }>
+                          {sc.prioridad}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
+              <div className="mt-3 pt-3 border-t flex justify-between items-center">
+                <span className="text-xs text-slate-500">Monto total estimado:</span>
+                <span className="text-sm font-bold text-[#0f2040]">{formatCLP(stats.scMontoTotal)}</span>
+              </div>
             </CardContent>
           </Card>
 
