@@ -388,8 +388,8 @@ export function PersonalModule() {
                   personal.map((per) => (
                     <tr key={per.id} className="border-b last:border-0 hover:bg-slate-50">
                       <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-7 w-7">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar className="h-7 w-7 shrink-0">
                             {per.foto ? (
                               <Image unoptimized src={per.foto} alt={`Foto de ${per.nombre}`} width={28} height={28} className="h-7 w-7 rounded-full object-cover" />
                             ) : (
@@ -398,16 +398,16 @@ export function PersonalModule() {
                             </AvatarFallback>
                             )}
                           </Avatar>
-                          <span className="font-semibold">{per.nombre}</span>
+                          <span className="font-semibold truncate" title={per.nombre}>{per.nombre}</span>
                         </div>
                       </td>
-                      <td className="p-3 font-mono text-xs">{per.rut || '–'}</td>
-                      <td className="p-3">{per.cargo || '–'}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{per.rut || '–'}</td>
+                      <td className="p-3 max-w-[150px] truncate" title={per.cargo || ''}>{per.cargo || '–'}</td>
                       <td className="p-3">
                         <Badge className={contratoColors[per.contrato] || 'bg-slate-100'}>{per.contrato}</Badge>
                       </td>
-                      <td className="p-3 text-xs">{per.afp}</td>
-                      <td className="p-3 font-mono text-xs">{formatCLP(per.sueldoBase)}</td>
+                      <td className="p-3 text-xs whitespace-nowrap">{per.afp}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{formatCLP(per.sueldoBase)}</td>
                       <td className="p-3">
                         <Badge className={estadoColors[per.estado] || 'bg-slate-100'}>{per.estado}</Badge>
                       </td>
@@ -514,24 +514,24 @@ export function PersonalModule() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Nombre Completo</Label>
-                <Input value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
+                <Input className="w-full" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>RUT</Label>
-                <Input value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
+                <Input className="w-full" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Cargo</Label>
-                <Input value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
+                <Input className="w-full" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Contrato</Label>
                 <Select value={formData.contrato} onValueChange={(v) => setFormData({...formData, contrato: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Indefinido', 'Plazo Fijo', 'Por Obra', 'Part-Time'].map(t => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -541,14 +541,14 @@ export function PersonalModule() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Fecha Ingreso</Label>
-                <Input type="date" value={formData.fechaIngreso} onChange={(e) => setFormData({...formData, fechaIngreso: e.target.value})} />
+                <Input className="w-full" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData({...formData, fechaIngreso: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Estado</Label>
                 <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Activo', 'Vacaciones', 'Licencia', 'Inactivo'].map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -561,25 +561,25 @@ export function PersonalModule() {
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">REMUNERACIÓN</div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Sueldo Base ($)</Label>
-                  <Input type="number" value={formData.sueldoBase} onChange={(e) => setFormData({...formData, sueldoBase: parseFloat(e.target.value) || 0})} />
+                  <Input className="w-full text-right" type="number" value={formData.sueldoBase} onChange={(e) => setFormData({...formData, sueldoBase: parseFloat(e.target.value) || 0})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Movilización ($)</Label>
-                  <Input type="number" value={formData.movilizacion} onChange={(e) => setFormData({...formData, movilizacion: parseFloat(e.target.value) || 0})} />
+                  <Input className="w-full text-right" type="number" value={formData.movilizacion} onChange={(e) => setFormData({...formData, movilizacion: parseFloat(e.target.value) || 0})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Colación ($)</Label>
-                  <Input type="number" value={formData.colacion} onChange={(e) => setFormData({...formData, colacion: parseFloat(e.target.value) || 0})} />
+                  <Input className="w-full text-right" type="number" value={formData.colacion} onChange={(e) => setFormData({...formData, colacion: parseFloat(e.target.value) || 0})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Viático ($)</Label>
-                  <Input type="number" value={formData.viatico} onChange={(e) => setFormData({...formData, viatico: parseFloat(e.target.value) || 0})} />
+                  <Input className="w-full text-right" type="number" value={formData.viatico} onChange={(e) => setFormData({...formData, viatico: parseFloat(e.target.value) || 0})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Asignación Familiar ($)</Label>
-                  <Input type="number" value={formData.asigFamiliar} onChange={(e) => setFormData({...formData, asigFamiliar: parseFloat(e.target.value) || 0})} />
+                  <Input className="w-full text-right" type="number" value={formData.asigFamiliar} onChange={(e) => setFormData({...formData, asigFamiliar: parseFloat(e.target.value) || 0})} />
                 </div>
               </div>
             </div>
@@ -587,10 +587,10 @@ export function PersonalModule() {
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">PREVISIÓN</div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>AFP</Label>
                   <Select value={formData.afp} onValueChange={(v) => setFormData({...formData, afp: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {['ProVida', 'Cuprum', 'Habitat', 'Capital', 'Planvital', 'Modelo', 'Uno'].map(a => (
                         <SelectItem key={a} value={a}>{a}</SelectItem>
@@ -598,10 +598,10 @@ export function PersonalModule() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Salud</Label>
                   <Select value={formData.salud} onValueChange={(v) => setFormData({...formData, salud: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {['Fonasa', 'Cruz del Norte', 'Banmédica', 'Colmena', 'Consalud', 'Vida Tres', 'MasVida'].map(s => (
                         <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -609,10 +609,10 @@ export function PersonalModule() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Mutual</Label>
                   <Select value={formData.mutual} onValueChange={(v) => setFormData({...formData, mutual: v})}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {['IST', 'ACHS', 'Mutual de Seguridad', 'CChC'].map(m => (
                         <SelectItem key={m} value={m}>{m}</SelectItem>
@@ -620,9 +620,9 @@ export function PersonalModule() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>CCAF</Label>
-                  <Input value={formData.ccaf} onChange={(e) => setFormData({...formData, ccaf: e.target.value})} />
+                  <Input className="w-full" value={formData.ccaf} onChange={(e) => setFormData({...formData, ccaf: e.target.value})} />
                 </div>
               </div>
             </div>
@@ -630,13 +630,13 @@ export function PersonalModule() {
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">CONTACTO</div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Teléfono</Label>
-                  <Input value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} />
+                  <Input className="w-full" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Email</Label>
-                  <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                  <Input className="w-full" type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
                 </div>
               </div>
             </div>
@@ -687,9 +687,9 @@ export function PersonalModule() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Notas</Label>
-              <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+              <Textarea className="w-full" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
             </div>
           </div>
           <DialogFooter>
@@ -718,14 +718,14 @@ export function PersonalModule() {
                 Ejemplo: Juan Pérez,12.345.678-9,Conserje,Indefinido,ProVida,Fonasa,IST,,500000,30000,30000,Activo,+56912345678,juan@email.com
               </p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Datos CSV</Label>
-              <Textarea 
-                value={bulkData} 
+              <Textarea
+                className="w-full font-mono text-sm"
+                value={bulkData}
                 onChange={(e) => setBulkData(e.target.value)}
                 placeholder="nombre,rut,cargo,contrato,afp,salud,mutual,ccaf,sueldoBase,movilizacion,colacion,estado,telefono,email&#10;Juan Pérez,12.345.678-9,Conserje,Indefinido,ProVida,Fonasa,IST,,500000,30000,30000,Activo,+56912345678,juan@email.com"
                 rows={10}
-                className="font-mono text-sm"
               />
             </div>
             {uploadResult && (

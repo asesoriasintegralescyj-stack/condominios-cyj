@@ -267,15 +267,15 @@ export function InspeccionesModule() {
                 ) : (
                   inspecciones.map((insp) => (
                     <tr key={insp.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 font-semibold">{insp.titulo}</td>
+                      <td className="p-3 font-semibold max-w-[200px] truncate" title={insp.titulo}>{insp.titulo}</td>
                       <td className="p-3">
                         <Badge className={tipoColors[insp.tipo] || 'bg-slate-100'}>{insp.tipo}</Badge>
                       </td>
                       <td className="p-3">
                         <Badge className={estadoColors[insp.estado] || 'bg-slate-100'}>{insp.estado}</Badge>
                       </td>
-                      <td className="p-3 text-xs">{insp.ubicacion || '–'}</td>
-                      <td className="p-3 text-xs">{insp.asignado || '–'}</td>
+                      <td className="p-3 text-xs max-w-[150px] truncate" title={insp.ubicacion || ''}>{insp.ubicacion || '–'}</td>
+                      <td className="p-3 text-xs max-w-[150px] truncate" title={insp.asignado || ''}>{insp.asignado || '–'}</td>
                       <td className="p-3 text-xs">{formatDate(insp.fecha)}</td>
                       <td className="p-3 text-xs">{insp.hora || '–'}</td>
                       <td className="p-3 text-xs">{countPhotos(insp)} 📷</td>
@@ -308,15 +308,15 @@ export function InspeccionesModule() {
             <DialogTitle>{editingInsp ? 'Editar' : 'Nueva'} Inspección</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Título</Label>
-              <Input value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} />
+              <Input className="w-full" value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Tipo</Label>
                 <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Mantenimiento', 'Seguridad', 'Eléctrica', 'Sanitaria', 'Estructural', 'General', 'Otra'].map(t => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -324,10 +324,10 @@ export function InspeccionesModule() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Estado</Label>
                 <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Planificado', 'En Progreso', 'Completado', 'Cancelado'].map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -337,24 +337,24 @@ export function InspeccionesModule() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Fecha</Label>
                 <Input type="date" value={formData.fecha} onChange={(e) => setFormData({...formData, fecha: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Hora</Label>
                 <Input type="time" value={formData.hora} onChange={(e) => setFormData({...formData, hora: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Ubicación</Label>
                 <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Asignado a</Label>
                 <Select value={formData.asignado} onValueChange={(v) => setFormData({...formData, asignado: v})}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sin asignar</SelectItem>
                     {personal.map(p => (
@@ -364,21 +364,21 @@ export function InspeccionesModule() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Descripción</Label>
-              <Textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
+              <Textarea className="w-full" value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
             </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={formData.recurrente} onChange={(e) => setFormData({...formData, recurrente: e.target.checked})} className="rounded" />
               Evento recurrente
             </label>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Notas</Label>
-              <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+              <Textarea className="w-full" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
             </div>
 
             {/* Fotos */}
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
                   <Camera className="w-4 h-4 text-orange-500" />
@@ -402,7 +402,7 @@ export function InspeccionesModule() {
               </div>
               <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                 {fotos.map((foto, i) => (
-                  <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                  <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200 min-w-0">
                     <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -415,7 +415,7 @@ export function InspeccionesModule() {
                   </div>
                 ))}
                 {fotos.length === 0 && (
-                  <div className="col-span-full py-6 text-center text-slate-500 border-2 border-dashed rounded-lg">
+                  <div className="col-span-full py-6 text-center text-slate-500 border-2 border-dashed rounded-lg min-w-0">
                     <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Sin fotos adjuntas</p>
                   </div>
@@ -439,27 +439,27 @@ export function InspeccionesModule() {
           {viewingInsp && (
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Tipo</div>
                   <Badge className={tipoColors[viewingInsp.tipo]}>{viewingInsp.tipo}</Badge>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Estado</div>
                   <Badge className={estadoColors[viewingInsp.estado]}>{viewingInsp.estado}</Badge>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Fecha/Hora</div>
-                  <div className="text-sm">{formatDate(viewingInsp.fecha)} {viewingInsp.hora}</div>
+                  <div className="text-sm truncate">{formatDate(viewingInsp.fecha)} {viewingInsp.hora}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Asignado</div>
-                  <div className="text-sm">{viewingInsp.asignado || '–'}</div>
+                  <div className="text-sm truncate">{viewingInsp.asignado || '–'}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Ubicación</div>
-                  <div className="text-sm">{viewingInsp.ubicacion || '–'}</div>
+                  <div className="text-sm truncate">{viewingInsp.ubicacion || '–'}</div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Fotos</div>
                   <div className="text-sm">{countPhotos(viewingInsp)} 📷</div>
                 </div>
@@ -481,7 +481,7 @@ export function InspeccionesModule() {
                   <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">Fotos ({parseFotoArray(viewingInsp.fotos).length})</div>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                     {parseFotoArray(viewingInsp.fotos).map((foto, i) => (
-                      <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                      <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200 min-w-0">
                         <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                       </div>
                     ))}

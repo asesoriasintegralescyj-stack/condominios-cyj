@@ -253,18 +253,18 @@ export function ActivosModule() {
                 ) : (
                   activos.map((act) => (
                     <tr key={act.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 font-semibold">{act.nombre}</td>
+                      <td className="p-3 font-semibold max-w-[200px] truncate" title={act.nombre}>{act.nombre}</td>
                       <td className="p-3">
                         <Badge className={categoriaColors[act.categoria] || 'bg-slate-100'}>{act.categoria}</Badge>
                       </td>
                       <td className="p-3">
                         <Badge className={estadoColors[act.estado] || 'bg-slate-100'}>{act.estado}</Badge>
                       </td>
-                      <td className="p-3 text-xs text-slate-600">{act.ubicacion || '–'}</td>
-                      <td className="p-3 font-mono text-xs">{act.serie || '–'}</td>
-                      <td className="p-3 font-mono text-xs">{formatCLP(act.costoCompra)}</td>
-                      <td className="p-3 font-mono text-xs">{formatCLP(act.valorActual)}</td>
-                      <td className="p-3 text-xs">{act.asignado?.nombre || '–'}</td>
+                      <td className="p-3 text-xs text-slate-600 max-w-[150px] truncate" title={act.ubicacion || ''}>{act.ubicacion || '–'}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{act.serie || '–'}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{formatCLP(act.costoCompra)}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{formatCLP(act.valorActual)}</td>
+                      <td className="p-3 text-xs max-w-[150px] truncate" title={act.asignado?.nombre || ''}>{act.asignado?.nombre || '–'}</td>
                       <td className="p-3">
                         <div className="flex justify-center gap-1">
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(act)}>
@@ -292,14 +292,14 @@ export function ActivosModule() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Nombre</Label>
-                <Input value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
+                <Input className="w-full" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Categoría</Label>
                 <Select value={formData.categoria} onValueChange={(v) => setFormData({...formData, categoria: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Equipo', 'Herramienta', 'Vehículo', 'Mobiliario', 'Infraestructura', 'Tecnología'].map(c => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -309,10 +309,10 @@ export function ActivosModule() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Estado</Label>
                 <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Activo', 'Inactivo', 'En Reparación', 'Dado de Baja'].map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -320,35 +320,35 @@ export function ActivosModule() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Ubicación</Label>
-                <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} />
+                <Input className="w-full" value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>N° Serie</Label>
-                <Input value={formData.serie} onChange={(e) => setFormData({...formData, serie: e.target.value})} />
+                <Input className="w-full" value={formData.serie} onChange={(e) => setFormData({...formData, serie: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Fecha Compra</Label>
-                <Input type="date" value={formData.fechaCompra} onChange={(e) => setFormData({...formData, fechaCompra: e.target.value})} />
+                <Input className="w-full" type="date" value={formData.fechaCompra} onChange={(e) => setFormData({...formData, fechaCompra: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Costo Compra ($)</Label>
-                <Input type="number" value={formData.costoCompra} onChange={(e) => setFormData({...formData, costoCompra: parseFloat(e.target.value) || 0})} />
+                <Input className="w-full text-right" type="number" value={formData.costoCompra} onChange={(e) => setFormData({...formData, costoCompra: parseFloat(e.target.value) || 0})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Valor Actual ($)</Label>
-                <Input type="number" value={formData.valorActual} onChange={(e) => setFormData({...formData, valorActual: parseFloat(e.target.value) || 0})} />
+                <Input className="w-full text-right" type="number" value={formData.valorActual} onChange={(e) => setFormData({...formData, valorActual: parseFloat(e.target.value) || 0})} />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Asignado a</Label>
               <Select value={formData.asignadoId} onValueChange={(v) => setFormData({...formData, asignadoId: v})}>
-                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Sin asignar</SelectItem>
                   {personal.map(p => (
@@ -357,9 +357,9 @@ export function ActivosModule() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Descripción</Label>
-              <Textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
+              <Textarea className="w-full" value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
             </div>
           </div>
           <DialogFooter>

@@ -182,14 +182,14 @@ export function CentroCostoModule() {
                     const porcentaje = centro.presupuesto > 0 ? Math.round((gastado / centro.presupuesto) * 100) : 0
                     return (
                       <tr key={centro.id} className="border-b last:border-0 hover:bg-slate-50">
-                        <td className="p-3 font-semibold">{centro.nombre}</td>
-                        <td className="p-3 text-xs text-slate-600">{centro.descripcion || '–'}</td>
-                        <td className="p-3 font-mono text-xs">{formatCLP(centro.presupuesto)}</td>
-                        <td className="p-3 font-mono text-xs text-red-600">{formatCLP(gastado)}</td>
-                        <td className={`p-3 font-mono text-xs ${disponible < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        <td className="p-3 font-semibold max-w-[200px] truncate" title={centro.nombre}>{centro.nombre}</td>
+                        <td className="p-3 text-xs text-slate-600 max-w-[260px] truncate" title={centro.descripcion || ''}>{centro.descripcion || '–'}</td>
+                        <td className="p-3 font-mono text-xs whitespace-nowrap">{formatCLP(centro.presupuesto)}</td>
+                        <td className="p-3 font-mono text-xs text-red-600 whitespace-nowrap">{formatCLP(gastado)}</td>
+                        <td className={`p-3 font-mono text-xs whitespace-nowrap ${disponible < 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {formatCLP(disponible)}
                         </td>
-                        <td className="p-3 min-w-[100px]">
+                        <td className="p-3 min-w-[120px]">
                           <div className="flex items-center gap-2">
                             <Progress 
                               value={porcentaje} 
@@ -218,9 +218,9 @@ export function CentroCostoModule() {
               </tbody>
             </table>
           </div>
-          <div className="p-3 border-t flex justify-end gap-5 text-sm">
-            <span>Presupuesto total: <b>{formatCLP(totalPresupuesto)}</b></span>
-            <span>Total gastado: <b className="text-red-600">{formatCLP(totalGastado)}</b></span>
+          <div className="p-3 border-t flex flex-wrap justify-end gap-x-5 gap-y-1 text-sm">
+            <span className="whitespace-nowrap">Presupuesto total: <b>{formatCLP(totalPresupuesto)}</b></span>
+            <span className="whitespace-nowrap">Total gastado: <b className="text-red-600">{formatCLP(totalGastado)}</b></span>
           </div>
         </CardContent>
       </Card>
@@ -232,23 +232,23 @@ export function CentroCostoModule() {
             <DialogTitle>{editingCentro ? 'Editar' : 'Nuevo'} Centro de Costo</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Nombre</Label>
-              <Input value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
+              <Input className="w-full" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Descripción</Label>
-              <Input value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
+              <Input className="w-full" value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Presupuesto ($)</Label>
-                <Input type="number" value={formData.presupuesto} onChange={(e) => setFormData({...formData, presupuesto: parseFloat(e.target.value) || 0})} />
+                <Input className="w-full text-right" type="number" value={formData.presupuesto} onChange={(e) => setFormData({...formData, presupuesto: parseFloat(e.target.value) || 0})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Estado</Label>
                 <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Activo', 'Inactivo', 'Cerrado'].map(s => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>

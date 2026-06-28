@@ -245,12 +245,12 @@ export function ProveedoresModule() {
                 ) : (
                   proveedores.map((prov) => (
                     <tr key={prov.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 font-semibold">{prov.razonSocial}</td>
-                      <td className="p-3 font-mono text-xs">{prov.rut || '–'}</td>
-                      <td className="p-3 text-xs text-slate-600">{prov.giro || '–'}</td>
-                      <td className="p-3 text-xs">{prov.comuna || '–'}</td>
-                      <td className="p-3 text-xs">{prov.telCorp || '–'}</td>
-                      <td className="p-3 text-xs">{prov.contacto || '–'}</td>
+                      <td className="p-3 font-semibold max-w-[240px] truncate" title={prov.razonSocial}>{prov.razonSocial}</td>
+                      <td className="p-3 font-mono text-xs whitespace-nowrap">{prov.rut || '–'}</td>
+                      <td className="p-3 text-xs text-slate-600 max-w-[180px] truncate" title={prov.giro || ''}>{prov.giro || '–'}</td>
+                      <td className="p-3 text-xs max-w-[120px] truncate" title={prov.comuna || ''}>{prov.comuna || '–'}</td>
+                      <td className="p-3 text-xs whitespace-nowrap">{prov.telCorp || '–'}</td>
+                      <td className="p-3 text-xs max-w-[150px] truncate" title={prov.contacto || ''}>{prov.contacto || '–'}</td>
                       <td className="p-3">
                         <Badge className={estadoColors[prov.estado] || 'bg-slate-100'}>{prov.estado}</Badge>
                       </td>
@@ -281,70 +281,70 @@ export function ProveedoresModule() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Razón Social</Label>
-                <Input value={formData.razonSocial} onChange={(e) => setFormData({...formData, razonSocial: e.target.value})} />
+                <Input className="w-full" value={formData.razonSocial} onChange={(e) => setFormData({...formData, razonSocial: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>RUT</Label>
-                <Input placeholder="76.123.456-7" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
+                <Input className="w-full" placeholder="76.123.456-7" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Giro</Label>
-                <Input value={formData.giro} onChange={(e) => setFormData({...formData, giro: e.target.value})} />
+                <Input className="w-full" value={formData.giro} onChange={(e) => setFormData({...formData, giro: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Dirección</Label>
-                <Input value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value})} />
+                <Input className="w-full" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Comuna</Label>
-                <Input value={formData.comuna} onChange={(e) => setFormData({...formData, comuna: e.target.value})} />
+                <Input className="w-full" value={formData.comuna} onChange={(e) => setFormData({...formData, comuna: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Tel. Corporativo</Label>
-                <Input value={formData.telCorp} onChange={(e) => setFormData({...formData, telCorp: e.target.value})} />
+                <Input className="w-full" value={formData.telCorp} onChange={(e) => setFormData({...formData, telCorp: e.target.value})} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Email Corporativo</Label>
-                <Input type="email" value={formData.emailCorp} onChange={(e) => setFormData({...formData, emailCorp: e.target.value})} />
+                <Input className="w-full" type="email" value={formData.emailCorp} onChange={(e) => setFormData({...formData, emailCorp: e.target.value})} />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Página Web</Label>
-                <Input value={formData.web} onChange={(e) => setFormData({...formData, web: e.target.value})} />
+                <Input className="w-full" value={formData.web} onChange={(e) => setFormData({...formData, web: e.target.value})} />
               </div>
             </div>
 
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">PERSONA DE CONTACTO</div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Contacto</Label>
-                  <Input value={formData.contacto} onChange={(e) => setFormData({...formData, contacto: e.target.value})} />
+                  <Input className="w-full" value={formData.contacto} onChange={(e) => setFormData({...formData, contacto: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Cargo</Label>
-                  <Input value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
+                  <Input className="w-full" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Tel. Directo</Label>
-                  <Input value={formData.telDirecto} onChange={(e) => setFormData({...formData, telDirecto: e.target.value})} />
+                  <Input className="w-full" value={formData.telDirecto} onChange={(e) => setFormData({...formData, telDirecto: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Email Contacto</Label>
-                  <Input type="email" value={formData.emailContacto} onChange={(e) => setFormData({...formData, emailContacto: e.target.value})} />
+                  <Input className="w-full" type="email" value={formData.emailContacto} onChange={(e) => setFormData({...formData, emailContacto: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Celular</Label>
-                  <Input value={formData.celular} onChange={(e) => setFormData({...formData, celular: e.target.value})} />
+                  <Input className="w-full" value={formData.celular} onChange={(e) => setFormData({...formData, celular: e.target.value})} />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0">
                   <Label>Estado</Label>
                   <select 
                     className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
@@ -359,9 +359,9 @@ export function ProveedoresModule() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Notas</Label>
-              <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+              <Textarea className="w-full" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
             </div>
           </div>
           <DialogFooter>

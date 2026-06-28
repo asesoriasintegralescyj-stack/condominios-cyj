@@ -110,22 +110,23 @@ function MetricCard({ titulo, numero, icon, color, bgColor, subtitulo, onClick }
     >
       {/* Decoración: círculo de color semi-transparente en esquina */}
       <div
-        className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-10 transition-opacity group-hover:opacity-20"
+        aria-hidden="true"
+        className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-10 transition-opacity group-hover:opacity-20 pointer-events-none z-0"
         style={{ backgroundColor: color }}
       />
 
-      <div className="flex items-center gap-2 mb-2 relative">
+      <div className="flex items-center gap-2 mb-2 relative z-10 min-w-0">
         <span style={{ color }} className="shrink-0">{icon}</span>
-        <span className="text-sm font-normal" style={{ color: colors.grisMedio }}>{titulo}</span>
+        <span className="text-sm font-normal truncate" style={{ color: colors.grisMedio }}>{titulo}</span>
       </div>
-      <div className="text-3xl font-bold relative" style={{ color }}>
+      <div className="text-3xl font-bold relative z-10 truncate" style={{ color }}>
         {numero}
       </div>
       {subtitulo && (
-        <div className="text-xs mt-1 relative" style={{ color: colors.grisMedio }}>{subtitulo}</div>
+        <div className="text-xs mt-1 relative z-10 truncate" style={{ color: colors.grisMedio }}>{subtitulo}</div>
       )}
       {onClick && (
-        <div className="flex items-center gap-1 mt-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity relative" style={{ color }}>
+        <div className="flex items-center gap-1 mt-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity relative z-10" style={{ color }}>
           Ver detalles <ArrowRight className="w-3 h-3" />
         </div>
       )}
@@ -143,7 +144,7 @@ function ProgressBar({ completadas, total, label }: { completadas: number; total
         </span>
         <span className="text-sm font-bold" style={{ color: colors.azul }}>{pct}%</span>
       </div>
-      <div className="w-full rounded-full h-2" style={{ backgroundColor: colors.grisClaro }}>
+      <div className="w-full rounded-full h-2 overflow-hidden" style={{ backgroundColor: colors.grisClaro }}>
         <div
           className="h-2 rounded-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: colors.grisOscuro }}
@@ -167,13 +168,16 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[...Array(8)].map((_, i) => (
-          <div key={i} className="bg-white rounded-lg border p-5 animate-pulse" style={{ borderColor: colors.grisClaro }}>
-            <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
-            <div className="h-8 bg-gray-200 rounded w-1/2"></div>
-          </div>
-        ))}
+      <div className="space-y-5">
+        <div className="h-7 bg-gray-200 rounded w-64 animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(12)].map((_, i) => (
+            <div key={i} className="bg-white rounded-lg border p-5 animate-pulse" style={{ borderColor: colors.grisClaro }}>
+              <div className="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -188,8 +192,8 @@ export function Dashboard() {
   return (
     <div className="space-y-5">
       {/* Título */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold" style={{ color: colors.azul }}>
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <h1 className="text-base sm:text-xl font-semibold truncate" style={{ color: colors.azul }}>
           Panel de Control — LAGUNA NORTE
         </h1>
       </div>
@@ -197,7 +201,7 @@ export function Dashboard() {
       {/* Fila 1: Órdenes de Trabajo (4 cards clickeables) */}
       <div>
         <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>ÓRDENES DE TRABAJO</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             titulo="Total OT"
             numero={totalOT}
@@ -240,7 +244,7 @@ export function Dashboard() {
       {/* Fila 2: Solicitudes de Compra (4 cards clickeables) */}
       <div>
         <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>SOLICITUDES DE COMPRA</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             titulo="Total Solicitudes"
             numero={stats.scTotal}
@@ -283,7 +287,7 @@ export function Dashboard() {
       {/* Fila 3: Recursos y Cumplimiento (4 cards clickeables) */}
       <div>
         <h2 className="text-sm font-semibold mb-2" style={{ color: colors.grisMedio }}>RECURSOS Y CUMPLIMIENTO</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
             titulo="Personal Activo"
             numero={stats.totalPersonal}
@@ -340,14 +344,15 @@ export function Dashboard() {
       {/* Sección: OT Recientes + Solicitudes Recientes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* OT Recientes */}
-        <div className="bg-white rounded-lg border p-5" style={{ borderColor: colors.grisClaro }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.grisOscuro }}>
-              <Wrench className="w-4 h-4" /> OT Recientes
+        <div className="bg-white rounded-lg border p-5 overflow-hidden min-w-0" style={{ borderColor: colors.grisClaro }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0" style={{ color: colors.grisOscuro }}>
+              <Wrench className="w-4 h-4 shrink-0" />
+              <span className="truncate">OT Recientes</span>
             </h3>
             <button
               onClick={() => setCurrentModule('ot')}
-              className="text-xs font-medium flex items-center gap-1 hover:underline"
+              className="text-xs font-medium flex items-center gap-1 hover:underline shrink-0"
               style={{ color: colors.azul }}
             >
               Ver todas <ArrowRight className="w-3 h-3" />
@@ -355,12 +360,12 @@ export function Dashboard() {
           </div>
           <div className="space-y-2">
             {recentOT.slice(0, 5).map((ot) => (
-              <div key={ot.id} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+              <div key={ot.id} className="flex items-center justify-between gap-2 py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold" style={{ color: colors.grisOscuro }}>{ot.otNum}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-mono font-bold shrink-0" style={{ color: colors.grisOscuro }}>{ot.otNum}</span>
                     <span
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
                       style={{
                         backgroundColor: ot.estado === 'Completado' ? '#d1e7dd' : ot.estado === 'Pendiente' ? '#fff3cd' : '#cfe2ff',
                         color: ot.estado === 'Completado' ? colors.verde : ot.estado === 'Pendiente' ? colors.naranja : colors.azul,
@@ -371,7 +376,7 @@ export function Dashboard() {
                   </div>
                   <div className="text-xs text-slate-600 mt-0.5 truncate">{ot.titulo}</div>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{
+                <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{
                   backgroundColor: ot.prioridad === 'Urgente' ? '#f8d7da' : ot.prioridad === 'Alta' ? '#fff3cd' : '#e2e3e5',
                   color: ot.prioridad === 'Urgente' ? colors.rojo : ot.prioridad === 'Alta' ? colors.naranja : colors.grisMedio,
                 }}>
@@ -383,14 +388,15 @@ export function Dashboard() {
         </div>
 
         {/* Solicitudes de Compra Recientes */}
-        <div className="bg-white rounded-lg border p-5" style={{ borderColor: colors.grisClaro }}>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: colors.grisOscuro }}>
-              <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra Recientes
+        <div className="bg-white rounded-lg border p-5 overflow-hidden min-w-0" style={{ borderColor: colors.grisClaro }}>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2 min-w-0" style={{ color: colors.grisOscuro }}>
+              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <span className="truncate">Solicitudes de Compra Recientes</span>
             </h3>
             <button
               onClick={() => setCurrentModule('solicitudescompra')}
-              className="text-xs font-medium flex items-center gap-1 hover:underline"
+              className="text-xs font-medium flex items-center gap-1 hover:underline shrink-0"
               style={{ color: colors.azul }}
             >
               Ver todas <ArrowRight className="w-3 h-3" />
@@ -401,12 +407,12 @@ export function Dashboard() {
               <p className="text-xs text-center py-4" style={{ color: colors.grisMedio }}>No hay solicitudes</p>
             ) : (
               solicitudesRecientes.map((sc) => (
-                <div key={sc.id} className="flex items-center justify-between py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+                <div key={sc.id} className="flex items-center justify-between gap-2 py-2 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold" style={{ color: colors.grisOscuro }}>{sc.codigo}</span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-mono font-bold shrink-0" style={{ color: colors.grisOscuro }}>{sc.codigo}</span>
                       <span
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                        className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
                         style={{
                           backgroundColor: sc.estado === 'Solicitado' ? '#cfe2ff' : sc.estado === 'Comprado' ? '#d1e7dd' : '#f8d7da',
                           color: sc.estado === 'Solicitado' ? colors.azul : sc.estado === 'Comprado' ? colors.verde : colors.rojo,
@@ -417,8 +423,8 @@ export function Dashboard() {
                     </div>
                     <div className="text-xs text-slate-600 mt-0.5 truncate">{sc.titulo}</div>
                   </div>
-                  <div className="text-right shrink-0 ml-2">
-                    <div className="text-sm font-bold" style={{ color: colors.grisOscuro }}>
+                  <div className="text-right shrink-0 ml-2 min-w-0">
+                    <div className="text-sm font-bold truncate" style={{ color: colors.grisOscuro }}>
                       {formatCLP(sc.totalEstimado)}
                     </div>
                   </div>

@@ -175,16 +175,16 @@ export function Sidebar() {
   return (
     <aside className="w-56 bg-[#0f2040] flex flex-col h-full shrink-0">
       {/* Logo */}
-      <div className="p-4 border-b border-white/10">
-        <div className="flex items-center gap-2">
+      <div className="p-4 border-b border-white/10 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <img
             src="/logo.jpg"
             alt="Asesorías Integrales CyJ"
-            className="w-10 h-10 rounded-lg object-cover"
+            className="w-10 h-10 rounded-lg object-cover shrink-0"
           />
-          <div>
-            <div className="text-white text-xs font-bold leading-tight">Asesorías Integrales CyJ</div>
-            <div className="text-blue-300 text-[9px] font-medium">Administración de Condominios</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-white text-xs font-bold leading-tight truncate">Asesorías Integrales CyJ</div>
+            <div className="text-blue-300 text-[9px] font-medium truncate">Administración de Condominios</div>
             {currentCondominio?.nombre && (
               <div className="text-amber-400 text-[10px] font-bold mt-0.5 truncate">
                 {currentCondominio.nombre}
@@ -195,10 +195,10 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-2">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden p-2 min-w-0">
         {filteredMenuItems.map((section) => (
           <div key={section.section} className="mb-2">
-            <div className="px-3 py-2 text-[10px] font-bold text-white/30 uppercase tracking-wider">
+            <div className="px-3 py-2 text-[10px] font-bold text-white/40 uppercase tracking-wider">
               {section.section}
             </div>
             {section.items.map((item) => (
@@ -206,7 +206,7 @@ export function Sidebar() {
                 key={item.id}
                 onClick={() => setCurrentModule(item.id)}
                 className={cn(
-                  'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+                  'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all min-w-0',
                   currentModule === item.id
                     ? 'bg-amber-500/20 text-amber-500'
                     : 'text-white/60 hover:bg-white/10 hover:text-white'
@@ -222,42 +222,42 @@ export function Sidebar() {
 
       {/* User Menu */}
       {user && (
-        <div className="p-2 border-t border-white/10">
+        <div className="p-2 border-t border-white/10 min-w-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start gap-2 px-2 py-2 h-auto text-white/70 hover:text-white hover:bg-white/10"
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 px-2 py-2 h-auto text-white/70 hover:text-white hover:bg-white/10 min-w-0"
               >
-                <Avatar className="h-8 w-8 bg-amber-500/20 text-amber-500">
+                <Avatar className="h-8 w-8 bg-amber-500/20 text-amber-500 shrink-0">
                   <AvatarFallback className="bg-amber-500/20 text-amber-500 text-xs font-bold">
                     {getInitials()}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left min-w-0">
                   <div className="text-xs font-medium truncate">
                     {user.nombre} {user.apellido}
                   </div>
-                  <div className="text-[10px] text-white/50 flex items-center gap-1">
+                  <div className="text-[10px] text-white/50 flex items-center gap-1 truncate">
                     {getRoleIcon()}
-                    {getRoleLabel()}
+                    <span className="truncate">{getRoleLabel()}</span>
                   </div>
                 </div>
-                <ChevronUp className="h-4 w-4 text-white/50 ml-auto" />
+                <ChevronUp className="h-4 w-4 text-white/50 ml-auto shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent 
-              align="end" 
+            <DropdownMenuContent
+              align="end"
               className="w-48 bg-[#1a3155] border-white/10 text-white"
             >
-              <div className="px-2 py-1.5 text-xs text-white/50">
+              <div className="px-2 py-1.5 text-xs text-white/50 truncate">
                 {user.email}
               </div>
               <DropdownMenuSeparator className="bg-white/10" />
-              
+
               {isAdmin() && (
                 <>
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     className="text-white/70 focus:text-white focus:bg-white/10 cursor-pointer"
                     onClick={() => setCurrentModule('usuarios')}
                   >
@@ -267,8 +267,8 @@ export function Sidebar() {
                   <DropdownMenuSeparator className="bg-white/10" />
                 </>
               )}
-              
-              <DropdownMenuItem 
+
+              <DropdownMenuItem
                 className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
                 onClick={handleLogout}
               >
@@ -281,7 +281,7 @@ export function Sidebar() {
       )}
 
       {/* Footer */}
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/10 shrink-0">
         <div className="text-white/25 text-[9px] text-center leading-relaxed">
           Asesorías Integrales CyJ<br/>
           Administración de Condominios<br/>

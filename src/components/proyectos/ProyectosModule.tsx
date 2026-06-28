@@ -554,21 +554,21 @@ export function ProyectosModule() {
           {selectedProy && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
+                <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Categoría</Label>
                   <Badge className={categoriaColors[selectedProy.categoria] || 'bg-slate-100'}>{selectedProy.categoria}</Badge>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Estado</Label>
                   <Badge className={estadoColors[selectedProy.estado] || 'bg-slate-100'}>{selectedProy.estado}</Badge>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Presupuesto Programado</Label>
-                  <p className="font-bold">{formatCLP(selectedProy.presProg)}</p>
+                  <p className="font-bold truncate">{formatCLP(selectedProy.presProg)}</p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Presupuesto Usado</Label>
-                  <p className="font-bold text-red-600">{formatCLP(selectedProy.presUsado)}</p>
+                  <p className="font-bold text-red-600 truncate">{formatCLP(selectedProy.presUsado)}</p>
                 </div>
               </div>
               
@@ -591,22 +591,22 @@ export function ProyectosModule() {
 
               {/* Recursos del proyecto */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                <div className="bg-slate-50 p-3 rounded">
+                <div className="bg-slate-50 p-3 rounded min-w-0">
                   <Package className="w-5 h-5 mx-auto mb-1 text-slate-500" />
                   <div className="text-lg font-bold">{selectedProy.materiales?.length || 0}</div>
                   <div className="text-xs text-slate-500">Materiales</div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded">
+                <div className="bg-slate-50 p-3 rounded min-w-0">
                   <Wrench className="w-5 h-5 mx-auto mb-1 text-slate-500" />
                   <div className="text-lg font-bold">{selectedProy.herramientas?.length || 0}</div>
                   <div className="text-xs text-slate-500">Herramientas</div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded">
+                <div className="bg-slate-50 p-3 rounded min-w-0">
                   <CheckSquare className="w-5 h-5 mx-auto mb-1 text-slate-500" />
                   <div className="text-lg font-bold">{selectedProy.tareas?.length || 0}</div>
                   <div className="text-xs text-slate-500">Tareas</div>
                 </div>
-                <div className="bg-slate-50 p-3 rounded">
+                <div className="bg-slate-50 p-3 rounded min-w-0">
                   <FileText className="w-5 h-5 mx-auto mb-1 text-slate-500" />
                   <div className="text-lg font-bold">{selectedProy.documentos?.length || 0}</div>
                   <div className="text-xs text-slate-500">Documentos</div>
@@ -619,17 +619,17 @@ export function ProyectosModule() {
                   <Label className="text-xs text-slate-500 mb-2 block">Documentos Adjuntos</Label>
                   <div className="space-y-2">
                     {selectedProy.documentos.map((doc) => (
-                      <div key={doc.id} className="flex items-center justify-between bg-slate-50 p-2 rounded">
-                        <div className="flex items-center gap-2">
-                          <Paperclip className="w-4 h-4 text-slate-400" />
-                          <div>
-                            <span className="text-sm font-medium">{doc.nombre}</span>
-                            <Badge className={`ml-2 ${documentoTipoColors[doc.tipo] || 'bg-slate-100'}`}>
+                      <div key={doc.id} className="flex items-center justify-between bg-slate-50 p-2 rounded gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
+                          <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium truncate">{doc.nombre}</span>
+                            <Badge className={`${documentoTipoColors[doc.tipo] || 'bg-slate-100'}`}>
                               {doc.tipo}
                             </Badge>
                           </div>
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => viewDocumento(doc)}>
+                        <Button size="sm" variant="ghost" onClick={() => viewDocumento(doc)} className="shrink-0">
                           <Eye className="w-4 h-4" />
                         </Button>
                       </div>
@@ -667,14 +667,14 @@ export function ProyectosModule() {
               {/* General Tab */}
               <TabsContent value="general" className="space-y-4 mt-0">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Nombre</Label>
-                    <Input value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
+                    <Input value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} className="w-full" />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Categoría</Label>
                     <Select value={formData.categoria} onValueChange={(v) => setFormData({...formData, categoria: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {['Áreas Verdes', 'Eléctrico', 'Sanitario', 'Infraestructura', 'Seguridad', 'Administración', 'Otro'].map(c => (
                           <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -684,10 +684,10 @@ export function ProyectosModule() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Estado</Label>
                     <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {['Planificado', 'En Ejecución', 'Completado', 'Cancelado', 'Pausado'].map(s => (
                           <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -695,19 +695,19 @@ export function ProyectosModule() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Ubicación</Label>
-                    <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} />
+                    <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} className="w-full" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Presupuesto Programado ($)</Label>
-                    <Input type="number" value={formData.presProg} onChange={(e) => setFormData({...formData, presProg: parseFloat(e.target.value) || 0})} />
+                    <Input type="number" value={formData.presProg} onChange={(e) => setFormData({...formData, presProg: parseFloat(e.target.value) || 0})} className="w-full text-right" />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Presupuesto Usado (calculado) ($)</Label>
-                    <Input type="number" value={granTotal} disabled className="bg-slate-100" />
+                    <Input type="number" value={granTotal} disabled className="w-full bg-slate-100 text-right" />
                     <p className="text-xs text-slate-500">Se calcula automáticamente desde materiales y personal</p>
                   </div>
                 </div>
@@ -716,22 +716,22 @@ export function ProyectosModule() {
                   <input type="range" min="0" max="100" value={formData.avance} onChange={(e) => setFormData({...formData, avance: parseInt(e.target.value)})} className="w-full" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Fecha Inicio</Label>
-                    <Input type="date" value={formData.fechaInicio} onChange={(e) => setFormData({...formData, fechaInicio: e.target.value})} />
+                    <Input type="date" value={formData.fechaInicio} onChange={(e) => setFormData({...formData, fechaInicio: e.target.value})} className="w-full" />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label>Fecha Fin</Label>
-                    <Input type="date" value={formData.fechaFin} onChange={(e) => setFormData({...formData, fechaFin: e.target.value})} />
+                    <Input type="date" value={formData.fechaFin} onChange={(e) => setFormData({...formData, fechaFin: e.target.value})} className="w-full" />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Descripción</Label>
-                  <Textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} />
+                  <Textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} className="w-full" />
                 </div>
                 <div className="space-y-2">
                   <Label>Notas</Label>
-                  <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+                  <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} className="w-full" />
                 </div>
               </TabsContent>
 
@@ -797,17 +797,16 @@ export function ProyectosModule() {
                 {herramientas.length > 0 ? (
                   <div className="space-y-2">
                     {herramientas.map((h, i) => (
-                      <div key={h.id} className="grid grid-cols-6 gap-2 items-end bg-slate-50 p-2 rounded">
-                        <div className="col-span-3">
+                      <div key={h.id} className="grid grid-cols-6 gap-3 items-end bg-slate-50 p-2 rounded">
+                        <div className="col-span-4 min-w-0">
                           <Label className="text-[10px]">Nombre</Label>
-                          <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8" />
+                          <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8 w-full" />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 min-w-0">
                           <Label className="text-[10px]">Cantidad</Label>
-                          <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8" />
+                          <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
                         </div>
-                        <div className="col-span-1"></div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeHerramienta(i)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -832,19 +831,19 @@ export function ProyectosModule() {
                 {tareas.length > 0 ? (
                   <div className="space-y-2">
                     {tareas.map((t, i) => (
-                      <div key={t.id} className="grid grid-cols-6 gap-2 items-end bg-slate-50 p-2 rounded">
-                        <div className="col-span-3">
+                      <div key={t.id} className="grid grid-cols-6 gap-3 items-end bg-slate-50 p-2 rounded">
+                        <div className="col-span-3 min-w-0">
                           <Label className="text-[10px]">Descripción</Label>
-                          <Input value={t.descripcion} onChange={(e) => updateTarea(i, 'descripcion', e.target.value)} className="h-8" />
+                          <Input value={t.descripcion} onChange={(e) => updateTarea(i, 'descripcion', e.target.value)} className="h-8 w-full" />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 min-w-0">
                           <Label className="text-[10px]">Cantidad</Label>
-                          <Input type="number" value={t.cantidad} onChange={(e) => updateTarea(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8" />
+                          <Input type="number" value={t.cantidad} onChange={(e) => updateTarea(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 min-w-0">
                           <Label className="text-[10px]">Estado</Label>
                           <Select value={t.estado} onValueChange={(v) => updateTarea(i, 'estado', v)}>
-                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {['Pendiente', 'En Progreso', 'Completado'].map(s => (
                                 <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -852,7 +851,7 @@ export function ProyectosModule() {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeTarea(i)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -937,15 +936,15 @@ export function ProyectosModule() {
                   <div className="space-y-2">
                     {documentos.map((d, i) => (
                       <div key={d.id} className="bg-slate-50 p-3 rounded">
-                        <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-4">
+                        <div className="grid grid-cols-12 gap-3 items-end">
+                          <div className="col-span-4 min-w-0">
                             <Label className="text-[10px]">Nombre del archivo</Label>
-                            <Input value={d.nombre} onChange={(e) => updateDocumento(i, 'nombre', e.target.value)} className="h-8" />
+                            <Input value={d.nombre} onChange={(e) => updateDocumento(i, 'nombre', e.target.value)} className="h-8 w-full" />
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-2 min-w-0">
                             <Label className="text-[10px]">Tipo</Label>
                             <Select value={d.tipo} onValueChange={(v) => updateDocumento(i, 'tipo', v)}>
-                              <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                              <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="cotizacion">Cotización</SelectItem>
                                 <SelectItem value="respaldo">Respaldo</SelectItem>
@@ -955,16 +954,16 @@ export function ProyectosModule() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="col-span-3">
+                          <div className="col-span-4 min-w-0">
                             <Label className="text-[10px]">Descripción</Label>
-                            <Input value={d.descripcion || ''} onChange={(e) => updateDocumento(i, 'descripcion', e.target.value)} className="h-8" />
+                            <Input value={d.descripcion || ''} onChange={(e) => updateDocumento(i, 'descripcion', e.target.value)} className="h-8 w-full" />
                           </div>
-                          <div className="col-span-1">
+                          <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
                             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => viewDocumento(d)}>
                               <Eye className="w-4 h-4" />
                             </Button>
                           </div>
-                          <div className="col-span-2">
+                          <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
                             <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeDocumento(i)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>

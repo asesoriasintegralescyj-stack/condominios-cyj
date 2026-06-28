@@ -683,14 +683,14 @@ export function CumplimientoModule() {
           <CardContent className="space-y-2">
             {documentosVencidos.map(doc => (
               <div key={doc.id} className="flex items-center justify-between p-2 bg-red-50 rounded border border-red-200">
-                <div className="flex items-center gap-2">
-                  <FileX className="w-4 h-4 text-red-500" />
-                  <div>
-                    <p className="text-sm font-medium">{doc.titulo}</p>
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileX className="w-4 h-4 text-red-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" title={doc.titulo}>{doc.titulo}</p>
                     <p className="text-xs text-red-600">Vencido el {formatDate(doc.fechaVencimiento)}</p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => openDocumentoDialog(doc)}>
+                <Button size="sm" variant="outline" onClick={() => openDocumentoDialog(doc)} className="shrink-0">
                   Actualizar
                 </Button>
               </div>
@@ -699,14 +699,14 @@ export function CumplimientoModule() {
               const dias = getDaysUntilExpiry(doc.fechaVencimiento)
               return (
                 <div key={doc.id} className="flex items-center justify-between p-2 bg-amber-50 rounded border border-amber-200">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-amber-500" />
-                    <div>
-                      <p className="text-sm font-medium">{doc.titulo}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" title={doc.titulo}>{doc.titulo}</p>
                       <p className="text-xs text-amber-600">Vence en {dias} días ({formatDate(doc.fechaVencimiento)})</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => openDocumentoDialog(doc)}>
+                  <Button size="sm" variant="outline" onClick={() => openDocumentoDialog(doc)} className="shrink-0">
                     Ver
                   </Button>
                 </div>
@@ -796,22 +796,22 @@ export function CumplimientoModule() {
                   return (
                     <Card key={categoria.id} className="border-dashed">
                       <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${tipoColors[categoria.tipo]}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`p-2 rounded-lg shrink-0 ${tipoColors[categoria.tipo]}`}>
                               {tipoIcons[categoria.tipo]}
                             </div>
-                            <div>
-                              <p className="font-medium">{categoria.nombre}</p>
-                              <p className="text-xs text-slate-500">
+                            <div className="min-w-0">
+                              <p className="font-medium truncate" title={categoria.nombre}>{categoria.nombre}</p>
+                              <p className="text-xs text-slate-500 truncate">
                                 {categoria.articuloLey || categoria.descripcion || 'Sin descripción'}
                               </p>
                             </div>
                             {categoria.obligatorio && (
-                              <Badge variant="outline" className="text-xs">Obligatorio</Badge>
+                              <Badge variant="outline" className="text-xs shrink-0">Obligatorio</Badge>
                             )}
                           </div>
-                          <Button size="sm" variant="outline" onClick={() => openDocumentoDialog()}>
+                          <Button size="sm" variant="outline" onClick={() => openDocumentoDialog()} className="shrink-0">
                             <Plus className="w-3 h-3 mr-1" /> Agregar
                           </Button>
                         </div>
@@ -828,21 +828,21 @@ export function CumplimientoModule() {
                   <Card key={categoria.id}>
                     <CardHeader className="py-3">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge className={tipoColors[categoria.tipo]}>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge className={`${tipoColors[categoria.tipo]} shrink-0`}>
                             {tipoIcons[categoria.tipo]}
                             {categoria.tipo}
                           </Badge>
-                          <CardTitle className="text-sm">{categoria.nombre}</CardTitle>
+                          <CardTitle className="text-sm truncate" title={categoria.nombre}>{categoria.nombre}</CardTitle>
                           {categoria.obligatorio && (
-                            <Badge variant="outline" className="text-xs">Obligatorio</Badge>
+                            <Badge variant="outline" className="text-xs shrink-0">Obligatorio</Badge>
                           )}
                           {categoria.articuloLey && (
-                            <span className="text-xs text-slate-500">{categoria.articuloLey}</span>
+                            <span className="text-xs text-slate-500 truncate" title={categoria.articuloLey}>{categoria.articuloLey}</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium">{porcentaje}% cumplido</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs font-medium whitespace-nowrap">{porcentaje}% cumplido</span>
                           <Progress value={porcentaje} className="w-20 h-2" />
                         </div>
                       </div>
@@ -868,28 +868,28 @@ export function CumplimientoModule() {
                               
                               return (
                                 <tr key={doc.id} className={`border-b last:border-0 hover:bg-slate-50 ${vencido ? 'bg-red-50' : proximoAVencer ? 'bg-amber-50' : ''}`}>
-                                  <td className="p-3">
+                                  <td className="p-3 min-w-0">
                                     <div className="flex items-center gap-2">
-                                      <FileText className="w-4 h-4 text-slate-400" />
-                                      <div>
-                                        <p className="font-medium">{doc.titulo}</p>
+                                      <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                                      <div className="min-w-0">
+                                        <p className="font-medium truncate" title={doc.titulo}>{doc.titulo}</p>
                                         {doc.descripcion && (
-                                          <p className="text-xs text-slate-500">{doc.descripcion.substring(0, 50)}...</p>
+                                          <p className="text-xs text-slate-500 truncate">{doc.descripcion.substring(0, 50)}...</p>
                                         )}
                                       </div>
                                     </div>
                                   </td>
                                   <td className="p-3">
                                     {doc.archivoNombre ? (
-                                      <div className="flex items-center gap-1">
-                                        <FileCheck className="w-4 h-4 text-green-500" />
-                                        <span className="text-xs truncate max-w-[150px]">{doc.archivoNombre}</span>
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <FileCheck className="w-4 h-4 text-green-500 shrink-0" />
+                                        <span className="text-xs truncate max-w-[150px]" title={doc.archivoNombre}>{doc.archivoNombre}</span>
                                       </div>
                                     ) : (
                                       <span className="text-xs text-slate-400">Sin archivo</span>
                                     )}
                                   </td>
-                                  <td className="p-3 text-xs">
+                                  <td className="p-3 text-xs whitespace-nowrap">
                                     <div>Doc: {formatDate(doc.fechaDocumento)}</div>
                                     {doc.fechaVencimiento && (
                                       <div className={vencido ? 'text-red-600 font-medium' : proximoAVencer ? 'text-amber-600' : ''}>
@@ -906,7 +906,7 @@ export function CumplimientoModule() {
                                     </Badge>
                                   </td>
                                   <td className="p-3">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 whitespace-nowrap">
                                       <Progress value={doc.porcentajeCumplimiento} className="w-12 h-2" />
                                       <span className="text-xs font-medium">{doc.porcentajeCumplimiento}%</span>
                                     </div>
@@ -971,27 +971,27 @@ export function CumplimientoModule() {
                 <Card key={cat.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2 rounded-lg ${tipoColors[cat.tipo]}`}>
+                      <div className="flex items-start gap-3 min-w-0">
+                        <div className={`p-2 rounded-lg shrink-0 ${tipoColors[cat.tipo]}`}>
                           {tipoIcons[cat.tipo]}
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold">{cat.nombre}</h3>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold truncate" title={cat.nombre}>{cat.nombre}</h3>
                             {cat.codigo && (
-                              <Badge variant="outline" className="text-xs font-mono">{cat.codigo}</Badge>
+                              <Badge variant="outline" className="text-xs font-mono shrink-0">{cat.codigo}</Badge>
                             )}
                             {cat.obligatorio && (
-                              <Badge className="bg-red-100 text-red-700 text-xs">Obligatorio</Badge>
+                              <Badge className="bg-red-100 text-red-700 text-xs shrink-0">Obligatorio</Badge>
                             )}
                           </div>
-                          <div className="text-sm text-slate-500 mt-1">
+                          <div className="text-sm text-slate-500 mt-1 break-words">
                             {cat.descripcion}
                           </div>
                           {cat.articuloLey && (
                             <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
-                              <Info className="w-3 h-3" />
-                              {cat.articuloLey}
+                              <Info className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{cat.articuloLey}</span>
                             </div>
                           )}
                           {cat.fechaLimiteDias && (
@@ -1001,12 +1001,12 @@ export function CumplimientoModule() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         <div className="text-right">
-                          <div className="text-xs text-slate-500">{docsCount} documentos</div>
+                          <div className="text-xs text-slate-500 whitespace-nowrap">{docsCount} documentos</div>
                           <div className="flex items-center gap-2">
                             <Progress value={porcentaje} className="w-16 h-2" />
-                            <span className="text-xs font-medium">{porcentaje}%</span>
+                            <span className="text-xs font-medium whitespace-nowrap">{porcentaje}%</span>
                           </div>
                         </div>
                         <div className="flex gap-1">
@@ -1040,20 +1040,21 @@ export function CumplimientoModule() {
             <DialogDescription>Complete los datos del documento y adjunte el archivo si corresponde.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Título *</Label>
-              <Input 
-                value={documentoForm.titulo} 
-                onChange={(e) => setDocumentoForm({...documentoForm, titulo: e.target.value})} 
+              <Input
+                className="w-full"
+                value={documentoForm.titulo}
+                onChange={(e) => setDocumentoForm({...documentoForm, titulo: e.target.value})}
                 placeholder="Nombre del documento"
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Categoría</Label>
                 <Select value={documentoForm.categoriaId} onValueChange={(v) => setDocumentoForm({...documentoForm, categoriaId: v})}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar categoría" /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar categoría" /></SelectTrigger>
                   <SelectContent>
                     {categorias.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
@@ -1061,10 +1062,10 @@ export function CumplimientoModule() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Estado</Label>
                 <Select value={documentoForm.estado} onValueChange={(v) => setDocumentoForm({...documentoForm, estado: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Pendiente">Pendiente</SelectItem>
                     <SelectItem value="En Revisión">En Revisión</SelectItem>
@@ -1077,35 +1078,38 @@ export function CumplimientoModule() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Fecha del Documento</Label>
-                <Input 
-                  type="date" 
-                  value={documentoForm.fechaDocumento} 
-                  onChange={(e) => setDocumentoForm({...documentoForm, fechaDocumento: e.target.value})} 
+                <Input
+                  className="w-full"
+                  type="date"
+                  value={documentoForm.fechaDocumento}
+                  onChange={(e) => setDocumentoForm({...documentoForm, fechaDocumento: e.target.value})}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Fecha de Vencimiento</Label>
-                <Input 
-                  type="date" 
-                  value={documentoForm.fechaVencimiento} 
-                  onChange={(e) => setDocumentoForm({...documentoForm, fechaVencimiento: e.target.value})} 
+                <Input
+                  className="w-full"
+                  type="date"
+                  value={documentoForm.fechaVencimiento}
+                  onChange={(e) => setDocumentoForm({...documentoForm, fechaVencimiento: e.target.value})}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Descripción</Label>
-              <Textarea 
-                value={documentoForm.descripcion} 
-                onChange={(e) => setDocumentoForm({...documentoForm, descripcion: e.target.value})} 
+              <Textarea
+                className="w-full"
+                value={documentoForm.descripcion}
+                onChange={(e) => setDocumentoForm({...documentoForm, descripcion: e.target.value})}
                 placeholder="Descripción del documento..."
                 rows={2}
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Archivo Adjunto</Label>
               <div className="border-2 border-dashed rounded-lg p-4 text-center">
                 {documentoForm.archivoNombre ? (
@@ -1138,11 +1142,12 @@ export function CumplimientoModule() {
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Observaciones</Label>
-              <Textarea 
-                value={documentoForm.observaciones} 
-                onChange={(e) => setDocumentoForm({...documentoForm, observaciones: e.target.value})} 
+              <Textarea
+                className="w-full"
+                value={documentoForm.observaciones}
+                onChange={(e) => setDocumentoForm({...documentoForm, observaciones: e.target.value})}
                 placeholder="Observaciones o notas..."
                 rows={2}
               />
@@ -1178,27 +1183,29 @@ export function CumplimientoModule() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Nombre *</Label>
-                <Input 
-                  value={categoriaForm.nombre} 
-                  onChange={(e) => setCategoriaForm({...categoriaForm, nombre: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={categoriaForm.nombre}
+                  onChange={(e) => setCategoriaForm({...categoriaForm, nombre: e.target.value})}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Código</Label>
-                <Input 
-                  placeholder="Ej: LEY-001" 
-                  value={categoriaForm.codigo} 
-                  onChange={(e) => setCategoriaForm({...categoriaForm, codigo: e.target.value})} 
+                <Input
+                  className="w-full"
+                  placeholder="Ej: LEY-001"
+                  value={categoriaForm.codigo}
+                  onChange={(e) => setCategoriaForm({...categoriaForm, codigo: e.target.value})}
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Tipo</Label>
                 <Select value={categoriaForm.tipo} onValueChange={(v) => setCategoriaForm({...categoriaForm, tipo: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TIPOS_CATEGORIA.map(t => (
                       <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -1206,39 +1213,43 @@ export function CumplimientoModule() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Orden</Label>
-                <Input 
-                  type="number" 
-                  value={categoriaForm.orden} 
-                  onChange={(e) => setCategoriaForm({...categoriaForm, orden: parseInt(e.target.value) || 0})} 
+                <Input
+                  className="w-full text-right"
+                  type="number"
+                  value={categoriaForm.orden}
+                  onChange={(e) => setCategoriaForm({...categoriaForm, orden: parseInt(e.target.value) || 0})}
                 />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Descripción</Label>
-              <Textarea 
-                value={categoriaForm.descripcion} 
-                onChange={(e) => setCategoriaForm({...categoriaForm, descripcion: e.target.value})} 
+              <Textarea
+                className="w-full"
+                value={categoriaForm.descripcion}
+                onChange={(e) => setCategoriaForm({...categoriaForm, descripcion: e.target.value})}
                 rows={2}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Artículo de Ley</Label>
-                <Input 
-                  placeholder="Ej: Art. 8 Ley 21.442" 
-                  value={categoriaForm.articuloLey} 
-                  onChange={(e) => setCategoriaForm({...categoriaForm, articuloLey: e.target.value})} 
+                <Input
+                  className="w-full"
+                  placeholder="Ej: Art. 8 Ley 21.442"
+                  value={categoriaForm.articuloLey}
+                  onChange={(e) => setCategoriaForm({...categoriaForm, articuloLey: e.target.value})}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Renovación (días)</Label>
-                <Input 
-                  type="number" 
-                  placeholder="Ej: 365" 
-                  value={categoriaForm.fechaLimiteDias} 
-                  onChange={(e) => setCategoriaForm({...categoriaForm, fechaLimiteDias: e.target.value})} 
+                <Input
+                  className="w-full text-right"
+                  type="number"
+                  placeholder="Ej: 365"
+                  value={categoriaForm.fechaLimiteDias}
+                  onChange={(e) => setCategoriaForm({...categoriaForm, fechaLimiteDias: e.target.value})}
                 />
               </div>
             </div>

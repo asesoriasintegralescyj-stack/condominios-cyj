@@ -331,27 +331,27 @@ export function NotificacionesModule() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={tipoColors[notif.tipo] || 'bg-slate-100'}>
+                      <Badge className={`${tipoColors[notif.tipo] || 'bg-slate-100'} inline-flex`}>
                         <span className="flex items-center gap-1">
                           {tipoIcons[notif.tipo]}
                           {notif.tipo}
                         </span>
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                    <TableCell className="font-medium max-w-[260px]">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
                           aria-label={`Indicador ${notif.tipo}`}
                           className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${getDotColor(notif.tipo)}`}
                         />
-                        <span>{notif.titulo}</span>
+                        <span className="truncate" title={notif.titulo}>{notif.titulo}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{notif.categoria}</Badge>
                     </TableCell>
                     <TableCell>{notif.destino}</TableCell>
-                    <TableCell className="text-sm text-slate-500">
+                    <TableCell className="text-sm text-slate-500 whitespace-nowrap">
                       {notif.fechaEnvio || 'Pendiente'}
                     </TableCell>
                     <TableCell>
@@ -400,18 +400,20 @@ export function NotificacionesModule() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Título</Label>
               <Input
+                className="w-full"
                 value={formData.titulo}
                 onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                 placeholder="Título de la notificación"
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Mensaje</Label>
               <Textarea
+                className="w-full"
                 value={formData.mensaje}
                 onChange={(e) => setFormData({ ...formData, mensaje: e.target.value })}
                 placeholder="Contenido del mensaje..."
@@ -420,13 +422,13 @@ export function NotificacionesModule() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Tipo</Label>
                 <Select
                   value={formData.tipo}
                   onValueChange={(v) => setFormData({ ...formData, tipo: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -448,13 +450,13 @@ export function NotificacionesModule() {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label>Categoría</Label>
                 <Select
                   value={formData.categoria}
                   onValueChange={(v) => setFormData({ ...formData, categoria: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -469,13 +471,13 @@ export function NotificacionesModule() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 min-w-0">
               <Label>Destino</Label>
               <Select
                 value={formData.destino}
                 onValueChange={(v) => setFormData({ ...formData, destino: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -521,29 +523,29 @@ export function NotificacionesModule() {
               </div>
 
               {/* Casilla de mensaje — highlighted box with type-colored border */}
-              <div className={`p-4 rounded-lg border-l-4 ${getBoxStyle(selectedNotificacion.tipo)}`}>
+              <div className={`p-4 rounded-lg border-l-4 min-w-0 ${getBoxStyle(selectedNotificacion.tipo)}`}>
                 <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Mensaje</div>
-                <p className="text-slate-800 whitespace-pre-wrap font-medium">{selectedNotificacion.mensaje}</p>
+                <p className="text-slate-800 whitespace-pre-wrap break-words font-medium">{selectedNotificacion.mensaje}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
+                <div className="min-w-0">
                   <p className="text-slate-500">Destino</p>
-                  <p className="font-medium">{selectedNotificacion.destino}</p>
+                  <p className="font-medium truncate">{selectedNotificacion.destino}</p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-slate-500">Fecha Envío</p>
-                  <p className="font-medium">{selectedNotificacion.fechaEnvio || 'Pendiente'}</p>
+                  <p className="font-medium truncate">{selectedNotificacion.fechaEnvio || 'Pendiente'}</p>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-slate-500">Estado</p>
                   <Badge className={selectedNotificacion.leido ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}>
                     {selectedNotificacion.leido ? 'Leído' : 'No leído'}
                   </Badge>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-slate-500">Fecha Lectura</p>
-                  <p className="font-medium">{selectedNotificacion.fechaLeido || '-'}</p>
+                  <p className="font-medium truncate">{selectedNotificacion.fechaLeido || '-'}</p>
                 </div>
               </div>
             </div>

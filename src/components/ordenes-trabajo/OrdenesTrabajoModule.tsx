@@ -1088,13 +1088,13 @@ export function OrdenesTrabajoModule() {
                     Información Básica
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Título *</Label>
-                      <Input value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} placeholder="Título de la OT" />
+                      <Input value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} placeholder="Título de la OT" className="w-full" />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Ubicación</Label>
-                      <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} placeholder="Ubicación del trabajo" />
+                      <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} placeholder="Ubicación del trabajo" className="w-full" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -1112,10 +1112,10 @@ export function OrdenesTrabajoModule() {
                     Clasificación
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Tipo</Label>
                       <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {['Correctivo', 'Preventivo', 'Mejora', 'Emergencia'].map(t => (
                             <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -1123,10 +1123,10 @@ export function OrdenesTrabajoModule() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Prioridad</Label>
                       <Select value={formData.prioridad} onValueChange={(v) => setFormData({...formData, prioridad: v})}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {['Urgente', 'Alta', 'Media', 'Baja'].map(p => (
                             <SelectItem key={p} value={p}>{p}</SelectItem>
@@ -1134,10 +1134,10 @@ export function OrdenesTrabajoModule() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Estado</Label>
                       <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {['Pendiente', 'En Progreso', 'Completado', 'Cancelado'].map(s => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -1145,9 +1145,9 @@ export function OrdenesTrabajoModule() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Progreso (%)</Label>
-                      <Input type="number" min="0" max="100" value={formData.progreso} onChange={(e) => setFormData({...formData, progreso: parseInt(e.target.value) || 0})} className="h-9" />
+                      <Input type="number" min="0" max="100" value={formData.progreso} onChange={(e) => setFormData({...formData, progreso: parseInt(e.target.value) || 0})} className="h-9 w-full text-right" />
                     </div>
                   </div>
                 </div>
@@ -1216,7 +1216,7 @@ export function OrdenesTrabajoModule() {
                     <Calendar className="w-4 h-4" /> Fechas
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Inicio Planificado</Label>
                       <DatePicker
                         date={formData.fechaInicio}
@@ -1224,7 +1224,7 @@ export function OrdenesTrabajoModule() {
                         placeholder="Seleccionar..."
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Fecha Límite</Label>
                       <DatePicker
                         date={formData.fechaLimite}
@@ -1232,7 +1232,7 @@ export function OrdenesTrabajoModule() {
                         placeholder="Seleccionar..."
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Inicio Real</Label>
                       <DatePicker
                         date={formData.fechaInicioReal}
@@ -1240,7 +1240,7 @@ export function OrdenesTrabajoModule() {
                         placeholder="Seleccionar..."
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Fin Real</Label>
                       <DatePicker
                         date={formData.fechaFinReal}
@@ -1260,7 +1260,7 @@ export function OrdenesTrabajoModule() {
                     <Users className="w-4 h-4" /> Asignación
                   </h4>
                   <div className="grid grid-cols-1 gap-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Asignado a</Label>
                       <Select value={formData.asignadoId} onValueChange={(v) => setFormData({...formData, asignadoId: v})}>
                         <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
@@ -1286,31 +1286,31 @@ export function OrdenesTrabajoModule() {
                     <Clock className="w-4 h-4" /> Control de Tiempo
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Tiempo Estimado (min)</Label>
                       <Input 
                         type="number" 
                         value={formData.tiempoEst || tiempoEstimadoTareas} 
                         onChange={(e) => setFormData({...formData, tiempoEst: parseInt(e.target.value) || 0})} 
-                        className="h-9"
+                        className="h-9 w-full text-right"
                       />
                       {tiempoEstimadoTareas > 0 && (
                         <p className="text-xs text-blue-600">De tareas: {formatMinutes(tiempoEstimadoTareas)}</p>
                       )}
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Tiempo Real (auto)</Label>
                       <Input
                         type="number"
                         value={formData.tiempoReal}
                         readOnly
                         tabIndex={-1}
-                        className="h-9 bg-slate-100 cursor-not-allowed text-slate-600"
+                        className="h-9 w-full bg-slate-100 cursor-not-allowed text-slate-600 text-right"
                         title="Calculado automáticamente al cambiar estado o progreso"
                       />
                       <p className="text-[10px] text-slate-400">Autocalculado al completar</p>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Diferencia</Label>
                       <div className={`h-9 px-3 rounded border flex items-center text-sm font-semibold ${
                         diferenciaTiempo > 0 ? 'bg-red-50 border-red-200 text-red-700' : 
@@ -1319,9 +1319,9 @@ export function OrdenesTrabajoModule() {
                         {diferenciaTiempo > 0 ? '+' : ''}{formatMinutes(diferenciaTiempo)}
                       </div>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Costo Estimado</Label>
-                      <Input type="number" value={formData.costoEstimado} onChange={(e) => setFormData({...formData, costoEstimado: parseFloat(e.target.value) || 0})} className="h-9" />
+                      <Input type="number" value={formData.costoEstimado} onChange={(e) => setFormData({...formData, costoEstimado: parseFloat(e.target.value) || 0})} className="h-9 w-full text-right" />
                     </div>
                   </div>
                 </div>
@@ -1380,14 +1380,14 @@ export function OrdenesTrabajoModule() {
                         {materiales.map((m, i) => (
                           <tr key={m.id} className="border-t">
                             <td className="p-2">
-                              <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8" />
+                              <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8 w-full" />
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 text-center" />
+                              <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 w-full text-center" />
                             </td>
                             <td className="p-2">
                               <Select value={m.unidad} onValueChange={(v) => updateMaterial(i, 'unidad', v)}>
-                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {['unidad', 'metro', 'm²', 'm³', 'kilo', 'saco', 'litro', 'galón', 'caja', 'bolsa'].map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
@@ -1396,7 +1396,7 @@ export function OrdenesTrabajoModule() {
                               </Select>
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 text-right" />
+                              <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" />
                             </td>
                             <td className="p-2 text-right font-mono font-semibold">{formatCLP(m.total)}</td>
                             <td className="p-2 text-center">
@@ -1473,10 +1473,10 @@ export function OrdenesTrabajoModule() {
                         {herramientas.map((h, i) => (
                           <tr key={h.id} className="border-t">
                             <td className="p-2">
-                              <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8" placeholder="Nombre de herramienta" />
+                              <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8 w-full" placeholder="Nombre de herramienta" />
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                              <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
                             </td>
                             <td className="p-2 text-center">
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar herramienta" onClick={() => removeHerramienta(i)}>
@@ -1537,14 +1537,14 @@ export function OrdenesTrabajoModule() {
                         {tareas.map((t, i) => (
                           <tr key={t.id} className="border-t">
                             <td className="p-2">
-                              <Input value={t.descripcion} onChange={(e) => updateTarea(i, 'descripcion', e.target.value)} className="h-8" />
+                              <Input value={t.descripcion} onChange={(e) => updateTarea(i, 'descripcion', e.target.value)} className="h-8 w-full" />
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={t.cantidad} onChange={(e) => updateTarea(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                              <Input type="number" value={t.cantidad} onChange={(e) => updateTarea(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
                             </td>
                             <td className="p-2">
                               <Select value={t.estado} onValueChange={(v) => updateTarea(i, 'estado', v)}>
-                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {['Pendiente', 'En Progreso', 'Completado'].map(s => (
                                     <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -1649,10 +1649,10 @@ export function OrdenesTrabajoModule() {
                         <tr>
                           <th className="text-left p-2 text-xs">Nombre</th>
                           <th className="text-center p-2 w-20 text-xs">Tipo</th>
-                          <th className="text-center p-2 w-16 text-xs">Cant.</th>
-                          <th className="text-right p-2 w-24 text-xs">$ Hora</th>
-                          <th className="text-right p-2 w-16 text-xs">Hrs</th>
-                          <th className="text-right p-2 w-24 text-xs">Total</th>
+                          <th className="text-center p-2 w-20 text-xs">Cant.</th>
+                          <th className="text-right p-2 w-28 text-xs">$ Hora</th>
+                          <th className="text-right p-2 w-20 text-xs">Hrs</th>
+                          <th className="text-right p-2 w-28 text-xs">Total</th>
                           <th className="p-2 w-12"></th>
                         </tr>
                       </thead>
@@ -1663,13 +1663,13 @@ export function OrdenesTrabajoModule() {
                               <Input 
                                 value={p.nombre} 
                                 onChange={(e) => updatePersonalOT(i, 'nombre', e.target.value)} 
-                                className="h-8" 
+                                className="h-8 w-full" 
                                 placeholder="Nombre"
                               />
                             </td>
                             <td className="p-2">
                               <Select value={p.tipo} onValueChange={(v) => updatePersonalOT(i, 'tipo', v)}>
-                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="Interno">Interno</SelectItem>
                                   <SelectItem value="Externo">Externo</SelectItem>
@@ -1677,14 +1677,14 @@ export function OrdenesTrabajoModule() {
                               </Select>
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={p.cantidad} onChange={(e) => updatePersonalOT(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
+                              <Input type="number" value={p.cantidad} onChange={(e) => updatePersonalOT(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
                             </td>
                             <td className="p-2">
-                              <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonalOT(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 text-right" />
+                              <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonalOT(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" />
                             </td>
                             <td className="p-2">
                               <Select value={String(p.horasTrabajadas)} onValueChange={(v) => updatePersonalOT(i, 'horasTrabajadas', parseFloat(v) || 0)}>
-                                <SelectTrigger className="h-8 w-20">
+                                <SelectTrigger className="h-8 w-full">
                                   <SelectValue placeholder="Hrs" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1852,11 +1852,12 @@ export function OrdenesTrabajoModule() {
           {selectedOT && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-lg">
-                  {selectedOT.otNum} - {selectedOT.titulo}
-                  <Badge className={estadoColors[selectedOT.estado]}>{selectedOT.estado}</Badge>
+                <DialogTitle className="flex items-center gap-2 text-lg min-w-0">
+                  <span className="font-mono text-xs font-bold text-[#0f2040] shrink-0">{selectedOT.otNum}</span>
+                  <span className="truncate">{selectedOT.titulo}</span>
+                  <Badge className={`${estadoColors[selectedOT.estado]} shrink-0`}>{selectedOT.estado}</Badge>
                   {selectedOT.esRecurrente && (
-                    <Badge className="bg-blue-100 text-blue-700 flex items-center gap-1">
+                    <Badge className="bg-blue-100 text-blue-700 flex items-center gap-1 shrink-0">
                       <RefreshCw className="w-3 h-3" /> Recurrente
                     </Badge>
                   )}
@@ -1867,12 +1868,12 @@ export function OrdenesTrabajoModule() {
               <div className="space-y-4">
                 {/* General info */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
-                  <div><span className="text-slate-500 text-xs">Prioridad:</span> <Badge className={prioridadColors[selectedOT.prioridad]}>{selectedOT.prioridad}</Badge></div>
-                  <div><span className="text-slate-500 text-xs">Progreso:</span> {selectedOT.progreso}%</div>
-                  <div><span className="text-slate-500 text-xs">Ubicación:</span> {selectedOT.ubicacion || selectedOT.propiedad?.nombre || '–'}</div>
-                  <div><span className="text-slate-500 text-xs">Centro Costo:</span> {selectedOT.centroCosto?.codigo || '–'}</div>
-                  <div><span className="text-slate-500 text-xs">Forma de Pago:</span> {selectedOT.formaPago || '–'}</div>
+                  <div className="min-w-0"><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
+                  <div className="min-w-0"><span className="text-slate-500 text-xs">Prioridad:</span> <Badge className={prioridadColors[selectedOT.prioridad]}>{selectedOT.prioridad}</Badge></div>
+                  <div className="min-w-0"><span className="text-slate-500 text-xs">Progreso:</span> {selectedOT.progreso}%</div>
+                  <div className="min-w-0 truncate"><span className="text-slate-500 text-xs">Ubicación:</span> <span className="truncate">{selectedOT.ubicacion || selectedOT.propiedad?.nombre || '–'}</span></div>
+                  <div className="min-w-0"><span className="text-slate-500 text-xs">Centro Costo:</span> {selectedOT.centroCosto?.codigo || '–'}</div>
+                  <div className="min-w-0 truncate"><span className="text-slate-500 text-xs">Forma de Pago:</span> <span className="truncate">{selectedOT.formaPago || '–'}</span></div>
                 </div>
                 
                 {/* Time tracking */}
@@ -1881,15 +1882,15 @@ export function OrdenesTrabajoModule() {
                     <Clock className="w-4 h-4" /> Control de Tiempo
                   </h4>
                   <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 text-xs">Estimado:</span>
                       <span className="ml-2 font-semibold">{formatMinutes(selectedOT.tiempoEst)}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 text-xs">Real:</span>
                       <span className="ml-2 font-semibold">{formatMinutes(selectedOT.tiempoReal)}</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-slate-500 text-xs">Diferencia:</span>
                       <span className={`ml-2 font-semibold ${selectedOT.tiempoReal - selectedOT.tiempoEst > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {selectedOT.tiempoReal - selectedOT.tiempoEst > 0 ? '+' : ''}{formatMinutes(selectedOT.tiempoReal - selectedOT.tiempoEst)}
@@ -2163,7 +2164,7 @@ export function OrdenesTrabajoModule() {
                   value={progressFormData.estado} 
                   onValueChange={(v) => setProgressFormData({...progressFormData, estado: v})}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -2182,7 +2183,7 @@ export function OrdenesTrabajoModule() {
                   value={progressFormData.tiempoReal}
                   readOnly
                   tabIndex={-1}
-                  className="bg-slate-100 cursor-not-allowed text-slate-600"
+                  className="w-full bg-slate-100 cursor-not-allowed text-slate-600 text-right"
                   title="Calculado automáticamente al cambiar estado o progreso"
                 />
                 <p className="text-xs text-slate-500">
@@ -2219,7 +2220,7 @@ export function OrdenesTrabajoModule() {
                                   setProgressFormData({...progressFormData, tareas: updated})
                                 }}
                               >
-                                <SelectTrigger className="h-7 text-xs">
+                                <SelectTrigger className="h-7 text-xs w-full">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>

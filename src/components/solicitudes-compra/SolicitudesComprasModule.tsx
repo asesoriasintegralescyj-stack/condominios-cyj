@@ -476,11 +476,11 @@ export function SolicitudesComprasModule() {
                 ) : (
                   solicitudes.map((s) => (
                     <tr key={s.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 font-mono text-xs font-semibold">{s.codigo}</td>
-                      <td className="p-3">
-                        <div className="font-medium">{s.titulo}</div>
+                      <td className="p-3 font-mono text-xs font-semibold whitespace-nowrap">{s.codigo}</td>
+                      <td className="p-3 max-w-[260px]">
+                        <div className="font-medium truncate" title={s.titulo}>{s.titulo}</div>
                         {s.origenCodigo && (
-                          <div className="text-[10px] text-slate-500">
+                          <div className="text-[10px] text-slate-500 truncate">
                             Origen: {s.origenTipo} {s.origenCodigo}
                           </div>
                         )}
@@ -495,7 +495,7 @@ export function SolicitudesComprasModule() {
                           {s.prioridad}
                         </Badge>
                       </td>
-                      <td className="p-3 text-right font-mono font-semibold">
+                      <td className="p-3 text-right font-mono font-semibold whitespace-nowrap">
                         {formatCLP(s.totalEstimado)}
                       </td>
                       <td className="p-3 text-xs text-slate-600">
@@ -592,10 +592,11 @@ export function SolicitudesComprasModule() {
 
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5 md:col-span-2 min-w-0">
                 <Label htmlFor="titulo">Título *</Label>
                 <Input
                   id="titulo"
+                  className="w-full"
                   value={formData.titulo}
                   onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                   placeholder="Ej: Compra de pintura para OT-1024"
@@ -603,9 +604,10 @@ export function SolicitudesComprasModule() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <Label>Descripción</Label>
               <Textarea
+                className="w-full"
                 rows={2}
                 value={formData.descripcion}
                 onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
@@ -614,13 +616,13 @@ export function SolicitudesComprasModule() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Prioridad</Label>
                 <Select
                   value={formData.prioridad}
                   onValueChange={(v) => setFormData({ ...formData, prioridad: v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -633,13 +635,13 @@ export function SolicitudesComprasModule() {
                 </Select>
               </div>
               {editing && (
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 min-w-0">
                   <Label>Estado</Label>
                   <Select
                     value={formData.estado}
                     onValueChange={(v) => setFormData({ ...formData, estado: v })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -652,17 +654,19 @@ export function SolicitudesComprasModule() {
                   </Select>
                 </div>
               )}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Fecha esperada</Label>
                 <Input
+                  className="w-full"
                   type="date"
                   value={formData.fechaEspera}
                   onChange={(e) => setFormData({ ...formData, fechaEspera: e.target.value })}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Proveedor sugerido</Label>
                 <Input
+                  className="w-full"
                   value={formData.proveedorSugerido}
                   onChange={(e) =>
                     setFormData({ ...formData, proveedorSugerido: e.target.value })
@@ -702,11 +706,11 @@ export function SolicitudesComprasModule() {
                     ) : (
                       materiales.map((m, i) => (
                         <tr key={i} className="border-t">
-                          <td className="p-2">
+                          <td className="p-2 min-w-0">
                             <Input
                               value={m.nombre}
                               onChange={(e) => updateMaterial(i, 'nombre', e.target.value)}
-                              className="h-8"
+                              className="h-8 w-full"
                               placeholder="Nombre del material"
                             />
                           </td>
@@ -717,15 +721,15 @@ export function SolicitudesComprasModule() {
                               onChange={(e) =>
                                 updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)
                               }
-                              className="h-8 text-center"
+                              className="h-8 w-full text-right"
                             />
                           </td>
-                          <td className="p-2">
+                          <td className="p-2 min-w-0">
                             <Select
                               value={m.unidad}
                               onValueChange={(v) => updateMaterial(i, 'unidad', v)}
                             >
-                              <SelectTrigger className="h-8">
+                              <SelectTrigger className="h-8 w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -744,10 +748,10 @@ export function SolicitudesComprasModule() {
                               onChange={(e) =>
                                 updateMaterial(i, 'precioEstimado', parseFloat(e.target.value) || 0)
                               }
-                              className="h-8 text-right"
+                              className="h-8 w-full text-right"
                             />
                           </td>
-                          <td className="p-2 text-right font-mono font-semibold">
+                          <td className="p-2 text-right font-mono font-semibold whitespace-nowrap">
                             {formatCLP(m.total)}
                           </td>
                           <td className="p-2 text-center">
@@ -782,9 +786,10 @@ export function SolicitudesComprasModule() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <Label>Observaciones</Label>
               <Textarea
+                className="w-full"
                 rows={2}
                 value={formData.observaciones}
                 onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
@@ -853,15 +858,15 @@ export function SolicitudesComprasModule() {
 
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {detail.fechaEspera && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-xs text-slate-500">Fecha esperada:</span>
-                      <div className="font-medium">{detail.fechaEspera}</div>
+                      <div className="font-medium truncate">{detail.fechaEspera}</div>
                     </div>
                   )}
                   {detail.proveedorSugerido && (
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-xs text-slate-500">Proveedor sugerido:</span>
-                      <div className="font-medium">{detail.proveedorSugerido}</div>
+                      <div className="font-medium truncate" title={detail.proveedorSugerido}>{detail.proveedorSugerido}</div>
                     </div>
                   )}
                 </div>
@@ -884,10 +889,10 @@ export function SolicitudesComprasModule() {
                           detail.materiales.map((m, i) => (
                             <tr key={i} className="border-t">
                               <td className="p-2">{m.nombre}</td>
-                              <td className="p-2 text-center">{m.cantidad}</td>
-                              <td className="p-2 text-center">{m.unidad}</td>
-                              <td className="p-2 text-right">{formatCLP(m.precioEstimado)}</td>
-                              <td className="p-2 text-right font-mono font-semibold">
+                              <td className="p-2 text-center whitespace-nowrap">{m.cantidad}</td>
+                              <td className="p-2 text-center whitespace-nowrap">{m.unidad}</td>
+                              <td className="p-2 text-right whitespace-nowrap">{formatCLP(m.precioEstimado)}</td>
+                              <td className="p-2 text-right font-mono font-semibold whitespace-nowrap">
                                 {formatCLP(m.total)}
                               </td>
                             </tr>
@@ -905,7 +910,7 @@ export function SolicitudesComprasModule() {
                           <td colSpan={4} className="p-2 text-right font-semibold text-xs">
                             Total estimado:
                           </td>
-                          <td className="p-2 text-right font-mono font-bold text-red-600">
+                          <td className="p-2 text-right font-mono font-bold text-red-600 whitespace-nowrap">
                             {formatCLP(detail.totalEstimado)}
                           </td>
                         </tr>

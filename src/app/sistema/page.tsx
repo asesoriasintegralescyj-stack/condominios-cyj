@@ -51,7 +51,7 @@ export default function SistemaPage() {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-100 flex">
+    <div className="h-screen overflow-hidden bg-slate-100 flex min-w-0">
       <Sidebar />
       <MainContent />
     </div>
