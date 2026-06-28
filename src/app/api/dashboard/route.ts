@@ -194,6 +194,24 @@ export async function GET() {
       porcentajeInterno: resumenCumplimiento?.porcentajeInterno ?? 0,
       porcentajeSeguridad: resumenCumplimiento?.porcentajeSeguridad ?? 0,
       alertasActivas: resumenCumplimiento?.alertasActivas ?? 0,
+      // porCategoria: mantener compatibilidad con Dashboard.tsx que hace Object.entries
+      porCategoria: {
+        Legal: documentosCumplimiento
+          .filter(c => c.titulo?.toLowerCase().includes('legal') || c.categoriaId?.toLowerCase().includes('legal'))
+          .map(c => ({ id: c.id, titulo: c.titulo, fechaVencimiento: c.fechaVencimiento, categoria: 'Legal', estado: c.estado })),
+        Seguridad: documentosCumplimiento
+          .filter(c => c.titulo?.toLowerCase().includes('seguridad') || c.categoriaId?.toLowerCase().includes('seguridad'))
+          .map(c => ({ id: c.id, titulo: c.titulo, fechaVencimiento: c.fechaVencimiento, categoria: 'Seguridad', estado: c.estado })),
+        Reglamentario: documentosCumplimiento
+          .filter(c => c.titulo?.toLowerCase().includes('reglamento') || c.titulo?.toLowerCase().includes('reglamentario') || c.categoriaId?.toLowerCase().includes('regla'))
+          .map(c => ({ id: c.id, titulo: c.titulo, fechaVencimiento: c.fechaVencimiento, categoria: 'Reglamentario', estado: c.estado })),
+        Interno: documentosCumplimiento
+          .filter(c => c.titulo?.toLowerCase().includes('interno') || c.categoriaId?.toLowerCase().includes('interno'))
+          .map(c => ({ id: c.id, titulo: c.titulo, fechaVencimiento: c.fechaVencimiento, categoria: 'Interno', estado: c.estado })),
+        Financiero: documentosCumplimiento
+          .filter(c => c.titulo?.toLowerCase().includes('financiero') || c.titulo?.toLowerCase().includes('finanzas') || c.categoriaId?.toLowerCase().includes('financ'))
+          .map(c => ({ id: c.id, titulo: c.titulo, fechaVencimiento: c.fechaVencimiento, categoria: 'Financiero', estado: c.estado })),
+      },
       proximosVencer: docsPorVencer
         .map(c => ({
           id: c.id,
