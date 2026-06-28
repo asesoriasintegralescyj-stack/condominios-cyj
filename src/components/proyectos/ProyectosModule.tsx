@@ -743,29 +743,33 @@ export function ProyectosModule() {
                 </div>
                 {materiales.length > 0 ? (
                   <div className="space-y-2">
+                    {/* Header */}
+                    <div className="grid grid-cols-12 gap-2 px-2 pb-1 border-b">
+                      <div className="col-span-4 text-[10px] font-bold text-slate-500 uppercase">Descripción</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase">Cantidad</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase">Unidad</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Precio Unit.</div>
+                      <div className="col-span-1 text-[10px] font-bold text-slate-500 uppercase text-right">Total</div>
+                      <div className="col-span-1"></div>
+                    </div>
                     {materiales.map((m, i) => (
-                      <div key={m.id} className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-2 rounded">
-                        <div className="col-span-4">
-                          <Label className="text-[10px]">Descripción</Label>
-                          <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8" />
+                      <div key={m.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded">
+                        <div className="col-span-4 min-w-0">
+                          <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8 w-full" placeholder="Descripción" />
                         </div>
-                        <div className="col-span-1">
-                          <Label className="text-[10px]">Cant.</Label>
-                          <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8" />
+                        <div className="col-span-2 min-w-0">
+                          <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="0" />
                         </div>
-                        <div className="col-span-1">
-                          <Label className="text-[10px]">Unidad</Label>
-                          <Input value={m.unidad} onChange={(e) => updateMaterial(i, 'unidad', e.target.value)} className="h-8" />
+                        <div className="col-span-2 min-w-0">
+                          <Input value={m.unidad} onChange={(e) => updateMaterial(i, 'unidad', e.target.value)} className="h-8 w-full" placeholder="unidad" />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px]">Precio Unit.</Label>
-                          <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8" />
+                        <div className="col-span-2 min-w-0">
+                          <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px]">Total</Label>
-                          <div className="h-8 px-3 py-1.5 bg-slate-100 rounded text-sm font-medium">{formatCLP(m.total)}</div>
+                        <div className="col-span-1 min-w-0">
+                          <div className="h-8 px-1 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(m.total)}</div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1 flex justify-center">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeMaterial(i)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -872,35 +876,39 @@ export function ProyectosModule() {
                 </div>
                 {personal.length > 0 ? (
                   <div className="space-y-2">
+                    {/* Header */}
+                    <div className="grid grid-cols-12 gap-2 px-2 pb-1 border-b">
+                      <div className="col-span-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase">Tipo</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Cantidad</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Precio Unit.</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Total</div>
+                      <div className="col-span-1"></div>
+                    </div>
                     {personal.map((p, i) => (
-                      <div key={p.id} className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-2 rounded">
-                        <div className="col-span-3">
-                          <Label className="text-[10px]">Nombre</Label>
-                          <Input value={p.nombre} onChange={(e) => updatePersonal(i, 'nombre', e.target.value)} className="h-8" />
+                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded">
+                        <div className="col-span-3 min-w-0">
+                          <Input value={p.nombre} onChange={(e) => updatePersonal(i, 'nombre', e.target.value)} className="h-8 w-full" placeholder="Nombre" />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px]">Tipo</Label>
+                        <div className="col-span-2 min-w-0">
                           <Select value={p.tipo} onValueChange={(v) => updatePersonal(i, 'tipo', v)}>
-                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="Interno">Interno</SelectItem>
                               <SelectItem value="Externo">Externo</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="col-span-1">
-                          <Label className="text-[10px]">Cant.</Label>
-                          <Input type="number" value={p.cantidad} onChange={(e) => updatePersonal(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8" />
+                        <div className="col-span-2 min-w-0">
+                          <Input type="number" value={p.cantidad} onChange={(e) => updatePersonal(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-right" placeholder="1" />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px]">Precio Unit.</Label>
-                          <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonal(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8" />
+                        <div className="col-span-2 min-w-0">
+                          <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonal(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px]">Total</Label>
-                          <div className="h-8 px-3 py-1.5 bg-slate-100 rounded text-sm font-medium">{formatCLP(p.total)}</div>
+                        <div className="col-span-2 min-w-0">
+                          <div className="h-8 px-2 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(p.total)}</div>
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1 flex justify-center">
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removePersonal(i)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
