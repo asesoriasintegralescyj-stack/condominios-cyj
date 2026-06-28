@@ -13,6 +13,8 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
+    "db:seed": "node -e \"fetch('http://localhost:3000/api/seed', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
+    "db:seed-catalogos": "node -e \"fetch('http://localhost:3000/api/seed-catalogos', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
     "vercel-build": "prisma generate && next build"
   },
   "dependencies": {
