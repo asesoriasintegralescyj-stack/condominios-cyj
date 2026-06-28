@@ -1259,29 +1259,17 @@ export function OrdenesTrabajoModule() {
                     <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">5</span>
                     <Users className="w-4 h-4" /> Asignación
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3">
                     <div className="space-y-1.5">
                       <Label className="text-xs">Asignado a</Label>
                       <Select value={formData.asignadoId} onValueChange={(v) => setFormData({...formData, asignadoId: v})}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Sin asignar</SelectItem>
                           {personal.map(p => (
                             <SelectItem key={p.id} value={p.id}>
                               {p.nombre} {p.sueldoBase > 0 ? `(${formatCLP(calcularValorHora(p.sueldoBase))}/hr)` : ''}
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Propiedad</Label>
-                      <Select value={formData.propiedadId} onValueChange={(v) => setFormData({...formData, propiedadId: v})}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Sin propiedad" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Sin propiedad</SelectItem>
-                          {propiedades.map(p => (
-                            <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

@@ -39,6 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
 import { 
   Plus, 
   Bell, 
@@ -70,16 +71,47 @@ interface Notificacion {
 
 const tipoColors: Record<string, string> = {
   'Info': 'bg-blue-100 text-blue-700',
-  'Alerta': 'bg-amber-100 text-amber-700',
+  'Alerta': 'bg-red-100 text-red-700',
   'Urgente': 'bg-red-100 text-red-700',
-  'Recordatorio': 'bg-purple-100 text-purple-700',
+  'Recordatorio': 'bg-blue-100 text-blue-700',
+  'Modificación': 'bg-yellow-100 text-yellow-700',
+  'Success': 'bg-green-100 text-green-700',
 }
+
+// Colored indicator dot (circle) shown next to each notification title.
+// - Alerta / Urgente = RED
+// - Modificación = YELLOW
+// - Info / Recordatorio = BLUE
+// - Success = GREEN
+const tipoDotColors: Record<string, string> = {
+  'Info': 'bg-blue-500',
+  'Alerta': 'bg-red-500',
+  'Urgente': 'bg-red-500',
+  'Recordatorio': 'bg-blue-500',
+  'Modificación': 'bg-yellow-500',
+  'Success': 'bg-green-500',
+}
+
+// Highlighted message box style (casilla de mensaje) per type.
+const tipoBoxStyles: Record<string, string> = {
+  'Info': 'border-blue-500 bg-blue-50',
+  'Alerta': 'border-red-500 bg-red-50',
+  'Urgente': 'border-red-500 bg-red-50',
+  'Recordatorio': 'border-blue-500 bg-blue-50',
+  'Modificación': 'border-yellow-500 bg-yellow-50',
+  'Success': 'border-green-500 bg-green-50',
+}
+
+const getDotColor = (tipo: string) => tipoDotColors[tipo] || 'bg-slate-400'
+const getBoxStyle = (tipo: string) => tipoBoxStyles[tipo] || 'border-slate-400 bg-slate-50'
 
 const tipoIcons: Record<string, React.ReactNode> = {
   'Info': <Info className="w-4 h-4" />,
   'Alerta': <AlertTriangle className="w-4 h-4" />,
   'Urgente': <AlertCircle className="w-4 h-4" />,
   'Recordatorio': <Clock className="w-4 h-4" />,
+  'Modificación': <BellRing className="w-4 h-4" />,
+  'Success': <CheckCircle className="w-4 h-4" />,
 }
 
 export function NotificacionesModule() {
@@ -124,18 +156,29 @@ export function NotificacionesModule() {
   }, [])
 
   const handleSubmit = async () => {
+    if (!formData.titulo.trim() || !formData.mensaje.trim()) {
+      toast.error('Título y mensaje son obligatorios')
+      return
+    }
     try {
-      await fetch('/api/notificaciones', {
+      const res = await fetch('/api/notificaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       })
+      if (!res.ok) throw new Error('Request failed')
 
+      const created = await res.json()
       setDialogOpen(false)
       resetForm()
       fetchData()
+      // Visual alert on creation
+      toast.success(`Notificación "${created.titulo}" creada`, {
+        description: `Tipo: ${created.tipo} · Destino: ${created.destino}`,
+      })
     } catch (error) {
       console.error('Error saving notificacion:', error)
+      toast.error('Error al crear la notificación')
     }
   }
 
@@ -159,8 +202,10 @@ export function NotificacionesModule() {
         body: JSON.stringify({ leido })
       })
       fetchData()
+      toast.success(leido ? 'Notificación marcada como leída' : 'Notificación marcada como no leída')
     } catch (error) {
       console.error('Error updating notificacion:', error)
+      toast.error('Error al actualizar la notificación')
     }
   }
 
@@ -293,7 +338,15 @@ export function NotificacionesModule() {
                         </span>
                       </Badge>
                     </TableCell>
-                    <TableCell className="font-medium">{notif.titulo}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span
+                          aria-label={`Indicador ${notif.tipo}`}
+                          className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${getDotColor(notif.tipo)}`}
+                        />
+                        <span>{notif.titulo}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{notif.categoria}</Badge>
                     </TableCell>
@@ -381,8 +434,18 @@ export function NotificacionesModule() {
                     <SelectItem value="Alerta">Alerta</SelectItem>
                     <SelectItem value="Urgente">Urgente</SelectItem>
                     <SelectItem value="Recordatorio">Recordatorio</SelectItem>
+                    <SelectItem value="Modificación">Modificación</SelectItem>
+                    <SelectItem value="Success">Success</SelectItem>
                   </SelectContent>
                 </Select>
+                {/* Live color preview for the selected type */}
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <span
+                    aria-label="Color del tipo seleccionado"
+                    className={`inline-block w-3 h-3 rounded-full ${getDotColor(formData.tipo)}`}
+                  />
+                  <span>Color asociado al tipo seleccionado</span>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -446,15 +509,21 @@ export function NotificacionesModule() {
           
           {selectedNotificacion && (
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <span
+                  aria-label={`Indicador ${selectedNotificacion.tipo}`}
+                  className={`inline-block w-3 h-3 rounded-full shrink-0 ${getDotColor(selectedNotificacion.tipo)}`}
+                />
                 <Badge className={tipoColors[selectedNotificacion.tipo]}>
                   {selectedNotificacion.tipo}
                 </Badge>
                 <Badge variant="outline">{selectedNotificacion.categoria}</Badge>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <p className="text-slate-700 whitespace-pre-wrap">{selectedNotificacion.mensaje}</p>
+              {/* Casilla de mensaje — highlighted box with type-colored border */}
+              <div className={`p-4 rounded-lg border-l-4 ${getBoxStyle(selectedNotificacion.tipo)}`}>
+                <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">Mensaje</div>
+                <p className="text-slate-800 whitespace-pre-wrap font-medium">{selectedNotificacion.mensaje}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4 text-sm">

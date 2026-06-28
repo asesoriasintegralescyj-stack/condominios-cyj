@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Pencil, Trash2, Search, Eye } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Eye, Camera, X } from 'lucide-react'
 
 interface Inspeccion {
   id: string
@@ -38,6 +38,18 @@ interface Inspeccion {
   fotosAntes: string | null
   fotosDurante: string | null
   fotosDespues: string | null
+  fotos: string | null
+}
+
+// Safely parse a JSON array stored as a String? column.
+const parseFotoArray = (raw: string | null): string[] => {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
 }
 
 const formatDate = (d: string | null) => {
@@ -87,6 +99,7 @@ export function InspeccionesModule() {
     recurrente: false,
     notas: '',
   })
+  const [fotos, setFotos] = useState<string[]>([])
 
   const fetchInspecciones = async (searchTerm = '') => {
     setLoading(true)
@@ -128,6 +141,7 @@ export function InspeccionesModule() {
         recurrente: insp.recurrente,
         notas: insp.notas || '',
       })
+      setFotos(parseFotoArray(insp.fotos))
     } else {
       setEditingInsp(null)
       setFormData({
@@ -142,8 +156,20 @@ export function InspeccionesModule() {
         recurrente: false,
         notas: '',
       })
+      setFotos([])
     }
     setDialogOpen(true)
+  }
+
+  const handleAddFotos = (files: FileList | null) => {
+    if (!files) return
+    Array.from(files).forEach(file => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setFotos(prev => [...prev, reader.result as string])
+      }
+      reader.readAsDataURL(file)
+    })
   }
 
   const handleSave = async () => {
@@ -152,6 +178,7 @@ export function InspeccionesModule() {
     const dataToSend = {
       ...formData,
       asignado: formData.asignado === 'none' ? null : formData.asignado,
+      fotos,
     }
 
     try {
@@ -186,10 +213,11 @@ export function InspeccionesModule() {
   }
 
   const countPhotos = (insp: Inspeccion) => {
-    const antes = insp.fotosAntes ? JSON.parse(insp.fotosAntes).length : 0
-    const durante = insp.fotosDurante ? JSON.parse(insp.fotosDurante).length : 0
-    const despues = insp.fotosDespues ? JSON.parse(insp.fotosDespues).length : 0
-    return antes + durante + despues
+    const antes = parseFotoArray(insp.fotosAntes).length
+    const durante = parseFotoArray(insp.fotosDurante).length
+    const despues = parseFotoArray(insp.fotosDespues).length
+    const generales = parseFotoArray(insp.fotos).length
+    return antes + durante + despues + generales
   }
 
   return (
@@ -348,6 +376,52 @@ export function InspeccionesModule() {
               <Label>Notas</Label>
               <Textarea value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
             </div>
+
+            {/* Fotos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2">
+                  <Camera className="w-4 h-4 text-orange-500" />
+                  Fotos ({fotos.length})
+                </Label>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      handleAddFotos(e.target.files)
+                      e.target.value = ''
+                    }}
+                  />
+                  <Button size="sm" variant="outline" type="button" asChild>
+                    <span><Plus className="w-3.5 h-3.5 mr-1" /> Agregar Foto</span>
+                  </Button>
+                </label>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                {fotos.map((foto, i) => (
+                  <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                    <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      aria-label="Eliminar foto"
+                      onClick={() => setFotos(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {fotos.length === 0 && (
+                  <div className="col-span-full py-6 text-center text-slate-500 border-2 border-dashed rounded-lg">
+                    <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Sin fotos adjuntas</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
@@ -400,6 +474,18 @@ export function InspeccionesModule() {
                 <div>
                   <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">Notas</div>
                   <p className="text-sm text-slate-600">{viewingInsp.notas}</p>
+                </div>
+              )}
+              {parseFotoArray(viewingInsp.fotos).length > 0 && (
+                <div>
+                  <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">Fotos ({parseFotoArray(viewingInsp.fotos).length})</div>
+                  <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                    {parseFotoArray(viewingInsp.fotos).map((foto, i) => (
+                      <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                        <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

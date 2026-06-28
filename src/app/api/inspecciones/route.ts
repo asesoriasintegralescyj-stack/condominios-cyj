@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         fotosAntes: data.fotosAntes ? JSON.stringify(data.fotosAntes) : null,
         fotosDurante: data.fotosDurante ? JSON.stringify(data.fotosDurante) : null,
         fotosDespues: data.fotosDespues ? JSON.stringify(data.fotosDespues) : null,
+        fotos: data.fotos ? JSON.stringify(data.fotos) : null,
       }
     })
     

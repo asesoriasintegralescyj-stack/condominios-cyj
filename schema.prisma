@@ -594,6 +594,7 @@ model Inspeccion {
   fotosAntes    String?  // JSON array
   fotosDurante  String?  // JSON array
   fotosDespues  String?  // JSON array
+  fotos         String?  // JSON array of base64 images (general gallery)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

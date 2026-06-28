@@ -66,6 +66,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
     section: 'Principal',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+      { id: 'notificaciones', label: 'Notificaciones', icon: <Bell className="w-4 h-4" /> },
     ]
   },
   {
@@ -102,7 +103,6 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
   {
     section: 'Sistema',
     items: [
-      { id: 'notificaciones', label: 'Notificaciones', icon: <Bell className="w-4 h-4" /> },
       { id: 'auditoria', label: 'Auditoría', icon: <Shield className="w-4 h-4" /> },
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
