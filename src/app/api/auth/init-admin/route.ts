@@ -1,6 +1,11 @@
 /**
  * API para crear el usuario administrador inicial
- * Accesible vía GET para facilitar la configuración inicial
+ *
+ * ⚠️ BLOQUEADO en producción por seguridad.
+ * ⚠️ No devuelve el password en la respuesta.
+ *
+ * En producción, use: npm run db:seed
+ * O configure: INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD en CI.
  */
 
 import { NextResponse } from 'next/server'
@@ -10,23 +15,35 @@ import { hashPassword } from '@/lib/auth'
 async function createAdmin() {
   // Verificar si ya existe algún usuario administrador
   const existingAdmin = await db.user.findFirst({
-    where: { rol: 'admin' }
+    where: { rol: 'admin' },
+    select: { email: true }
   })
-  
+
   if (existingAdmin) {
-    return { 
+    return {
       success: false,
       message: 'Ya existe un usuario administrador',
       error: 'ADMIN_EXISTS'
     }
   }
-  
-  // Crear usuario administrador con credenciales conocidas
-  const hashedPassword = await hashPassword('admin123')
-  
-  const admin = await db.user.create({
+
+  // Credenciales desde variables de entorno (defaults solo para dev)
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@cyj.cl'
+  const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'admin123'
+
+  if (!adminPassword || adminPassword.length < 8) {
+    return {
+      success: false,
+      message: 'INITIAL_ADMIN_PASSWORD debe tener al menos 8 caracteres',
+      error: 'WEAK_PASSWORD'
+    }
+  }
+
+  const hashedPassword = await hashPassword(adminPassword)
+
+  await db.user.create({
     data: {
-      email: 'admin@cyj.cl',
+      email: adminEmail,
       nombre: 'Administrador',
       apellido: 'Sistema',
       password: hashedPassword,
@@ -53,56 +70,50 @@ async function createAdmin() {
       })
     }
   })
-  
+
   return {
     success: true,
     message: 'Usuario administrador creado exitosamente',
     user: {
-      email: admin.email,
-      nombre: admin.nombre,
-      rol: admin.rol
-    },
-    credentials: {
-      usuario: 'admin@cyj.cl',
-      password: 'admin123'
+      email: adminEmail,
+      rol: 'admin'
     }
+    // No devolver el password
   }
 }
 
 export async function GET() {
+  // Bloquear en producción
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Endpoint deshabilitado en producción. Use npm run db:seed.' },
+      { status: 404 }
+    )
+  }
+
   try {
     const result = await createAdmin()
-    
+
     if (!result.success) {
       return NextResponse.json(result, { status: 400 })
     }
-    
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error creando admin:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: false,
-      error: 'Error al crear usuario administrador',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Error al crear usuario administrador'
     }, { status: 500 })
   }
 }
 
 export async function POST() {
-  try {
-    const result = await createAdmin()
-    
-    if (!result.success) {
-      return NextResponse.json(result, { status: 400 })
-    }
-    
-    return NextResponse.json(result)
-  } catch (error) {
-    console.error('Error creando admin:', error)
-    return NextResponse.json({ 
-      success: false,
-      error: 'Error al crear usuario administrador',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Endpoint deshabilitado en producción. Use npm run db:seed.' },
+      { status: 404 }
+    )
   }
+  return GET()
 }

@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // ============================================
 // GET - Obtener configuración
 // ============================================
 export async function GET() {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     let config = await db.configMorosidad.findFirst({
       where: { activo: true }
@@ -34,6 +41,11 @@ export async function GET() {
 // PUT - Actualizar configuración
 // ============================================
 export async function PUT(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json()
     const { tasaInteresMensual, tasaInteresDiario, diasGracia, maxDiasMora } = body

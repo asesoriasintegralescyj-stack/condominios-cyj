@@ -1,40 +1,27 @@
 /**
  * API para inicializar la base de datos
- * Crea las tablas necesarias usando Prisma
+ *
+ * ⚠️ DESHABILITADA por seguridad.
+ *
+ * Este endpoint ejecutaba `prisma db push --accept-data-loss` sin autenticación,
+ * lo que permitía a cualquier atacante destruir el esquema de la BD en producción.
+ *
+ * La inicialización de la BD debe hacerse vía CI/CD o scripts locales:
+ *   npm run db:push
  */
 
 import { NextResponse } from 'next/server'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-
-const execAsync = promisify(exec)
 
 export async function GET() {
-  try {
-    console.log('Inicializando base de datos...')
-    
-    // Ejecutar prisma db push para crear las tablas
-    const { stdout, stderr } = await execAsync('npx prisma db push --accept-data-loss --skip-generate', {
-      env: {
-        ...process.env,
-        DATABASE_URL: process.env.DATABASE_URL
-      }
-    })
-    
-    console.log('DB Push stdout:', stdout)
-    if (stderr) console.log('DB Push stderr:', stderr)
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Base de datos inicializada correctamente',
-      output: stdout
-    })
-  } catch (error) {
-    console.error('Error inicializando base de datos:', error)
-    return NextResponse.json({
-      success: false,
-      error: 'Error al inicializar base de datos',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
-  }
+  return NextResponse.json(
+    { error: 'Endpoint deshabilitado por seguridad. Use npm run db:push localmente.' },
+    { status: 404 }
+  )
+}
+
+export async function POST() {
+  return NextResponse.json(
+    { error: 'Endpoint deshabilitado por seguridad. Use npm run db:push localmente.' },
+    { status: 404 }
+  )
 }

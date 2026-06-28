@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -40,6 +42,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const { id } = await params
     const personal = await db.personal.findUnique({

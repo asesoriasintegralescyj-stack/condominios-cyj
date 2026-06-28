@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar notificaciones
 export async function GET() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const notificaciones = await db.notificacion.findMany({
       orderBy: { createdAt: 'desc' }
@@ -31,6 +35,11 @@ export async function GET() {
 
 // POST - Crear notificación
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     

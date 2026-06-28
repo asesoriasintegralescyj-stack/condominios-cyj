@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // POST - Bulk upload centros de costo from Excel data
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'centros-costo.crear')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     const centrosList = data.centros // Array of centro de costo objects from Excel

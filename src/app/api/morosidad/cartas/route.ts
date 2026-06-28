@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // ============================================
 // TEMPLATES DE CARTAS
@@ -90,6 +92,11 @@ Tel: +56 964 650 643`
 // GET - Listar cartas de cobranza
 // ============================================
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const { searchParams } = new URL(request.url)
     const residenteId = searchParams.get('residenteId')
@@ -130,6 +137,11 @@ export async function GET(request: NextRequest) {
 // POST - Generar carta de cobranza
 // ============================================
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.editar')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json()
     const { tipo, residenteId, deudasIncluidas, metodoEnvio } = body

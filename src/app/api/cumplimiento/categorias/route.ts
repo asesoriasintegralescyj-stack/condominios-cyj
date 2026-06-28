@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // Categorías predeterminadas basadas en la Ley 21.442 de Copropiedad Inmobiliaria de Chile
 const CATEGORIAS_DEFAULT = [
@@ -175,6 +177,8 @@ const CATEGORIAS_DEFAULT = [
 
 // GET - Get all categories
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const searchParams = request.nextUrl.searchParams
     const condominioId = searchParams.get('condominioId') || ''
@@ -225,6 +229,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Create new category
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
 
@@ -251,6 +260,11 @@ export async function POST(request: NextRequest) {
 
 // PUT - Update category
 export async function PUT(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
 
@@ -282,6 +296,11 @@ export async function PUT(request: NextRequest) {
 
 // DELETE - Delete category
 export async function DELETE(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const searchParams = request.nextUrl.searchParams
     const id = searchParams.get('id')

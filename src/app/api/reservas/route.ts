@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar todas las reservas
 export async function GET() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const reservas = await db.reserva.findMany({
       include: {
@@ -31,6 +35,8 @@ export async function GET() {
 
 // POST - Crear nueva reserva
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const data = await request.json()
     

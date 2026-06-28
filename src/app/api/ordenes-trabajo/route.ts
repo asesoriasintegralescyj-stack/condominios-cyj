@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - List all ordenes de trabajo
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.ver')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
@@ -46,6 +53,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Create new orden de trabajo
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.crear')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     

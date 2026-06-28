@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar asientos contables
 export async function GET() {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const asientos = await db.asientoContable.findMany({
       include: {
@@ -39,6 +46,11 @@ export async function GET() {
 
 // POST - Crear asiento contable
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.crear')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const data = await request.json()
     const { detalles, ...asientoData } = data

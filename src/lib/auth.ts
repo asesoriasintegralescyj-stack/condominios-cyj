@@ -4,7 +4,7 @@
  */
 
 import { db } from '@/lib/db';
-import { randomBytes, createCipheriv, createDecipheriv, createHash, scryptSync } from 'crypto';
+import { randomBytes, randomInt, createCipheriv, createDecipheriv, createHash, scryptSync } from 'crypto';
 import { cookies } from 'next/headers';
 import * as bcrypt from 'bcrypt';
 
@@ -19,9 +19,39 @@ const SALT_LENGTH = 32;
 
 // Clave de encriptación (debe estar en variables de entorno)
 const getEncryptionKey = (): Buffer => {
-  const secret = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET || 'default-encryption-key-change-in-production';
-  const salt = process.env.ENCRYPTION_SALT || 'condominio-laguna-tuna-salt';
+  const secret = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET;
+  const salt = process.env.ENCRYPTION_SALT || 'condominio-cyj-prod-salt';
+
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('ENCRYPTION_KEY (o NEXTAUTH_SECRET) es obligatoria en producción. Configúrala en Vercel.');
+    }
+    // Solo en desarrollo: usar valor por defecto para no romper el entorno local
+    return scryptSync('dev-only-encryption-key-not-for-prod', salt, 32);
+  }
+
   return scryptSync(secret, salt, 32);
+};
+
+// Tipo seguro de usuario (sin password hash)
+export type SafeUser = {
+  id: string;
+  email: string;
+  nombre: string;
+  apellido: string | null;
+  rut: string | null;
+  telefono: string | null;
+  direccion: string | null;
+  rol: string;
+  permisos: string | null;
+  activo: boolean;
+  emailVerificado: Date | null;
+  ultimoAcceso: Date | null;
+  intentosLogin: number;
+  bloqueadoHasta: Date | null;
+  twoFactorEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 // ============================================
@@ -117,7 +147,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 /**
- * Genera una contraseña segura aleatoria
+ * Genera una contraseña segura aleatoria usando crypto.randomInt (criptográficamente seguro)
  */
 export function generateSecurePassword(length: number = 16): string {
   const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -126,21 +156,30 @@ export function generateSecurePassword(length: number = 16): string {
   const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
   const allChars = uppercase + lowercase + numbers + symbols;
   
-  let password = '';
+  const securePick = (charset: string): string => charset[randomInt(0, charset.length)];
   
   // Asegurar al menos un carácter de cada tipo
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += symbols[Math.floor(Math.random() * symbols.length)];
+  const required = [
+    securePick(uppercase),
+    securePick(lowercase),
+    securePick(numbers),
+    securePick(symbols),
+  ];
   
   // Completar el resto
-  for (let i = password.length; i < length; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
+  const remaining: string[] = [];
+  for (let i = required.length; i < length; i++) {
+    remaining.push(securePick(allChars));
   }
   
-  // Mezclar caracteres
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+  // Mezclar usando Fisher-Yates con crypto.randomInt
+  const all = [...required, ...remaining];
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [all[i], all[j]] = [all[j], all[i]];
+  }
+  
+  return all.join('');
 }
 
 // ============================================
@@ -178,14 +217,36 @@ export async function createSession(userId: string, userAgent?: string, ip?: str
 }
 
 /**
- * Verifica un token de sesión
+ * Verifica un token de sesión. NO incluye el hash del password en el objeto retornado.
  */
-export async function verifySession(token: string): Promise<{ userId: string; user: any } | null> {
+export async function verifySession(token: string): Promise<{ userId: string; user: SafeUser } | null> {
   if (!token) return null;
   
   const session = await db.session.findUnique({
     where: { token },
-    include: { user: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          nombre: true,
+          apellido: true,
+          rut: true,
+          telefono: true,
+          direccion: true,
+          rol: true,
+          permisos: true,
+          activo: true,
+          emailVerificado: true,
+          ultimoAcceso: true,
+          intentosLogin: true,
+          bloqueadoHasta: true,
+          twoFactorEnabled: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
   });
   
   if (!session) return null;
@@ -202,15 +263,15 @@ export async function verifySession(token: string): Promise<{ userId: string; us
     return null;
   }
   
-  // Actualizar último acceso
-  await db.user.update({
+  // Actualizar último acceso (sin bloquear el flujo)
+  db.user.update({
     where: { id: session.userId },
     data: { ultimoAcceso: new Date() },
-  });
+  }).catch((err) => console.error('Error actualizando ultimoAcceso:', err));
   
   return {
     userId: session.userId,
-    user: session.user,
+    user: session.user as SafeUser,
   };
 }
 
@@ -226,7 +287,7 @@ export async function deleteSession(token: string): Promise<void> {
 /**
  * Obtiene la sesión actual desde las cookies
  */
-export async function getCurrentSession(): Promise<{ userId: string; user: any } | null> {
+export async function getCurrentSession(): Promise<{ userId: string; user: SafeUser } | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   
@@ -236,9 +297,9 @@ export async function getCurrentSession(): Promise<{ userId: string; user: any }
 }
 
 /**
- * Obtiene el usuario actual de la sesión
+ * Obtiene el usuario actual de la sesión (sin password hash)
  */
-export async function getCurrentUser(): Promise<any | null> {
+export async function getCurrentUser(): Promise<SafeUser | null> {
   const session = await getCurrentSession();
   return session?.user || null;
 }

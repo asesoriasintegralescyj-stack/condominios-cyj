@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Obtener una reserva por ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
     const reserva = await db.reserva.findUnique({
@@ -40,6 +44,8 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
     const data = await request.json()
@@ -78,6 +84,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
     await db.reserva.delete({

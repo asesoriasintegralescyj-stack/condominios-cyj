@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // Mapeo de columnas del Excel a campos del modelo
 const fieldMapping: Record<string, string> = {
@@ -61,6 +63,11 @@ const fieldMapping: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.crear')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json()
     const { personal } = body

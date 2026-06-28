@@ -2,8 +2,18 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 
-// POST - Seed initial data
+/**
+ * POST - Seed initial data
+ * ⚠️ BLOQUEADO en producción. Use npm run db:seed localmente.
+ */
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Endpoint deshabilitado en producción. Use npm run db:seed.' },
+      { status: 404 }
+    )
+  }
+
   try {
     // Check if already seeded
     const existingPropiedades = await db.propiedad.count()
@@ -12,13 +22,17 @@ export async function POST() {
     }
     
     // ==========================================
-    // CREAR USUARIO ADMINISTRADOR
+    // CREAR USUARIO ADMINISTRADOR (solo dev)
     // ==========================================
-    const hashedPassword = await hashPassword('Admin123!')
+    // Password desde variable de entorno o default solo en dev
+    const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'admin@condominio.com'
+    const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Admin123!'
+    
+    const hashedPassword = await hashPassword(adminPassword)
     
     await db.user.create({
       data: {
-        email: 'admin@condominio.com',
+        email: adminEmail,
         nombre: 'Administrador',
         apellido: 'Sistema',
         password: hashedPassword,

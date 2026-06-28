@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Get single compliance document
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
 
@@ -38,6 +42,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const { id } = await params
     const data = await request.json()
@@ -104,6 +113,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const { id } = await params
 

@@ -5,8 +5,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'logs.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const searchParams = request.nextUrl.searchParams
     const tipoAccion = searchParams.get('tipoAccion')
@@ -131,31 +138,5 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    const data = await request.json()
-    
-    const registro = await db.auditoriaSistema.create({
-      data: {
-        tipoAccion: data.tipoAccion || 'Acceso',
-        modulo: data.modulo || 'Sistema',
-        descripcion: data.descripcion || '',
-        entidad: data.entidad || null,
-        entidadId: data.entidadId || null,
-        datosAntes: data.datosAntes ? JSON.stringify(data.datosAntes) : null,
-        datosDespues: data.datosDespues ? JSON.stringify(data.datosDespues) : null,
-        usuarioId: data.usuarioId || null,
-        usuarioNombre: data.usuarioNombre || null,
-        ip: data.ip || null,
-        userAgent: data.userAgent || null,
-        resultado: data.resultado || 'Exitoso',
-        mensajeError: data.mensajeError || null,
-      }
-    })
-    
-    return NextResponse.json(registro)
-    
-  } catch (error) {
-    console.error('Error creating auditoria:', error)
-    return NextResponse.json({ error: 'Error al crear registro de auditoría' }, { status: 500 })
-  }
+  return apiError('No se permite crear entradas de auditoría manualmente', 403);
 }

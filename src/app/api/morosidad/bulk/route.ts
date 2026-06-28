@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 interface BulkUploadRow {
   Unidad: string
@@ -180,6 +182,11 @@ export async function PUT(request: NextRequest) {
 
 // POST - Save bulk data to database
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.editar')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json()
     const { data } = body as { data: BulkUploadRow[] }

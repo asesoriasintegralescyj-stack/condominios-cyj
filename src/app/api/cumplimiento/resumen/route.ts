@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Get compliance summary
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const searchParams = request.nextUrl.searchParams
     const condominioId = searchParams.get('condominioId') || ''
@@ -179,6 +183,11 @@ export async function GET(request: NextRequest) {
 
 // POST - Force recalculate summary
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     const { condominioId } = data

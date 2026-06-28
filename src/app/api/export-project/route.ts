@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import archiver from 'archiver'
 import { Readable } from 'stream'
+import { getCurrentSession } from '@/lib/auth'
 
 // Archivos a excluir
 const EXCLUDE_PATTERNS = [
@@ -13,17 +14,34 @@ const EXCLUDE_PATTERNS = [
 ]
 
 export async function GET(request: NextRequest) {
+  // ⚠️ Requiere autenticación de admin para evitar exposición pública del código fuente
+  const session = await getCurrentSession()
+  if (!session || session.user.rol !== 'admin') {
+    return NextResponse.json(
+      { error: 'No autorizado' },
+      { status: 403 }
+    )
+  }
+
+  // Bloquear en producción (el código fuente puede exponer credenciales)
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Endpoint deshabilitado en producción' },
+      { status: 404 }
+    )
+  }
+
   try {
     const fs = await import('fs')
     const path = await import('path')
-    
+
     const projectRoot = process.cwd()
-    
+
     // Crear un archivo ZIP en memoria
     const chunks: Buffer[] = []
-    
+
     const archive = archiver('zip', { zlib: { level: 9 } })
-    
+
     archive.on('data', (chunk) => {
       chunks.push(chunk)
     })
@@ -234,8 +252,9 @@ Archivos incluidos en este paquete:
     archive.finalize()
     
     const buffer = await archivePromise
-    
-    return new NextResponse(buffer, {
+
+    // Convertir Buffer a Uint8Array para compatibilidad con NextResponse (BodyInit)
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': 'attachment; filename="cyj-condominios-completo.zip"',

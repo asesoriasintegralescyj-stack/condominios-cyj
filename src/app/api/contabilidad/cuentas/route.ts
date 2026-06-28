@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar cuentas contables
 export async function GET() {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const cuentas = await db.cuentaContable.findMany({
       orderBy: { codigo: 'asc' }
@@ -17,6 +24,11 @@ export async function GET() {
 
 // POST - Crear cuenta contable
 export async function POST(request: Request) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.crear')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const data = await request.json()
     

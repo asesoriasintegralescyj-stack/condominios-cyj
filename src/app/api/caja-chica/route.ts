@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Get caja chica
 export async function GET() {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     let caja = await db.cajaChica.findFirst()
     
@@ -25,6 +32,11 @@ export async function GET() {
 
 // PUT - Update caja chica
 export async function PUT(request: Request) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.editar')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const data = await request.json()
     

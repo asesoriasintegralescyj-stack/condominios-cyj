@@ -107,6 +107,14 @@ const materialesInventory = [
 ]
 
 export async function POST(req: NextRequest) {
+  // ⚠️ BLOQUEADO en producción. Use npm run db:seed-catalogos localmente.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'Endpoint deshabilitado en producción. Use npm run db:seed-catalogos.' },
+      { status: 404 }
+    )
+  }
+
   try {
     // Limpiar tablas existentes
     await db.catHerramienta.deleteMany({})

@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 export async function GET() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.ver')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     // Use $queryRaw as a fallback if condominio model is not available
     // This can happen during hot reload when Prisma client is stale
@@ -31,6 +38,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     

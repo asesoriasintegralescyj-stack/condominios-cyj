@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar movimientos de inventario
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.ver')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
@@ -41,12 +42,12 @@ export async function GET(request: NextRequest) {
 
 // POST - Crear movimiento de inventario
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
-    const user = await getCurrentUser()
-    if (!user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-    }
-
     const body = await request.json()
     const { tipo, materialId, materialCodigo, materialNombre, cantidad, stockAnterior, stockNuevo, motivo, referencia, referenciaId, observaciones, condominioId } = body
 
@@ -64,8 +65,8 @@ export async function POST(request: NextRequest) {
         referenciaId,
         observaciones,
         condominioId,
-        usuarioId: user.id,
-        usuarioNombre: `${user.nombre} ${user.apellido || ''}`.trim(),
+        usuarioId: session.user.id,
+        usuarioNombre: `${session.user.nombre} ${session.user.apellido || ''}`.trim(),
       },
     })
 

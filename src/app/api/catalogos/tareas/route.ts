@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - List all cat tareas
 export async function GET() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'catalogos.ver')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const tareas = await db.catTarea.findMany({
       orderBy: { nombre: 'asc' }
@@ -17,6 +24,11 @@ export async function GET() {
 
 // POST - Create new cat tarea
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'catalogos.crear')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     

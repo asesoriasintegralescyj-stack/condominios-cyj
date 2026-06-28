@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // ============================================
 // HELPER FUNCTIONS
@@ -20,6 +22,11 @@ function calcularDiasMora(fechaVencimiento: string | null): number {
 // GET - Listar deudas con estadísticas
 // ============================================
 export async function GET(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.ver')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const { searchParams } = new URL(request.url)
     const residenteId = searchParams.get('residenteId')
@@ -110,6 +117,11 @@ export async function GET(request: NextRequest) {
 // POST - Crear nueva deuda
 // ============================================
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'gastos.editar')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json()
     const { tipo, periodo, concepto, montoOriginal, residenteId, fechaVencimiento, notas } = body

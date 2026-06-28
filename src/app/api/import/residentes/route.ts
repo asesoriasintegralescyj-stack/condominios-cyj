@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getCurrentSession, hasPermission } from '@/lib/auth';
+import { apiError } from '@/lib/api-helpers';
 
 interface ResidenteRow {
   Nombre: string;
@@ -62,6 +64,11 @@ function formatPhone(phone: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession();
+  if (!session) return apiError('No autenticado', 401);
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'residentes.crear')) {
+    return apiError('Sin permisos', 403);
+  }
   try {
     const body = await request.json();
     const { residentes } = body as { residentes: ResidenteRow[] };

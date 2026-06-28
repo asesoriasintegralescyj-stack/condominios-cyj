@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Obtener asistencia por fecha y condominio
 export async function GET(request: Request) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
   try {
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get('fecha')
@@ -55,6 +59,11 @@ export async function GET(request: Request) {
 
 // POST - Registrar entrada, salida o cambiar estado
 export async function POST(request: Request) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.editar')) {
+    return apiError('Sin permisos', 403)
+  }
   try {
     const data = await request.json()
     const { personalId, fecha, horaEntrada, horaSalida, estado, observaciones } = data

@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import fs from 'fs'
+import { getCurrentSession } from '@/lib/auth'
+import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
-// GET - Get backup configuration
+// GET - Get backup configuration (requiere admin)
 export async function GET() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin') return apiError('Requiere rol admin', 403)
+
   try {
     // Get config from Configuracion table
     const configs = await db.configuracion.findMany({
@@ -41,8 +46,12 @@ export async function GET() {
   }
 }
 
-// POST - Update backup configuration
+// POST - Update backup configuration (requiere admin)
 export async function POST(request: NextRequest) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin') return apiError('Requiere rol admin', 403)
+
   try {
     const body = await request.json()
     const { 
@@ -90,8 +99,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - Clean old backups based on retention
+// DELETE - Clean old backups based on retention (requiere admin)
 export async function DELETE() {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+  if (session.user.rol !== 'admin') return apiError('Requiere rol admin', 403)
+
   try {
     // Get retention days
     const config = await db.configuracion.findUnique({
@@ -116,15 +129,8 @@ export async function DELETE() {
 
     for (const backup of oldBackups) {
       try {
-        // Delete file if exists
-        if (backup.ubicacion) {
-          if (fs.existsSync(backup.ubicacion)) {
-            fs.unlinkSync(backup.ubicacion)
-            deletedSize += backup.tamano || 0
-          }
-        }
-        
-        // Delete database record
+        deletedSize += backup.tamano || 0
+        // Delete database record (los datos JSON están en el registro)
         await db.backup.delete({ where: { id: backup.id } })
         deletedCount++
       } catch (e) {
