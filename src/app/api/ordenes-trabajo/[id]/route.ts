@@ -203,6 +203,10 @@ export async function PUT(
               descripcion: t.descripcion,
               cantidad: parseInt(t.cantidad) || 1,
               estado: t.estado || 'Pendiente',
+              // Checklist de verificación (LV del PMI): OK / NO OK / N/A
+              ok: t.ok === true,
+              noOk: t.noOk === true,
+              na: t.na === true,
               otId: id
             }))
           })

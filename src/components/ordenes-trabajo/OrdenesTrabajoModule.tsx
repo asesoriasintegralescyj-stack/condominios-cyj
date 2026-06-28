@@ -57,7 +57,11 @@ interface OTTarea {
   descripcion: string
   cantidad: number
   estado: string
-  cumple: boolean | null
+  cumple?: boolean | null
+  // Checklist de verificación (LV del PMI): OK / NO OK / N/A (mutuamente excluyentes)
+  ok?: boolean
+  noOk?: boolean
+  na?: boolean
 }
 
 interface OTPersonalOT {
@@ -403,7 +407,7 @@ export function OrdenesTrabajoModule() {
         id: t.id,
         descripcion: t.descripcion,
         estado: t.estado,
-        cumple: t.cumple,
+        cumple: t.cumple ?? null,
       })),
     })
     setProgressDialogOpen(true)
@@ -503,6 +507,132 @@ export function OrdenesTrabajoModule() {
     } catch (error) {
       console.error('Error deleting OT:', error)
     }
+  }
+
+  // Imprimir Checklist (LV del PMI) - abre una ventana con la lista de verificación
+  // para imprimir y rellenar a mano con casillas vacías (☐)
+  const imprimirChecklist = (ot: OrdenTrabajo) => {
+    const tareas = ot.tareas || []
+    const filas = tareas.length > 0
+      ? tareas.map((t, i) => `
+        <tr>
+          <td class="num">${i + 1}</td>
+          <td class="desc">${(t.descripcion || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+          <td class="check">☐</td>
+          <td class="check">☐</td>
+          <td class="check">☐</td>
+          <td class="obs"></td>
+        </tr>`).join('')
+      : `<tr><td colspan="6" style="text-align:center;padding:20px;color:#999;">Sin tareas registradas</td></tr>`
+
+    const fechaStr = ot.fechaInicio
+      ? new Date(ot.fechaInicio).toLocaleDateString('es-CL')
+      : new Date().toLocaleDateString('es-CL')
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Checklist OT ${ot.otNum}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
+    h1 { font-size: 18px; color: #0f2040; margin: 0 0 4px 0; }
+    h2 { font-size: 13px; color: #444; margin: 0 0 12px 0; font-weight: normal; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f2040; padding-bottom: 10px; margin-bottom: 15px; }
+    .header-left { flex: 1; }
+    .header-right { text-align: right; font-size: 11px; color: #555; }
+    .info { font-size: 12px; margin-bottom: 12px; }
+    .info span { display: inline-block; margin-right: 18px; }
+    .info b { color: #0f2040; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: #0f2040; color: white; padding: 8px; font-size: 12px; text-align: center; border: 1px solid #0f2040; }
+    th.desc { text-align: left; }
+    td { border: 1px solid #ccc; padding: 6px 8px; font-size: 11px; vertical-align: middle; }
+    td.num { text-align: center; width: 30px; color: #555; }
+    td.desc { text-align: left; }
+    td.check { text-align: center; font-size: 16px; width: 40px; }
+    td.obs { width: 28%; }
+    .check-title { text-align: center; font-size: 11px; padding: 4px; font-weight: bold; }
+    .check-title.ok { color: #16a34a; }
+    .check-title.no { color: #dc2626; }
+    .check-title.na { color: #6b7280; }
+    .signature { margin-top: 50px; display: flex; justify-content: space-between; }
+    .sig-line { border-top: 1px solid #000; width: 220px; padding-top: 5px; font-size: 10px; color: #333; }
+    .footer-note { margin-top: 20px; font-size: 10px; color: #666; font-style: italic; }
+    @media print {
+      body { margin: 10px; }
+      .no-print { display: none; }
+    }
+    .no-print { margin-bottom: 15px; }
+    .no-print button { padding: 6px 14px; font-size: 12px; cursor: pointer; background: #0f2040; color: white; border: none; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+  </div>
+  <div class="header">
+    <div class="header-left">
+      <h1>ORDEN DE TRABAJO ${ot.otNum}</h1>
+      <h2>${(ot.titulo || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</h2>
+    </div>
+    <div class="header-right">
+      <div><b>Fecha:</b> ${fechaStr}</div>
+      <div><b>Tipo:</b> ${ot.tipo || '–'}</div>
+      <div><b>Prioridad:</b> ${ot.prioridad || '–'}</div>
+    </div>
+  </div>
+  <div class="info">
+    <span><b>Ubicación:</b> ${ot.ubicacion || '–'}</span>
+    <span><b>Asignado:</b> ${ot.asignado?.nombre || '–'}</span>
+    <span><b>Propiedad:</b> ${ot.propiedad?.nombre || '–'}</span>
+  </div>
+
+  <h3 style="font-size:13px;color:#0f2040;margin:14px 0 4px 0;">LISTA DE VERIFICACIÓN DE TAREAS (LV - PMI)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30px;">ÍTEM</th>
+        <th class="desc">TAREA / ACTIVIDAD</th>
+        <th style="width:40px;" class="check-title ok">OK</th>
+        <th style="width:40px;" class="check-title no">NO</th>
+        <th style="width:40px;" class="check-title na">N/A</th>
+        <th style="width:28%;">OBSERVACIONES</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filas}
+    </tbody>
+  </table>
+
+  <div class="footer-note">
+    Marcar con una X o ✓ la casilla correspondiente. Indicar observaciones si la tarea NO cumple o es N/A.
+  </div>
+
+  <div class="signature">
+    <div class="sig-line">
+      Ejecutado por (firma y nombre)
+    </div>
+    <div class="sig-line">
+      Supervisor / Administrador (firma y nombre)
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() { setTimeout(function(){ window.print(); }, 300); };
+  </script>
+</body>
+</html>`
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) {
+      toast.error('No se pudo abrir la ventana de impresión. Revisa el bloqueador de pop-ups.')
+      return
+    }
+    printWindow.document.open()
+    printWindow.document.write(html)
+    printWindow.document.close()
   }
 
   // Crear Solicitud de Compra desde los materiales de la OT
@@ -636,7 +766,10 @@ export function OrdenesTrabajoModule() {
       descripcion: '',
       cantidad: 1,
       estado: 'Pendiente',
-      cumple: null
+      cumple: null,
+      ok: false,
+      noOk: false,
+      na: false
     }])
   }
 
@@ -646,13 +779,30 @@ export function OrdenesTrabajoModule() {
       descripcion: `${catTar.codigo ? `[${catTar.codigo}] ` : ''}${catTar.nombre}${catTar.centroCosto ? ` (CC: ${catTar.centroCosto.codigo})` : ''}`,
       cantidad: 1,
       estado: 'Pendiente',
-      cumple: null
+      cumple: null,
+      ok: false,
+      noOk: false,
+      na: false
     }])
   }
 
   const updateTarea = (index: number, field: string, value: any) => {
     const updated = [...tareas]
     updated[index] = { ...updated[index], [field]: value }
+    setTareas(updated)
+  }
+
+  // Toggle checklist OK / NO / N/A (mutuamente excluyentes)
+  const toggleTareaCheck = (index: number, field: 'ok' | 'noOk' | 'na') => {
+    const updated = [...tareas]
+    const current = !!updated[index][field]
+    // Si se activa, desactiva los otros dos (mutuamente excluyentes)
+    updated[index] = {
+      ...updated[index],
+      ok: field === 'ok' ? !current : false,
+      noOk: field === 'noOk' ? !current : false,
+      na: field === 'na' ? !current : false,
+    }
     setTareas(updated)
   }
 
@@ -1391,7 +1541,9 @@ export function OrdenesTrabajoModule() {
                           <th className="text-left p-2 text-xs">Tarea</th>
                           <th className="text-center p-2 w-20 text-xs">Cant.</th>
                           <th className="text-center p-2 w-28 text-xs">Estado</th>
-                          <th className="text-center p-2 w-16 text-xs">Cumple</th>
+                          <th className="text-center p-2 w-12 text-xs text-green-700">OK</th>
+                          <th className="text-center p-2 w-12 text-xs text-red-700">NO</th>
+                          <th className="text-center p-2 w-12 text-xs text-slate-500">N/A</th>
                           <th className="p-2 w-12"></th>
                         </tr>
                       </thead>
@@ -1415,10 +1567,46 @@ export function OrdenesTrabajoModule() {
                               </Select>
                             </td>
                             <td className="p-2 text-center">
-                              <Checkbox 
-                                checked={t.cumple === true} 
-                                onCheckedChange={(checked) => updateTarea(i, 'cumple', checked ? true : null)}
-                              />
+                              <button
+                                type="button"
+                                aria-label="Marcar OK"
+                                onClick={() => toggleTareaCheck(i, 'ok')}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded border-2 text-sm font-bold transition-colors ${
+                                  t.ok
+                                    ? 'bg-green-500 border-green-500 text-white'
+                                    : 'bg-white border-green-400 text-transparent hover:border-green-600'
+                                }`}
+                              >
+                                ✓
+                              </button>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                aria-label="Marcar NO OK"
+                                onClick={() => toggleTareaCheck(i, 'noOk')}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded border-2 text-sm font-bold transition-colors ${
+                                  t.noOk
+                                    ? 'bg-red-500 border-red-500 text-white'
+                                    : 'bg-white border-red-400 text-transparent hover:border-red-600'
+                                }`}
+                              >
+                                ✗
+                              </button>
+                            </td>
+                            <td className="p-2 text-center">
+                              <button
+                                type="button"
+                                aria-label="Marcar N/A"
+                                onClick={() => toggleTareaCheck(i, 'na')}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded border-2 text-sm font-bold transition-colors ${
+                                  t.na
+                                    ? 'bg-slate-400 border-slate-400 text-white'
+                                    : 'bg-white border-slate-300 text-transparent hover:border-slate-500'
+                                }`}
+                              >
+                                –
+                              </button>
                             </td>
                             <td className="p-2 text-center">
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar tarea" onClick={() => removeTarea(i)}>
@@ -1796,7 +1984,9 @@ export function OrdenesTrabajoModule() {
                           <th className="text-left p-2">Tarea</th>
                           <th className="text-center p-2 w-16">Cant.</th>
                           <th className="text-center p-2 w-24">Estado</th>
-                          <th className="text-center p-2 w-16">Cumple</th>
+                          <th className="text-center p-2 w-10 text-green-700">OK</th>
+                          <th className="text-center p-2 w-10 text-red-700">NO</th>
+                          <th className="text-center p-2 w-10 text-slate-500">N/A</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1810,7 +2000,19 @@ export function OrdenesTrabajoModule() {
                               </Badge>
                             </td>
                             <td className="p-2 text-center">
-                              {t.cumple !== null ? (t.cumple ? '✓' : '✗') : '–'}
+                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded border ${t.ok ? 'bg-green-500 border-green-500 text-white' : 'border-green-400 text-transparent'}`}>
+                                ✓
+                              </span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded border ${t.noOk ? 'bg-red-500 border-red-500 text-white' : 'border-red-400 text-transparent'}`}>
+                                ✗
+                              </span>
+                            </td>
+                            <td className="p-2 text-center">
+                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded border ${t.na ? 'bg-slate-400 border-slate-400 text-white' : 'border-slate-300 text-transparent'}`}>
+                                –
+                              </span>
                             </td>
                           </tr>
                         ))}
@@ -1918,6 +2120,9 @@ export function OrdenesTrabajoModule() {
               
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
+                <Button variant="outline" onClick={() => imprimirChecklist(selectedOT)}>
+                  <Printer className="w-4 h-4 mr-1" /> Imprimir Checklist
+                </Button>
                 <Button variant="outline" onClick={() => window.open(`/api/pdf/orden-trabajo/${selectedOT.id}`, '_blank')}>
                   <Printer className="w-4 h-4 mr-1" /> PDF
                 </Button>

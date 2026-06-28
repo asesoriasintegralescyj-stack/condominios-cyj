@@ -463,6 +463,10 @@ model OTTarea {
   descripcion String
   cantidad    Int      @default(1)
   estado      String   @default("Pendiente") // Pendiente, En Progreso, Completado
+  // Checklist de verificación (LV del PMI): OK / NO OK / N/A
+  ok          Boolean  @default(false)
+  noOk        Boolean  @default(false)
+  na          Boolean  @default(false)
   otId        String
   ot          OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
