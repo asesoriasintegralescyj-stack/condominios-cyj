@@ -1160,30 +1160,30 @@ export function OrdenesTrabajoModule() {
                     <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
                     <Building2 className="w-4 h-4" /> Centro de Costo e Imputación
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Centro de Costo</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 min-w-0">
+                      <Label className="text-xs font-medium">Centro de Costo</Label>
                       <Select value={formData.centroCostoId} onValueChange={(v) => setFormData({...formData, centroCostoId: v})}>
-                        <SelectTrigger className="h-9"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Sin centro de costo</SelectItem>
                           {centrosCosto.map(cc => (
-                            <SelectItem key={cc.id} value={cc.id}>
-                              {cc.codigo} - {cc.nombre}
+                            <SelectItem key={cc.id} value={cc.id} className="max-w-full">
+                              <span className="truncate">{cc.codigo} - {cc.nombre}</span>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                       {formData.centroCostoId && formData.centroCostoId !== 'none' && (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-500 truncate">
                           Presupuesto: {formatCLP(centrosCosto.find(cc => cc.id === formData.centroCostoId)?.presupuestoMens || 0)}/mes
                         </p>
                       )}
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Forma de Pago</Label>
+                    <div className="space-y-1.5 min-w-0">
+                      <Label className="text-xs font-medium">Forma de Pago</Label>
                       <Select value={formData.formaPago} onValueChange={(v) => setFormData({...formData, formaPago: v})}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Gasto Común Mensual">Gasto Común Mensual</SelectItem>
                           <SelectItem value="Fondo de Reserva">Fondo de Reserva</SelectItem>
