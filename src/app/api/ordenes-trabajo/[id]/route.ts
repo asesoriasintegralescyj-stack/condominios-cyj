@@ -62,11 +62,21 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
     
-    // Get current OT to check state change
+    // Get current OT to check state change (include fields needed for time tracking)
     const currentOT = await db.ordenTrabajo.findUnique({
       where: { id },
-      select: { estado: true, estadoAprobacion: true }
+      select: {
+        estado: true,
+        estadoAprobacion: true,
+        fechaInicioReal: true,
+        fechaInicio: true,
+        progreso: true,
+      }
     })
+
+    if (!currentOT) {
+      return apiError('OT no encontrada', 404)
+    }
     
     // Prepare update data
     const updateData: any = {
@@ -96,6 +106,47 @@ export async function PUT(
       fotosAntes: data.fotosAntes && data.fotosAntes.length > 0 ? JSON.stringify(data.fotosAntes) : null,
       fotosDespues: data.fotosDespues && data.fotosDespues.length > 0 ? JSON.stringify(data.fotosDespues) : null,
     }
+
+    // ===== Automatic time tracking =====
+    const ahora = new Date()
+    const ahoraStr = ahora.toISOString()
+
+    // Si el estado cambia a "En Progreso" y no tiene fechaInicioReal, setearla
+    if (data.estado === 'En Progreso' && !currentOT.fechaInicioReal && !data.fechaInicioReal) {
+      updateData.fechaInicioReal = ahoraStr
+    }
+
+    // Si el estado cambia a "Completado", setear fechaFinReal y calcular tiempoReal
+    if (data.estado === 'Completado' && currentOT.estado !== 'Completado') {
+      updateData.fechaFinReal = ahoraStr
+      // Calcular tiempo real en minutos
+      const inicio = currentOT.fechaInicioReal
+        ? new Date(currentOT.fechaInicioReal)
+        : (currentOT.fechaInicio ? new Date(currentOT.fechaInicio) : null)
+      if (inicio) {
+        const diffMs = ahora.getTime() - inicio.getTime()
+        updateData.tiempoReal = Math.round(diffMs / (1000 * 60)) // minutos
+      }
+      updateData.progreso = 100
+    }
+
+    // Si se setea progreso manualmente y llega a 100, marcar como Completado
+    if (
+      data.progreso === 100 &&
+      currentOT.progreso < 100 &&
+      data.estado !== 'Completado'
+    ) {
+      updateData.estado = 'Completado'
+      updateData.fechaFinReal = ahoraStr
+      const inicio = currentOT.fechaInicioReal
+        ? new Date(currentOT.fechaInicioReal)
+        : (currentOT.fechaInicio ? new Date(currentOT.fechaInicio) : null)
+      if (inicio) {
+        const diffMs = ahora.getTime() - inicio.getTime()
+        updateData.tiempoReal = Math.round(diffMs / (1000 * 60))
+      }
+    }
+    // ===== End automatic time tracking =====
     
     // Si el estado cambia a Completado y no tiene estadoAprobacion, establecerlo como Pendiente
     if (data.estado === 'Completado' && currentOT?.estado !== 'Completado') {

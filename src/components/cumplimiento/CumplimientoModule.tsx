@@ -149,7 +149,23 @@ const getDaysUntilExpiry = (fechaVencimiento: string | null) => {
 }
 
 export function CumplimientoModule() {
-  const { currentCondominio } = useAppStore()
+  const { currentCondominio, setCurrentCondominio } = useAppStore()
+
+  // Fallback hardcoded: el sistema es para UN SOLO CONDOMINIO (LAGUNA NORTE).
+  // Si por alguna razón currentCondominio no está cargado (ej: refresh en módulo),
+  // usar este ID garantizado para que el módulo siempre funcione.
+  const CONDOMINIO_ID_FALLBACK = 'cmo9f3x7j0000ktyeb0rzhwt9'
+  const CONDOMINIO_NOMBRE_FALLBACK = 'LAGUNA NORTE'
+
+  const condominioId = currentCondominio?.id || CONDOMINIO_ID_FALLBACK
+  const condominioNombre = currentCondominio?.nombre || CONDOMINIO_NOMBRE_FALLBACK
+
+  // Auto-set si no está en store (para refresh directo al módulo)
+  useEffect(() => {
+    if (!currentCondominio?.id) {
+      setCurrentCondominio({ id: CONDOMINIO_ID_FALLBACK, nombre: CONDOMINIO_NOMBRE_FALLBACK })
+    }
+  }, [currentCondominio?.id, setCurrentCondominio])
   
   // ============================================
   // STATE
@@ -208,7 +224,7 @@ export function CumplimientoModule() {
   // FETCH FUNCTIONS
   // ============================================
   const fetchData = useCallback(async () => {
-    if (!currentCondominio?.id) {
+    if (!condominioId) {
       setLoading(false)
       return
     }
@@ -216,7 +232,7 @@ export function CumplimientoModule() {
     try {
       setLoading(true)
       // Fetch categories with createDefaults=true to populate initial categories
-      const catRes = await fetch(`/api/cumplimiento/categorias?condominioId=${currentCondominio.id}&createDefaults=true`)
+      const catRes = await fetch(`/api/cumplimiento/categorias?condominioId=${condominioId}&createDefaults=true`)
       if (!catRes.ok) {
         const err = await catRes.json().catch(() => ({}))
         throw new Error(err.error || `Error ${catRes.status} al cargar categorías`)
@@ -227,7 +243,7 @@ export function CumplimientoModule() {
       
       // Fetch documents
       const params = new URLSearchParams()
-      params.append('condominioId', currentCondominio.id)
+      params.append('condominioId', condominioId)
       if (search) params.append('search', search)
       if (filterTipo !== 'todos') params.append('tipo', filterTipo)
       if (filterEstado !== 'todos') params.append('estado', filterEstado)
@@ -244,7 +260,7 @@ export function CumplimientoModule() {
       
       // Fetch summary (opcional - no fallar si no carga)
       try {
-        const resumenRes = await fetch(`/api/cumplimiento/resumen?condominioId=${currentCondominio.id}`)
+        const resumenRes = await fetch(`/api/cumplimiento/resumen?condominioId=${condominioId}`)
         if (resumenRes.ok) {
           const resumenData = await resumenRes.json()
           setDocumentosProximosVencer(Array.isArray(resumenData?.documentosProximosVencer) ? resumenData.documentosProximosVencer : [])
@@ -377,7 +393,7 @@ export function CumplimientoModule() {
       toast.error('El título es obligatorio')
       return
     }
-    if (!currentCondominio?.id) {
+    if (!condominioId) {
       toast.error('No hay condominio seleccionado')
       return
     }
@@ -386,7 +402,7 @@ export function CumplimientoModule() {
     try {
       const data = {
         ...documentoForm,
-        condominioId: currentCondominio.id,
+        condominioId: condominioId,
       }
       
       let response
@@ -425,7 +441,7 @@ export function CumplimientoModule() {
       toast.error('El nombre de la categoría es obligatorio')
       return
     }
-    if (!currentCondominio?.id) {
+    if (!condominioId) {
       toast.error('No hay condominio seleccionado')
       return
     }
@@ -436,7 +452,7 @@ export function CumplimientoModule() {
         ...categoriaForm,
         obligatorio: categoriaForm.obligatorio,
         fechaLimiteDias: categoriaForm.fechaLimiteDias ? parseInt(categoriaForm.fechaLimiteDias) : null,
-        condominioId: currentCondominio.id,
+        condominioId: condominioId,
       }
       
       let response
@@ -521,7 +537,7 @@ export function CumplimientoModule() {
   // ============================================
 
   // Mostrar mensaje si no hay condominio seleccionado
-  if (!currentCondominio?.id && !loading) {
+  if (!condominioId && !loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md w-full">
@@ -529,8 +545,7 @@ export function CumplimientoModule() {
             <Building2 className="w-16 h-16 mx-auto text-slate-400 mb-4" />
             <h2 className="text-xl font-bold text-slate-700 mb-2">No hay condominio seleccionado</h2>
             <p className="text-slate-500 text-sm">
-              Para gestionar el cumplimiento legal primero debe seleccionar un condominio.
-              Si no aparece automáticamente, recargue la página o cree un condominio en el módulo de Configuración.
+              Cargando condominio {condominioNombre}...
             </p>
             <Button className="mt-4" onClick={() => fetchData()}>
               Reintentar

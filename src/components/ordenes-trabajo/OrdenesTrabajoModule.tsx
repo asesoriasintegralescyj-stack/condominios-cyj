@@ -33,7 +33,7 @@ import { toast } from 'sonner'
 import { 
   Plus, Pencil, Trash2, Search, Printer, Clock, Users, 
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
-  Calendar, Lock, Download, Camera, Image, X
+  Calendar, Lock, Download, Camera, Image, X, ShoppingCart
 } from 'lucide-react'
 
 // Interfaces
@@ -221,6 +221,8 @@ export function OrdenesTrabajoModule() {
   const [editingOT, setEditingOT] = useState<OrdenTrabajo | null>(null)
   const [progressDialogOpen, setProgressDialogOpen] = useState(false)
   const [progressOT, setProgressOT] = useState<OrdenTrabajo | null>(null)
+  const [crearSolicitudDialogOpen, setCrearSolicitudDialogOpen] = useState(false)
+  const [creandoSolicitud, setCreandoSolicitud] = useState(false)
   
   // Catalogs state
   const [centrosCosto, setCentrosCosto] = useState<CentroCosto[]>([])
@@ -500,6 +502,67 @@ export function OrdenesTrabajoModule() {
       fetchOrdenes(search)
     } catch (error) {
       console.error('Error deleting OT:', error)
+    }
+  }
+
+  // Crear Solicitud de Compra desde los materiales de la OT
+  const crearSolicitudDesdeOT = async () => {
+    if (materiales.length === 0) {
+      toast.error('La OT no tiene materiales para solicitar')
+      return
+    }
+    setCreandoSolicitud(true)
+    try {
+      const materialesSolicitud = materiales
+        .filter((m) => (m.descripcion || '').trim() !== '')
+        .map((m) => ({
+          nombre: (m.descripcion || '').trim(),
+          cantidad: Number(m.cantidad) || 0,
+          unidad: m.unidad || 'unidad',
+          precioEstimado: Number(m.precioUnit) || 0,
+          total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
+        }))
+
+      if (materialesSolicitud.length === 0) {
+        toast.error('No hay materiales válidos para crear la solicitud')
+        setCreandoSolicitud(false)
+        return
+      }
+
+      const total = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
+
+      const payload = {
+        titulo: `Solicitud de compra para ${editingOT?.otNum || 'OT'} - ${formData.titulo || 'materiales OT'}`.slice(0, 200),
+        descripcion: `Solicitud generada automáticamente desde la Orden de Trabajo ${editingOT?.otNum || ''}.`,
+        prioridad: formData.prioridad === 'Urgente' ? 'Alta' : (formData.prioridad as 'Media' | 'Alta' | 'Baja' | 'Urgente') || 'Media',
+        materiales: materialesSolicitud,
+        totalEstimado: total,
+        origenTipo: 'OT',
+        origenId: editingOT?.id || null,
+        origenCodigo: editingOT?.otNum || null,
+      }
+
+      const res = await fetch('/api/solicitudes-compra', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error al crear la solicitud de compra')
+      }
+      const emailMsg = data?.emailSkipped
+        ? ' (SMTP no configurado, email no enviado)'
+        : data?.emailEnviado
+          ? ' y email enviado'
+          : ''
+      toast.success(`Solicitud ${data.codigo} creada${emailMsg}`)
+      setCrearSolicitudDialogOpen(false)
+    } catch (error) {
+      console.error('Error creando solicitud de compra:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al crear la solicitud de compra')
+    } finally {
+      setCreandoSolicitud(false)
     }
   }
 
@@ -1100,8 +1163,16 @@ export function OrdenesTrabajoModule() {
                       )}
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-xs">Tiempo Real (min)</Label>
-                      <Input type="number" value={formData.tiempoReal} onChange={(e) => setFormData({...formData, tiempoReal: parseInt(e.target.value) || 0})} className="h-9" />
+                      <Label className="text-xs">Tiempo Real (auto)</Label>
+                      <Input
+                        type="number"
+                        value={formData.tiempoReal}
+                        readOnly
+                        tabIndex={-1}
+                        className="h-9 bg-slate-100 cursor-not-allowed text-slate-600"
+                        title="Calculado automáticamente al cambiar estado o progreso"
+                      />
+                      <p className="text-[10px] text-slate-400">Autocalculado al completar</p>
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Diferencia</Label>
@@ -1204,8 +1275,23 @@ export function OrdenesTrabajoModule() {
                   </div>
                 )}
                 
-                <div className="flex justify-end font-semibold text-sm">
-                  Total Materiales: <span className="ml-2 text-red-600">{formatCLP(totalMateriales)}</span>
+                <div className="flex justify-between items-center font-semibold text-sm">
+                  <div>
+                    {materiales.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-[#0f2040] border-[#0f2040]/30 hover:bg-[#0f2040]/5"
+                        onClick={() => setCrearSolicitudDialogOpen(true)}
+                        title="Crea una solicitud de compra con estos materiales y envía email a administración"
+                      >
+                        <ShoppingCart className="w-3.5 h-3.5 mr-1" /> Crear Solicitud de Compra
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    Total Materiales: <span className="ml-2 text-red-600">{formatCLP(totalMateriales)}</span>
+                  </div>
                 </div>
               </TabsContent>
               
@@ -1902,14 +1988,20 @@ export function OrdenesTrabajoModule() {
 
               {/* Tiempo Real */}
               <div className="space-y-2">
-                <Label>Tiempo Real (minutos)</Label>
+                <Label>Tiempo Real (auto)</Label>
                 <Input
                   type="number"
                   value={progressFormData.tiempoReal}
-                  onChange={(e) => setProgressFormData({...progressFormData, tiempoReal: parseInt(e.target.value) || 0})}
+                  readOnly
+                  tabIndex={-1}
+                  className="bg-slate-100 cursor-not-allowed text-slate-600"
+                  title="Calculado automáticamente al cambiar estado o progreso"
                 />
                 <p className="text-xs text-slate-500">
                   Tiempo estimado: {formatMinutes(progressOT.tiempoEst)}
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Autocalculado: al marcar &quot;En Progreso&quot; se inicia el cronómetro, al marcar &quot;Completado&quot; se calcula automáticamente.
                 </p>
               </div>
 
@@ -1991,6 +2083,51 @@ export function OrdenesTrabajoModule() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setProgressDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveProgress}>Guardar Progreso</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Crear Solicitud de Compra desde OT */}
+      <Dialog open={crearSolicitudDialogOpen} onOpenChange={setCrearSolicitudDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-[#0f2040]" />
+              Crear Solicitud de Compra
+            </DialogTitle>
+            <DialogDescription>
+              Se creará una solicitud de compra con los {materiales.length} material
+              {materiales.length === 1 ? '' : 'es'} cargados en esta OT
+              {editingOT?.otNum ? ` (${editingOT.otNum})` : ''}.
+              La solicitud se guardará en estado &quot;Solicitado&quot; y se enviará
+              automáticamente un email a administracionlagunanorte@gmail.com.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2 max-h-60 overflow-y-auto border rounded-lg bg-slate-50 p-3">
+            {materiales.map((m, i) => (
+              <div key={i} className="flex justify-between items-center text-sm">
+                <span className="truncate">{m.descripcion || '(sin nombre)'}</span>
+                <span className="text-xs text-slate-600 ml-2 shrink-0">
+                  {m.cantidad} {m.unidad} · {formatCLP(m.total || m.cantidad * m.precioUnit)}
+                </span>
+              </div>
+            ))}
+            <div className="border-t pt-2 mt-2 flex justify-between font-semibold text-sm">
+              <span>Total estimado:</span>
+              <span className="text-red-600">{formatCLP(totalMateriales)}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCrearSolicitudDialogOpen(false)}
+              disabled={creandoSolicitud}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={crearSolicitudDesdeOT} disabled={creandoSolicitud}>
+              {creandoSolicitud ? 'Creando...' : 'Confirmar y crear'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -25,6 +25,7 @@ export type Module =
   | 'backups'
   | 'cumplimiento'
   | 'rondas'
+  | 'solicitudescompra'
 
 interface CondominioInfo {
   id: string

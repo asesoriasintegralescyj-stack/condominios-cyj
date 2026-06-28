@@ -64,6 +64,8 @@ model Condominio {
   resumenCumplimiento ResumenCumplimiento?
   // Rondas
   rondas         Ronda[]
+  // Solicitudes de Compra
+  solicitudesCompra SolicitudCompra[]
 }
 
 // ============================================
@@ -1602,4 +1604,40 @@ model RegistroRonda {
   
   @@index([rondaId, fecha])
   @@index([usuarioId, fecha])
+}
+
+// ============================================
+// SOLICITUDES DE COMPRA
+// ============================================
+model SolicitudCompra {
+  id              String   @id @default(cuid())
+  codigo          String   @unique // SC-0001, SC-0002, etc.
+  titulo          String
+  descripcion     String?
+  estado          String   @default("Solicitado") // Solicitado, En Proceso, Comprado, Rechazado, Anulada
+  prioridad       String   @default("Media") // Baja, Media, Alta, Urgente
+  origenTipo      String?  // OT, Manual
+  origenId        String?  // ID de la OT si vino de ahí
+  origenCodigo    String?  // OT-0001 etc
+  materiales      String?  // JSON array con [{nombre, cantidad, unidad, precioEstimado, total}]
+  totalEstimado   Float    @default(0)
+  solicitadoPor   String?  // Nombre del usuario
+  solicitadoPorId String?  // ID del usuario
+  fechaSolicitud  DateTime @default(now())
+  fechaEspera     String?  // Fecha esperada de entrega
+  proveedorSugerido String?
+  observaciones   String?
+  // Email
+  emailEnviado    Boolean  @default(false)
+  emailEnviadoA   String?  // administracionlagunanorte@gmail.com
+  emailFechaEnvio DateTime?
+  // Condominio
+  condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([estado, createdAt])
+  @@index([condominioId])
+  @@index([origenTipo, origenId])
 }

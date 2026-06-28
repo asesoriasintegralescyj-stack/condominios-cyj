@@ -23,6 +23,7 @@ import { NotificacionesModule } from './notificaciones/NotificacionesModule'
 import { BackupsModule } from './backups/BackupsModule'
 import { CumplimientoModule } from './cumplimiento/CumplimientoModule'
 import { RondasModule } from './rondas/RondasModule'
+import { SolicitudesComprasModule } from './solicitudes-compra/SolicitudesComprasModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -47,6 +48,7 @@ const moduleTitles: Record<string, string> = {
   backups: 'Respaldos de Base de Datos',
   cumplimiento: 'Cumplimiento Legal',
   rondas: 'Control de Rondas',
+  solicitudescompra: 'Solicitud de Compras',
 }
 
 export function MainContent() {
@@ -98,6 +100,8 @@ export function MainContent() {
         return <CumplimientoModule />
       case 'rondas':
         return <RondasModule />
+      case 'solicitudescompra':
+        return <SolicitudesComprasModule />
       default:
         return <Dashboard />
     }

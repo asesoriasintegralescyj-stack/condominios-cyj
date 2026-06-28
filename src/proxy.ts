@@ -62,6 +62,7 @@ const PROTECTED_API_ROUTES = [
   '/api/notificaciones',
   '/api/aprobaciones',
   '/api/aprobaciones-ot',
+  '/api/solicitudes-compra',
 ];
 
 // Verificar si una ruta es pública
