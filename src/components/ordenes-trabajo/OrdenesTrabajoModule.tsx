@@ -1022,11 +1022,9 @@ export function OrdenesTrabajoModule() {
                             size="icon" 
                             variant="ghost" 
                             className="h-7 w-7 text-slate-600 hover:text-slate-700" 
-                            title="Descargar PDF"
-                            aria-label="Descargar PDF"
-                            onClick={() => {
-                              window.open(`/api/pdf/orden-trabajo/${ot.id}`, '_blank')
-                            }}
+                            title="Imprimir Checklist"
+                            aria-label="Imprimir Checklist"
+                            onClick={() => imprimirChecklist(ot)}
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
@@ -2122,9 +2120,6 @@ export function OrdenesTrabajoModule() {
                 <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
                 <Button variant="outline" onClick={() => imprimirChecklist(selectedOT)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir Checklist
-                </Button>
-                <Button variant="outline" onClick={() => window.open(`/api/pdf/orden-trabajo/${selectedOT.id}`, '_blank')}>
-                  <Printer className="w-4 h-4 mr-1" /> PDF
                 </Button>
                 <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
                   <Pencil className="w-4 h-4 mr-1" /> Editar
