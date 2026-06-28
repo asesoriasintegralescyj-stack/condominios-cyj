@@ -585,7 +585,7 @@ export function SolicitudesComprasModule() {
             </DialogTitle>
             <DialogDescription>
               Las solicitudes nuevas se crean en estado &quot;Solicitado&quot; y envían
-              automáticamente un email a administracionlagunanorte@gmail.com (si SMTP está
+              automáticamente un email desde asesoriasintegralescyj@gmail.com hacia administracionlagunanorte@gmail.com (si SMTP está
               configurado).
             </DialogDescription>
           </DialogHeader>

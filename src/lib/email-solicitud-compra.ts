@@ -9,7 +9,10 @@
 
 import nodemailer, { type Transporter } from 'nodemailer'
 
+// El email se envía DESDE asesoriasintegralescyj@gmail.com (remitente, configurado via SMTP_USER)
+// HACIA administracionlagunanorte@gmail.com (destinatario fijo)
 export const SOLICITUD_COMPRA_EMAIL_TO = 'administracionlagunanorte@gmail.com'
+export const SOLICITUD_COMPRA_EMAIL_FROM = process.env.SMTP_USER || 'asesoriasintegralescyj@gmail.com'
 
 export interface MaterialSolicitud {
   nombre: string
@@ -237,8 +240,9 @@ export async function sendSolicitudCompraEmail(
 
   try {
     const info = await transport.sendMail({
-      from: `"Sistema Condominios CyJ" <${process.env.SMTP_USER}>`,
+      from: `"Sistema Condominios CyJ" <${SOLICITUD_COMPRA_EMAIL_FROM}>`,
       to: SOLICITUD_COMPRA_EMAIL_TO,
+      replyTo: SOLICITUD_COMPRA_EMAIL_FROM,
       subject,
       html,
       text: `Nueva Solicitud de Compra ${payload.codigo} - ${payload.titulo}. Total estimado: ${formatCLP(
