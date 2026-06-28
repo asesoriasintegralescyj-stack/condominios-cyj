@@ -127,7 +127,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
 ]
 
 export function Sidebar() {
-  const { currentModule, setCurrentModule } = useAppStore()
+  const { currentModule, setCurrentModule, currentCondominio } = useAppStore()
   const { user, loading, authenticated, logout, hasPermission, isAdmin } = useSession()
   const router = useRouter()
 
@@ -192,14 +192,19 @@ export function Sidebar() {
       {/* Logo */}
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <img 
-            src="/logo.jpg" 
-            alt="Asesorías Integrales CyJ" 
+          <img
+            src="/logo.jpg"
+            alt="Asesorías Integrales CyJ"
             className="w-10 h-10 rounded-lg object-cover"
           />
           <div>
             <div className="text-white text-xs font-bold leading-tight">Asesorías Integrales CyJ</div>
             <div className="text-blue-300 text-[9px] font-medium">Administración de Condominios</div>
+            {currentCondominio?.nombre && (
+              <div className="text-amber-400 text-[10px] font-bold mt-0.5 truncate">
+                {currentCondominio.nombre}
+              </div>
+            )}
           </div>
         </div>
       </div>

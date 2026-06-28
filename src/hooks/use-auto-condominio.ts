@@ -1,13 +1,13 @@
 /**
- * Hook que carga automáticamente el condominio principal al iniciar sesión.
+ * Hook que carga automáticamente el condominio único al iniciar sesión.
  *
- * Este sistema gestiona UN SOLO condominio que contiene varios micro-condominios
- * en su interior. Por lo tanto, basta con cargar el primer (y único) condominio
- * registrado en la BD y dejarlo disponible globalmente en el store.
+ * ⚠️ IMPORTANTE: Este sistema gestiona UN SOLO CONDOMINIO llamado "LAGUNA NORTE".
+ * Las "etapas" (ALBATROS, BANDURRIAS, BECACINAS, CANQUEN, FAISANES,
+ * FLAMENCOS, GARZAS, GAVIOTAS) son subdivisiones internas del condominio,
+ * NO condominios separados.
  *
- * Una vez cargado, todos los módulos (Cumplimiento, Comite, Asistencia, etc.)
- * pueden leerlo vía `useAppStore().currentCondominio` sin necesidad de volver
- * a consultarlo.
+ * Una vez cargado, todos los módulos pueden leerlo vía
+ * `useAppStore().currentCondominio` sin necesidad de volver a consultarlo.
  */
 
 'use client'
@@ -17,12 +17,17 @@ import { useAppStore } from '@/lib/store'
 
 type Status = 'idle' | 'loading' | 'loaded' | 'error'
 
+const LAGUNA_NORTE_FALLBACK = {
+  id: 'cmo9f3x7j0000ktyeb0rzhwt9',
+  nombre: 'LAGUNA NORTE',
+}
+
 export function useAutoCondominio() {
   const { currentCondominio, setCurrentCondominio } = useAppStore()
   const [status, setStatus] = useState<Status>('idle')
 
   useEffect(() => {
-    // Si ya hay un condominio cargado (ej. persistido en localStorage), no hacer nada
+    // Si ya hay un condominio cargado, no hacer nada
     if (currentCondominio?.id) {
       setStatus('loaded')
       return
@@ -38,22 +43,27 @@ export function useAutoCondominio() {
           throw new Error(`HTTP ${res.status}`)
         }
         const data = await res.json()
-        // El endpoint puede devolver un array directo o { condominios: [...] }
         const condominios = Array.isArray(data) ? data : (data?.condominios || [])
         if (cancelled) return
 
         if (Array.isArray(condominios) && condominios.length > 0) {
-          // Cargar el primer condominio (el sistema es para un solo condominio)
-          const first = condominios[0]
-          setCurrentCondominio({ id: first.id, nombre: first.nombre })
+          // Cargar el condominio único (LAGUNA NORTE)
+          const condominio = condominios[0]
+          setCurrentCondominio({ id: condominio.id, nombre: condominio.nombre })
           setStatus('loaded')
         } else {
-          // No hay condominios registrados — el usuario debería crear uno
+          // No hay condominios registrados — usar fallback para que la app no se rompa
+          // (el admin debería configurar LAGUNA NORTE via /api/condominios POST)
+          setCurrentCondominio(LAGUNA_NORTE_FALLBACK)
           setStatus('loaded')
         }
       } catch (e) {
-        console.warn('[useAutoCondominio] No se pudo cargar condominio:', e)
-        if (!cancelled) setStatus('error')
+        console.warn('[useAutoCondominio] No se pudo cargar condominio vía API, usando fallback:', e)
+        if (!cancelled) {
+          // En caso de error de red, usar el fallback hardcoded para que la app funcione
+          setCurrentCondominio(LAGUNA_NORTE_FALLBACK)
+          setStatus('loaded')
+        }
       }
     })()
 
