@@ -1,8 +1,9 @@
 /**
  * API Dashboard - Sistema CYJ Condominios
  *
- * OPTIMIZADO: Usa count/aggregate/groupBy en vez de findMany con todos los datos.
- * Reduce significativamente el tiempo de respuesta y uso de memoria.
+ * Dashboard simplificado: muestra solo métricas de los módulos activos.
+ * Módulos eliminados (residentes, gastos, gastos-comunes, morosidad,
+ * contabilidad, comite, reservas) no se muestran en el dashboard.
  */
 
 import { NextResponse } from 'next/server'
@@ -16,11 +17,8 @@ export async function GET() {
   if (!session) return apiError('No autenticado', 401);
 
   try {
-    // 1. Conteos y agregaciones en paralelo (sin traer todas las filas)
     const [
       totalPropiedades,
-      totalResidentes,
-      morosos,
       totalPersonal,
       totalActivos,
       valorActivosAgg,
@@ -29,16 +27,11 @@ export async function GET() {
       otGroupByEstado,
       otGroupByAprobacion,
       otCompletadasAprobacion,
-      gastosAgg,
-      gastosDelMesAgg,
       recentOT,
-      centrosConGastoAgg,
       documentosCumplimiento,
       resumenCumplimiento,
     ] = await Promise.all([
       db.propiedad.count(),
-      db.residente.count(),
-      db.residente.count({ where: { estado: 'Moroso' } }),
       db.personal.count(),
       db.activo.count(),
       db.activo.aggregate({ _sum: { valorActual: true } }),
@@ -57,15 +50,6 @@ export async function GET() {
       }),
       // OT completadas (count total)
       db.ordenTrabajo.count({ where: { estado: 'Completado' } }),
-      // Total gastado (todos los gastos)
-      db.gasto.aggregate({ _sum: { monto: true } }),
-      // Gastos del mes actual
-      db.gasto.aggregate({
-        _sum: { monto: true },
-        where: {
-          fecha: { startsWith: new Date().toISOString().slice(0, 7) }
-        },
-      }),
       // Últimas 6 órdenes (con relaciones necesarias para la UI)
       db.ordenTrabajo.findMany({
         include: {
@@ -76,12 +60,7 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 6,
       }),
-      // Gastos agrupados por centro de costo
-      db.gasto.groupBy({
-        by: ['centroCostoId'],
-        _sum: { monto: true },
-      }),
-      // Documentos de cumplimiento (necesitamos sus detalles para UI)
+      // Documentos de cumplimiento
       db.documentoCumplimiento.findMany({
         select: {
           id: true,
@@ -95,34 +74,29 @@ export async function GET() {
       db.resumenCumplimiento.findFirst(),
     ]);
 
-    // Helpers para leer resultados de groupBy
     const countByEstado = (estado: string): number =>
       otGroupByEstado.find(g => g.estado === estado)?._count ?? 0;
 
     const countByAprobacion = (estado: string): number =>
       otGroupByAprobacion.find(g => g.estadoAprobacion === estado)?._count ?? 0;
 
-    // 2. Construir stats
+    // Stats (sin métricas de residentes/gastos que fueron eliminados)
     const stats = {
       totalPropiedades,
-      totalResidentes,
+      totalPersonal,
+      totalActivos,
+      valorActivos: valorActivosAgg._sum.valorActual ?? 0,
+      saldoCaja: caja?.saldo || 0,
+      saldoInicialCaja: caja?.saldoInicial || 0,
       otPendientes: countByEstado('Pendiente'),
       otEnProgreso: countByEstado('En Progreso'),
       otCompletadas: otCompletadasAprobacion,
       otPendientesAprobacion: countByAprobacion('Pendiente') + countByAprobacion('') + countByAprobacion(null as unknown as string),
       otAprobadas: countByAprobacion('Aprobada'),
       otRechazadas: countByAprobacion('Rechazada'),
-      morosos,
-      totalPersonal,
-      totalActivos,
-      valorActivos: valorActivosAgg._sum.valorActual ?? 0,
-      saldoCaja: caja?.saldo || 0,
-      saldoInicialCaja: caja?.saldoInicial || 0,
-      totalGastado: gastosAgg._sum.monto ?? 0,
-      gastosDelMes: gastosDelMesAgg._sum.monto ?? 0,
     };
 
-    // 3. Estado de propiedades (count en vez de findMany)
+    // Estado de propiedades
     const [ocupado, disponible, arriendo, venta, mantenimiento] = await Promise.all([
       db.propiedad.count({ where: { estado: 'Ocupado' } }),
       db.propiedad.count({ where: { estado: 'Disponible' } }),
@@ -139,25 +113,16 @@ export async function GET() {
       Mantenimiento: mantenimiento,
     };
 
-    // 4. Centro de costo con gasto (necesitamos los centros + suma de gastos)
+    // Centros de costo (sin gastos, que fueron eliminados)
     const centros = await db.centroCostoMaster.findMany();
-    const gastosPorCentroMap = new Map(
-      centrosConGastoAgg
-        .filter(g => g.centroCostoId)
-        .map(g => [g.centroCostoId, g._sum.monto ?? 0])
-    );
+    const centrosConGasto = centros.map(cc => ({
+      ...cc,
+      gastado: 0,
+      disponible: cc.presupuestoMens || 0,
+      porcentaje: 0,
+    }));
 
-    const centrosConGasto = centros.map(cc => {
-      const gastado = gastosPorCentroMap.get(cc.id) ?? 0;
-      return {
-        ...cc,
-        gastado,
-        disponible: (cc.presupuestoMens || 0) - gastado,
-        porcentaje: (cc.presupuestoMens || 0) > 0 ? Math.round((gastado / cc.presupuestoMens) * 100) : 0,
-      };
-    });
-
-    // 5. Cumplimiento Legal
+    // Cumplimiento Legal
     const hoy = new Date();
     const en30Dias = new Date();
     en30Dias.setDate(en30Dias.getDate() + 30);
@@ -194,7 +159,6 @@ export async function GET() {
       porcentajeInterno: resumenCumplimiento?.porcentajeInterno ?? 0,
       porcentajeSeguridad: resumenCumplimiento?.porcentajeSeguridad ?? 0,
       alertasActivas: resumenCumplimiento?.alertasActivas ?? 0,
-      // porCategoria: mantener compatibilidad con Dashboard.tsx que hace Object.entries
       porCategoria: {
         Legal: documentosCumplimiento
           .filter(c => c.titulo?.toLowerCase().includes('legal') || c.categoriaId?.toLowerCase().includes('legal'))

@@ -61,12 +61,10 @@ export function CentroCostoModule() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [centrosRes, gastosRes] = await Promise.all([
-        fetch('/api/centros-costo'),
-        fetch('/api/gastos'),
-      ])
+      const centrosRes = await fetch('/api/centros-costo')
       setCentros(await centrosRes.json())
-      setGastos(await gastosRes.json())
+      // Módulo de gastos fue eliminado; setear array vacío
+      setGastos([])
     } catch (error) {
       console.error('Error fetching data:', error)
     }

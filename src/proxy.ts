@@ -9,7 +9,6 @@
  * - Rate limiting por IP (Edge Runtime compatible)
  * - Autenticación de sesiones
  * - Protección de rutas
- * - Portal de residentes
  */
 
 import { NextResponse } from 'next/server';
@@ -36,25 +35,15 @@ const PUBLIC_ROUTES = [
   '/api/seed-catalogos',
   '/api/setup',
   '/api/descargar',
-  '/portal',
-  '/api/portal/auth',
-];
-
-// Rutas del portal de residentes (autenticación con token de portal)
-const PORTAL_ROUTES = [
-  '/portal/',
-  '/api/portal/',
 ];
 
 // Rutas de API que requieren autenticación admin
 const PROTECTED_API_ROUTES = [
-  '/api/residentes',
   '/api/propiedades',
   '/api/personal',
   '/api/proveedores',
   '/api/ordenes-trabajo',
   '/api/proyectos',
-  '/api/gastos',
   '/api/inspecciones',
   '/api/activos',
   '/api/catalogos',
@@ -65,12 +54,14 @@ const PROTECTED_API_ROUTES = [
   '/api/usuarios',
   '/api/condominios',
   '/api/asistencia',
-  '/api/gastos-comunes',
-  '/api/morosidad',
-  '/api/comite',
   '/api/auditoria',
   '/api/backups',
   '/api/inventario',
+  '/api/cumplimiento',
+  '/api/rondas',
+  '/api/notificaciones',
+  '/api/aprobaciones',
+  '/api/aprobaciones-ot',
 ];
 
 // Verificar si una ruta es pública
@@ -82,11 +73,6 @@ function isPublicRoute(pathname: string): boolean {
     }
     return pathname === route || pathname.startsWith(route + '/');
   });
-}
-
-// Verificar si es una ruta del portal de residentes
-function isPortalRoute(pathname: string): boolean {
-  return PORTAL_ROUTES.some(route => pathname.startsWith(route));
 }
 
 // Verificar si una ruta de API necesita protección
@@ -129,33 +115,6 @@ export async function proxy(request: NextRequest) {
 
   // Permitir rutas públicas (pero ya pasaron el rate limit)
   if (isPublicRoute(pathname)) {
-    return NextResponse.next();
-  }
-
-  // === PORTAL DE RESIDENTES ===
-  if (isPortalRoute(pathname)) {
-    // Para API del portal, verificar token de portal
-    if (pathname.startsWith('/api/portal/')) {
-      const portalToken = request.cookies.get('portal_token')?.value;
-
-      if (!portalToken) {
-        return NextResponse.json(
-          { error: 'No autenticado en portal', authenticated: false },
-          { status: 401 }
-        );
-      }
-
-      return NextResponse.next();
-    }
-
-    // Para páginas del portal, verificar cookie de portal
-    const portalToken = request.cookies.get('portal_token')?.value;
-
-    if (!portalToken) {
-      const loginUrl = new URL('/portal', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
     return NextResponse.next();
   }
 

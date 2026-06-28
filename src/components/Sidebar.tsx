@@ -9,7 +9,6 @@ import {
   User, 
   Package, 
   Building2, 
-  Receipt, 
   PiggyBank, 
   FileText,
   LogOut,
@@ -17,10 +16,7 @@ import {
   Shield,
   UserCog,
   Calendar,
-  DollarSign,
-  AlertTriangle,
   Bell,
-  Calculator,
   Database,
   FileCheck,
   Eye,
@@ -43,14 +39,12 @@ import { Button } from '@/components/ui/button'
 
 // Definir permisos necesarios para cada módulo
 const modulePermissions: Partial<Record<Module, string>> = {
-  residentes: 'residentes.ver',
   ot: 'ots.ver',
   proyectos: 'proyectos.ver',
   inspecciones: 'inspecciones.ver',
   personal: 'personal.ver',
   activos: 'activos.ver',
   proveedores: 'proveedores.ver',
-  gastos: 'gastos.ver',
   centrocostos: 'centros-costo.ver',
   materiales: 'catalogos.ver',
   tareas: 'catalogos.ver',
@@ -58,15 +52,10 @@ const modulePermissions: Partial<Record<Module, string>> = {
   reportes: 'reportes.ver',
   inventario: 'inventario.ver',
   catalogos: 'catalogos.ver',
-  reservas: 'residentes.ver',
-  gastoscomunes: 'gastos.ver',
-  morosidad: 'gastos.ver',
   notificaciones: 'usuarios.ver',
-  contabilidad: 'gastos.ver',
-  comite: 'residentes.ver',
   auditoria: 'logs.ver',
   backups: 'configuracion.editar',
-  cumplimiento: 'residentes.ver',
+  cumplimiento: 'configuracion.ver',
   rondas: 'ots.ver',
 }
 
@@ -80,9 +69,6 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
   {
     section: 'Gestión',
     items: [
-      { id: 'residentes', label: 'Residentes', icon: <Users className="w-4 h-4" /> },
-      { id: 'reservas', label: 'Reservas', icon: <Calendar className="w-4 h-4" /> },
-      { id: 'comite', label: 'Comité', icon: <UserCog className="w-4 h-4" /> },
       { id: 'cumplimiento', label: 'Cumplimiento', icon: <FileCheck className="w-4 h-4" /> },
       { id: 'ot', label: 'Órdenes de Trabajo', icon: <Wrench className="w-4 h-4" /> },
       { id: 'aprobacionesot', label: 'Aprobaciones OT', icon: <CheckCircle className="w-4 h-4" /> },
@@ -98,12 +84,8 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
   {
     section: 'Finanzas',
     items: [
-      { id: 'gastoscomunes', label: 'Gastos Comunes', icon: <DollarSign className="w-4 h-4" /> },
-      { id: 'morosidad', label: 'Morosidad', icon: <AlertTriangle className="w-4 h-4" /> },
       { id: 'proveedores', label: 'Proveedores', icon: <Building2 className="w-4 h-4" /> },
-      { id: 'gastos', label: 'Gastos / Rendición', icon: <Receipt className="w-4 h-4" /> },
       { id: 'centrocostos', label: 'Centro de Costos', icon: <PiggyBank className="w-4 h-4" /> },
-      { id: 'contabilidad', label: 'Contabilidad', icon: <Calculator className="w-4 h-4" /> },
     ]
   },
   {

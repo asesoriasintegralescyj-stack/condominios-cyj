@@ -2,13 +2,11 @@
 
 import { useAppStore } from '@/lib/store'
 import { Dashboard } from './Dashboard'
-import { ResidentesModule } from './residentes/ResidentesModule'
 import { PersonalModule } from './personal/PersonalModule'
 import { AsistenciaModule } from './asistencia/AsistenciaModule'
 import { ActivosModule } from './activos/ActivosModule'
 import { ProveedoresModule } from './proveedores/ProveedoresModule'
 import { OrdenesTrabajoModule } from './ordenes-trabajo/OrdenesTrabajoModule'
-import { GastosModule } from './gastos/GastosModule'
 import { CentroCostoModule } from './centros-costo/CentroCostoModule'
 import { ProyectosModule } from './proyectos/ProyectosModule'
 import { InspeccionesModule } from './inspecciones/InspeccionesModule'
@@ -19,21 +17,15 @@ import { ReportesModule } from './reportes/ReportesModule'
 import { UsuariosModule } from './usuarios/UsuariosModule'
 import { InventarioModule } from './inventario/InventarioModule'
 import { HerramientasModule } from './herramientas/HerramientasModule'
-import { ReservasModule } from './reservas/ReservasModule'
 import { AprobacionesModule } from './aprobaciones/AprobacionesModule'
 import { AprobacionesOTModule } from './aprobaciones-ot/AprobacionesOTModule'
-import { GastosComunesModule } from './gastos-comunes/GastosComunesModule'
-import { MorosidadModule } from './morosidad/MorosidadModule'
 import { NotificacionesModule } from './notificaciones/NotificacionesModule'
-import { ContabilidadModule } from './contabilidad/ContabilidadModule'
-import { ComiteModule } from './comite/ComiteModule'
 import { BackupsModule } from './backups/BackupsModule'
 import { CumplimientoModule } from './cumplimiento/CumplimientoModule'
 import { RondasModule } from './rondas/RondasModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
-  residentes: 'Residentes',
   ot: 'Órdenes de Trabajo',
   proyectos: 'Proyectos',
   inspecciones: 'Inspecciones',
@@ -41,7 +33,6 @@ const moduleTitles: Record<string, string> = {
   asistencia: 'Control de Asistencia',
   activos: 'Activos',
   proveedores: 'Proveedores',
-  gastos: 'Gastos / Rendición',
   centrocostos: 'Centro de Costos',
   catalogos: 'Catálogos',
   materiales: 'Materiales',
@@ -50,14 +41,9 @@ const moduleTitles: Record<string, string> = {
   usuarios: 'Gestión de Usuarios',
   inventario: 'Inventario',
   herramientas: 'Herramientas',
-  reservas: 'Reservas',
   aprobaciones: 'Seguimiento de Aprobaciones',
   aprobacionesot: 'Aprobaciones de Órdenes de Trabajo',
-  gastoscomunes: 'Gastos Comunes',
-  morosidad: 'Control de Morosidad',
   notificaciones: 'Notificaciones',
-  contabilidad: 'Contabilidad',
-  comite: 'Comité de Condominio',
   backups: 'Respaldos de Base de Datos',
   cumplimiento: 'Cumplimiento Legal',
   rondas: 'Control de Rondas',
@@ -70,8 +56,6 @@ export function MainContent() {
     switch (currentModule) {
       case 'dashboard':
         return <Dashboard />
-      case 'residentes':
-        return <ResidentesModule />
       case 'personal':
         return <PersonalModule />
       case 'asistencia':
@@ -82,8 +66,6 @@ export function MainContent() {
         return <ProveedoresModule />
       case 'ot':
         return <OrdenesTrabajoModule />
-      case 'gastos':
-        return <GastosModule />
       case 'centrocostos':
         return <CentroCostoModule />
       case 'proyectos':
@@ -104,22 +86,12 @@ export function MainContent() {
         return <InventarioModule />
       case 'herramientas':
         return <HerramientasModule />
-      case 'reservas':
-        return <ReservasModule />
       case 'aprobaciones':
         return <AprobacionesModule />
       case 'aprobacionesot':
         return <AprobacionesOTModule />
-      case 'gastoscomunes':
-        return <GastosComunesModule />
-      case 'morosidad':
-        return <MorosidadModule />
       case 'notificaciones':
         return <NotificacionesModule />
-      case 'contabilidad':
-        return <ContabilidadModule />
-      case 'comite':
-        return <ComiteModule />
       case 'backups':
         return <BackupsModule />
       case 'cumplimiento':

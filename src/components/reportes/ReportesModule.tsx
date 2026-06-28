@@ -1,14 +1,12 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { 
-  Home, 
-  Users, 
-  User, 
-  Package, 
-  Wrench, 
-  Building2, 
-  Receipt, 
+import {
+  Home,
+  User,
+  Package,
+  Wrench,
+  Building2,
   PiggyBank,
   Printer
 } from 'lucide-react'
@@ -26,12 +24,10 @@ function escapeHtml(str: string | null | undefined): string {
 
 const reportTypes = [
   { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades', endpoint: 'propiedades' },
-  { icon: Users, title: 'Residentes', desc: 'Directorio de residentes', endpoint: 'residentes' },
   { icon: User, title: 'Personal', desc: 'Nómina completa', endpoint: 'personal' },
   { icon: Package, title: 'Activos', desc: 'Inventario con valorización', endpoint: 'activos' },
   { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT', endpoint: 'ot' },
   { icon: Building2, title: 'Proveedores', desc: 'Directorio de proveedores', endpoint: 'proveedores' },
-  { icon: Receipt, title: 'Gastos', desc: 'Rendición de gastos', endpoint: 'gastos' },
   { icon: PiggyBank, title: 'Centro de Costos', desc: 'Ejecución presupuestaria', endpoint: 'centrocostos' },
 ]
 
@@ -143,20 +139,6 @@ function generateReportHTML(tipo: string, data: any[]): string {
         </table>
       `
       break
-    case 'residentes':
-      tableContent = `
-        <table>
-          <thead><tr><th>Nombre</th><th>RUT</th><th>Unidad</th><th>Tipo</th><th>Estado</th><th>Teléfono</th><th>Email</th><th>Ingreso</th></tr></thead>
-          <tbody>
-            ${data.map((r: any) => `<tr>
-              <td><b>${escapeHtml(r.nombre)}</b></td><td>${escapeHtml(r.rut) || '–'}</td><td>${escapeHtml(r.unidad) || '–'}</td>
-              <td>${escapeHtml(r.tipo)}</td><td>${escapeHtml(r.estado)}</td><td>${escapeHtml(r.telefono) || '–'}</td>
-              <td>${escapeHtml(r.email) || '–'}</td><td>${formatDate(r.fechaIngreso)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      `
-      break
     case 'personal':
       tableContent = `
         <table>
@@ -185,21 +167,6 @@ function generateReportHTML(tipo: string, data: any[]): string {
           </tbody>
         </table>
         <div style="margin-top:10px;text-align:right;font-weight:bold">Valor Total: ${formatCLP(data.reduce((s: number, a: any) => s + (a.valorActual || 0), 0))}</div>
-      `
-      break
-    case 'gastos':
-      tableContent = `
-        <table>
-          <thead><tr><th>N° Doc.</th><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Centro Costo</th><th>Monto</th><th>Estado</th></tr></thead>
-          <tbody>
-            ${data.map((g: any) => `<tr>
-              <td>${escapeHtml(g.nDoc) || '–'}</td><td>${formatDate(g.fecha)}</td><td>${escapeHtml(g.descripcion)}</td>
-              <td>${escapeHtml(g.categoria)}</td><td>${escapeHtml(g.centroCosto) || '–'}</td>
-              <td style="text-align:right;font-weight:bold">${formatCLP(g.monto)}</td><td>${escapeHtml(g.estado)}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-        <div style="margin-top:10px;text-align:right;font-weight:bold">Total: ${formatCLP(data.reduce((s: number, g: any) => s + (g.monto || 0), 0))}</div>
       `
       break
     default:

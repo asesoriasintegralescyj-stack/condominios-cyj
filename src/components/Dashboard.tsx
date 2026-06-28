@@ -6,11 +6,10 @@ import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { useAppStore } from '@/lib/store'
 import { formatCLP } from '@/lib/utils'
-import { 
-  Home, 
-  Wrench, 
-  AlertTriangle, 
-  TrendingUp,
+import {
+  Home,
+  Wrench,
+  AlertTriangle,
   Shield,
   CheckCircle,
   Clock,
@@ -21,21 +20,17 @@ import {
 
 interface DashboardStats {
   totalPropiedades: number
-  totalResidentes: number
+  totalPersonal: number
+  totalActivos: number
+  valorActivos: number
+  saldoCaja: number
+  saldoInicialCaja: number
   otPendientes: number
   otEnProgreso: number
   otCompletadas: number
   otPendientesAprobacion: number
   otAprobadas: number
   otRechazadas: number
-  morosos: number
-  totalPersonal: number
-  totalActivos: number
-  valorActivos: number
-  saldoCaja: number
-  saldoInicialCaja: number
-  totalGastado: number
-  gastosDelMes: number
 }
 
 interface EstadoPropiedades {
@@ -185,13 +180,6 @@ export function Dashboard() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl mb-1">👥</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Residentes</div>
-            <div className="text-2xl font-bold text-[#0f2040]">{stats.totalResidentes}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
             <div className="text-2xl mb-1">🔧</div>
             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">OT Pendientes</div>
             <div className="text-2xl font-bold text-amber-600">{stats.otPendientes}</div>
@@ -202,13 +190,6 @@ export function Dashboard() {
             <div className="text-2xl mb-1">✅</div>
             <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Por Aprobar</div>
             <div className="text-2xl font-bold text-orange-600">{stats.otPendientesAprobacion}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl mb-1">⚠️</div>
-            <div className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">Morosos</div>
-            <div className="text-2xl font-bold text-red-600">{stats.morosos}</div>
           </CardContent>
         </Card>
         <Card>
@@ -479,19 +460,6 @@ export function Dashboard() {
                   </div>
                 )
               )}
-            </CardContent>
-          </Card>
-
-          {/* Gastos del Mes */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" /> Gastos del Mes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl font-bold text-red-600">{formatCLP(stats.gastosDelMes)}</div>
-              <div className="text-xs text-slate-500 mt-1">Total gastado este mes</div>
             </CardContent>
           </Card>
 
