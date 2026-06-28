@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
     })
 
     const hoy = new Date()
-    let actualizadas = 0
 
-    for (const deuda of deudas) {
+    // Calcular y preparar las actualizaciones para todas las deudas
+    const updates = deudas.map(deuda => {
       // Calcular días de mora
       let diasMora = 0
       if (deuda.fechaVencimiento) {
@@ -59,8 +59,7 @@ export async function POST(request: NextRequest) {
 
       const montoTotal = deuda.montoOriginal + montoInteres
 
-      // Actualizar deuda
-      await db.deuda.update({
+      return db.deuda.update({
         where: { id: deuda.id },
         data: {
           diasMora,
@@ -68,11 +67,14 @@ export async function POST(request: NextRequest) {
           montoTotal
         }
       })
+    })
 
-      actualizadas++
-    }
+    // Ejecutar todas las actualizaciones en una sola transacción
+    await db.$transaction(updates)
 
-    return NextResponse.json({ 
+    const actualizadas = deudas.length
+
+    return NextResponse.json({
       message: `Se actualizaron ${actualizadas} deudas`,
       actualizadas,
       config: {

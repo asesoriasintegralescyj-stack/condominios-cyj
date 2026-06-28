@@ -1,189 +1,200 @@
+/**
+ * API Dashboard - Sistema CYJ Condominios
+ *
+ * OPTIMIZADO: Usa count/aggregate/groupBy en vez de findMany con todos los datos.
+ * Reduce significativamente el tiempo de respuesta y uso de memoria.
+ */
+
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
-import { apiError } from '@/lib/api-helpers'
+import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
-// GET - Dashboard stats
+// GET - Dashboard stats (requiere auth)
 export async function GET() {
   const session = await getCurrentSession();
   if (!session) return apiError('No autenticado', 401);
+
   try {
+    // 1. Conteos y agregaciones en paralelo (sin traer todas las filas)
     const [
-      propiedades,
-      residentes,
-      todasOrdenes,
-      recentOT,
-      personal,
-      activos,
-      gastos,
+      totalPropiedades,
+      totalResidentes,
+      morosos,
+      totalPersonal,
+      totalActivos,
+      valorActivosAgg,
       caja,
-      centros,
+      totalCentros,
+      otGroupByEstado,
+      otGroupByAprobacion,
+      otCompletadasAprobacion,
+      gastosAgg,
+      gastosDelMesAgg,
+      recentOT,
+      centrosConGastoAgg,
       documentosCumplimiento,
       resumenCumplimiento,
     ] = await Promise.all([
-      db.propiedad.findMany(),
-      db.residente.findMany(),
-      // Obtener TODAS las órdenes para contar estados correctamente
-      db.ordenTrabajo.findMany({
-        select: { estado: true, estadoAprobacion: true }
-      }),
-      // Separar consulta para últimas 6 órdenes recientes
-      db.ordenTrabajo.findMany({
-        include: { propiedad: true, asignado: true, centroCosto: true },
-        orderBy: { createdAt: 'desc' },
-        take: 6
-      }),
-      db.personal.findMany(),
-      db.activo.findMany(),
-      db.gasto.findMany({ include: { centroCosto: true } }),
+      db.propiedad.count(),
+      db.residente.count(),
+      db.residente.count({ where: { estado: 'Moroso' } }),
+      db.personal.count(),
+      db.activo.count(),
+      db.activo.aggregate({ _sum: { valorActual: true } }),
       db.cajaChica.findFirst(),
-      db.centroCostoMaster.findMany(),
-      db.documentoCumplimiento.findMany(),
+      db.centroCostoMaster.count(),
+      // OT por estado
+      db.ordenTrabajo.groupBy({
+        by: ['estado'],
+        _count: true,
+      }),
+      // OT completadas por estadoAprobacion
+      db.ordenTrabajo.groupBy({
+        by: ['estadoAprobacion'],
+        where: { estado: 'Completado' },
+        _count: true,
+      }),
+      // OT completadas (count total)
+      db.ordenTrabajo.count({ where: { estado: 'Completado' } }),
+      // Total gastado (todos los gastos)
+      db.gasto.aggregate({ _sum: { monto: true } }),
+      // Gastos del mes actual
+      db.gasto.aggregate({
+        _sum: { monto: true },
+        where: {
+          fecha: { startsWith: new Date().toISOString().slice(0, 7) }
+        },
+      }),
+      // Últimas 6 órdenes (con relaciones necesarias para la UI)
+      db.ordenTrabajo.findMany({
+        include: {
+          propiedad: { select: { id: true, nombre: true } },
+          asignado: { select: { id: true, nombre: true, cargo: true } },
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+      }),
+      // Gastos agrupados por centro de costo
+      db.gasto.groupBy({
+        by: ['centroCostoId'],
+        _sum: { monto: true },
+      }),
+      // Documentos de cumplimiento (necesitamos sus detalles para UI)
+      db.documentoCumplimiento.findMany({
+        select: {
+          id: true,
+          titulo: true,
+          estado: true,
+          cumple: true,
+          fechaVencimiento: true,
+          categoriaId: true,
+        },
+      }),
       db.resumenCumplimiento.findFirst(),
-    ])
+    ]);
 
-    // Calculate stats - usando todasOrdenes para conteo correcto
-    // Obtener OTs completadas con estado de aprobación
-    const otCompletadasList = todasOrdenes.filter(o => o.estado === 'Completado')
-    const otPendientesAprobacion = otCompletadasList.filter(o => 
-      o.estadoAprobacion === 'Pendiente' || !o.estadoAprobacion
-    ).length
-    const otAprobadas = otCompletadasList.filter(o => o.estadoAprobacion === 'Aprobada').length
-    const otRechazadas = otCompletadasList.filter(o => o.estadoAprobacion === 'Rechazada').length
+    // Helpers para leer resultados de groupBy
+    const countByEstado = (estado: string): number =>
+      otGroupByEstado.find(g => g.estado === estado)?._count ?? 0;
 
+    const countByAprobacion = (estado: string): number =>
+      otGroupByAprobacion.find(g => g.estadoAprobacion === estado)?._count ?? 0;
+
+    // 2. Construir stats
     const stats = {
-      totalPropiedades: propiedades.length,
-      totalResidentes: residentes.length,
-      otPendientes: todasOrdenes.filter(o => o.estado === 'Pendiente').length,
-      otEnProgreso: todasOrdenes.filter(o => o.estado === 'En Progreso').length,
-      otCompletadas: otCompletadasList.length,
-      otPendientesAprobacion,
-      otAprobadas,
-      otRechazadas,
-      morosos: residentes.filter(r => r.estado === 'Moroso').length,
-      totalPersonal: personal.length,
-      totalActivos: activos.length,
-      valorActivos: activos.reduce((sum, a) => sum + (a.valorActual || 0), 0),
+      totalPropiedades,
+      totalResidentes,
+      otPendientes: countByEstado('Pendiente'),
+      otEnProgreso: countByEstado('En Progreso'),
+      otCompletadas: otCompletadasAprobacion,
+      otPendientesAprobacion: countByAprobacion('Pendiente') + countByAprobacion('') + countByAprobacion(null as unknown as string),
+      otAprobadas: countByAprobacion('Aprobada'),
+      otRechazadas: countByAprobacion('Rechazada'),
+      morosos,
+      totalPersonal,
+      totalActivos,
+      valorActivos: valorActivosAgg._sum.valorActual ?? 0,
       saldoCaja: caja?.saldo || 0,
       saldoInicialCaja: caja?.saldoInicial || 0,
-      totalGastado: gastos.reduce((sum, g) => sum + (g.monto || 0), 0),
-      gastosDelMes: gastos
-        .filter(g => g.fecha && g.fecha.startsWith(new Date().toISOString().slice(0, 7)))
-        .reduce((sum, g) => sum + (g.monto || 0), 0),
-    }
-    
-    // Estado de propiedades
+      totalGastado: gastosAgg._sum.monto ?? 0,
+      gastosDelMes: gastosDelMesAgg._sum.monto ?? 0,
+    };
+
+    // 3. Estado de propiedades (count en vez de findMany)
+    const [ocupado, disponible, arriendo, venta, mantenimiento] = await Promise.all([
+      db.propiedad.count({ where: { estado: 'Ocupado' } }),
+      db.propiedad.count({ where: { estado: 'Disponible' } }),
+      db.propiedad.count({ where: { estado: 'Arriendo' } }),
+      db.propiedad.count({ where: { estado: 'Venta' } }),
+      db.propiedad.count({ where: { estado: 'Mantenimiento' } }),
+    ]);
+
     const estadoPropiedades = {
-      Ocupado: propiedades.filter(p => p.estado === 'Ocupado').length,
-      Disponible: propiedades.filter(p => p.estado === 'Disponible').length,
-      Arriendo: propiedades.filter(p => p.estado === 'Arriendo').length,
-      Venta: propiedades.filter(p => p.estado === 'Venta').length,
-      Mantenimiento: propiedades.filter(p => p.estado === 'Mantenimiento').length,
-    }
-    
-    // Centro de costo con gasto
+      Ocupado: ocupado,
+      Disponible: disponible,
+      Arriendo: arriendo,
+      Venta: venta,
+      Mantenimiento: mantenimiento,
+    };
+
+    // 4. Centro de costo con gasto (necesitamos los centros + suma de gastos)
+    const centros = await db.centroCostoMaster.findMany();
+    const gastosPorCentroMap = new Map(
+      centrosConGastoAgg
+        .filter(g => g.centroCostoId)
+        .map(g => [g.centroCostoId, g._sum.monto ?? 0])
+    );
+
     const centrosConGasto = centros.map(cc => {
-      const gastado = gastos
-        .filter(g => g.centroCostoId === cc.id || g.centroCosto?.id === cc.id)
-        .reduce((sum, g) => sum + (g.monto || 0), 0)
+      const gastado = gastosPorCentroMap.get(cc.id) ?? 0;
       return {
         ...cc,
         gastado,
         disponible: (cc.presupuestoMens || 0) - gastado,
-        porcentaje: (cc.presupuestoMens || 0) > 0 ? Math.round((gastado / cc.presupuestoMens) * 100) : 0
-      }
-    })
+        porcentaje: (cc.presupuestoMens || 0) > 0 ? Math.round((gastado / cc.presupuestoMens) * 100) : 0,
+      };
+    });
 
-    // Cumplimiento Legal - Estadísticas
-    const hoy = new Date()
-    
-    // Agrupar documentos por categoría
-    const documentosPorCategoria = {
-      Legal: documentosCumplimiento.filter(c => c.categoriaId ? true : false), // Se puede mejorar con join
-      Seguridad: documentosCumplimiento.filter(c => c.titulo?.toLowerCase().includes('seguridad')),
-      Reglamentario: documentosCumplimiento.filter(c => c.titulo?.toLowerCase().includes('reglamento') || c.titulo?.toLowerCase().includes('reglamentario')),
-      Interno: documentosCumplimiento.filter(c => c.titulo?.toLowerCase().includes('interno')),
-      Financiero: documentosCumplimiento.filter(c => c.titulo?.toLowerCase().includes('financiero') || c.titulo?.toLowerCase().includes('finanzas')),
-    }
-    
+    // 5. Cumplimiento Legal
+    const hoy = new Date();
+    const en30Dias = new Date();
+    en30Dias.setDate(en30Dias.getDate() + 30);
+
+    const docsVencidos = documentosCumplimiento.filter(c =>
+      c.estado !== 'Aprobado' &&
+      c.fechaVencimiento &&
+      new Date(c.fechaVencimiento) < hoy
+    );
+
+    const docsPorVencer = documentosCumplimiento.filter(c => {
+      if (c.estado === 'Aprobado' || !c.fechaVencimiento) return false;
+      const fechaVen = new Date(c.fechaVencimiento);
+      return fechaVen >= hoy && fechaVen <= en30Dias;
+    });
+
     const cumplimientoStats = {
-      // Usar resumen si existe, sino calcular
       total: resumenCumplimiento?.totalRequisitos ?? documentosCumplimiento.length,
-      completados: resumenCumplimiento?.requisitosCumplidos ?? documentosCumplimiento.filter(c => c.estado === 'Aprobado' || c.cumple).length,
-      pendientes: resumenCumplimiento?.requisitosPendientes ?? documentosCumplimiento.filter(c => c.estado === 'Pendiente' || c.estado === 'En Revisión').length,
+      completados: resumenCumplimiento?.requisitosCumplidos ??
+        documentosCumplimiento.filter(c => c.estado === 'Aprobado' || c.cumple).length,
+      pendientes: resumenCumplimiento?.requisitosPendientes ??
+        documentosCumplimiento.filter(c => c.estado === 'Pendiente' || c.estado === 'En Revisión').length,
       enProceso: documentosCumplimiento.filter(c => c.estado === 'En Revisión').length,
-      vencidos: resumenCumplimiento?.requisitosVencidos ?? documentosCumplimiento.filter(c => 
-        c.estado === 'Vencido' || 
-        (c.estado !== 'Aprobado' && 
-        c.fechaVencimiento && 
-        new Date(c.fechaVencimiento) < hoy)
-      ).length,
-      porVencer: documentosCumplimiento.filter(c => {
-        if (c.estado === 'Aprobado' || !c.fechaVencimiento) return false
-        const fechaVen = new Date(c.fechaVencimiento)
-        const en30Dias = new Date()
-        en30Dias.setDate(en30Dias.getDate() + 30)
-        return fechaVen >= hoy && fechaVen <= en30Dias
-      }).length,
-      obligatorios: documentosCumplimiento.length, // Todos son obligatorios por ahora
+      vencidos: resumenCumplimiento?.requisitosVencidos ?? docsVencidos.length,
+      porVencer: docsPorVencer.length,
+      obligatorios: documentosCumplimiento.length,
       opcionales: 0,
-      porcentajeGeneral: resumenCumplimiento?.porcentajeGeneral ?? (documentosCumplimiento.length > 0 
-        ? Math.round(documentosCumplimiento.filter(c => c.cumple || c.estado === 'Aprobado').length / documentosCumplimiento.length * 100)
-        : 0),
-      // Porcentajes por categoría desde resumen
+      porcentajeGeneral: resumenCumplimiento?.porcentajeGeneral ??
+        (documentosCumplimiento.length > 0
+          ? Math.round(documentosCumplimiento.filter(c => c.cumple || c.estado === 'Aprobado').length / documentosCumplimiento.length * 100)
+          : 0),
       porcentajeLegal: resumenCumplimiento?.porcentajeLegal ?? 0,
       porcentajeReglamentario: resumenCumplimiento?.porcentajeReglamentario ?? 0,
       porcentajeInterno: resumenCumplimiento?.porcentajeInterno ?? 0,
       porcentajeSeguridad: resumenCumplimiento?.porcentajeSeguridad ?? 0,
-      // Alertas activas
       alertasActivas: resumenCumplimiento?.alertasActivas ?? 0,
-      // Por categoría - formato que espera el Dashboard
-      porCategoria: {
-        Legal: documentosPorCategoria.Legal.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          fechaVencimiento: c.fechaVencimiento,
-          categoria: 'Legal',
-          estado: c.estado,
-        })),
-        Seguridad: documentosPorCategoria.Seguridad.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          fechaVencimiento: c.fechaVencimiento,
-          categoria: 'Seguridad',
-          estado: c.estado,
-        })),
-        Reglamentario: documentosPorCategoria.Reglamentario.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          fechaVencimiento: c.fechaVencimiento,
-          categoria: 'Reglamentario',
-          estado: c.estado,
-        })),
-        Interno: documentosPorCategoria.Interno.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          fechaVencimiento: c.fechaVencimiento,
-          categoria: 'Interno',
-          estado: c.estado,
-        })),
-        Financiero: documentosPorCategoria.Financiero.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          fechaVencimiento: c.fechaVencimiento,
-          categoria: 'Financiero',
-          estado: c.estado,
-        })),
-      },
-      // Items próximos a vencer
-      proximosVencer: documentosCumplimiento
-        .filter(c => {
-          if (c.estado === 'Aprobado' || !c.fechaVencimiento) return false
-          const fechaVen = new Date(c.fechaVencimiento)
-          const en30Dias = new Date()
-          en30Dias.setDate(en30Dias.getDate() + 30)
-          return fechaVen >= hoy && fechaVen <= en30Dias
-        })
+      proximosVencer: docsPorVencer
         .map(c => ({
           id: c.id,
           titulo: c.titulo,
@@ -193,13 +204,7 @@ export async function GET() {
         }))
         .sort((a, b) => new Date(a.fechaVencimiento!).getTime() - new Date(b.fechaVencimiento!).getTime())
         .slice(0, 5),
-      // Items vencidos
-      itemsVencidos: documentosCumplimiento
-        .filter(c => 
-          c.estado !== 'Aprobado' && 
-          c.fechaVencimiento && 
-          new Date(c.fechaVencimiento) < hoy
-        )
+      itemsVencidos: docsVencidos
         .map(c => ({
           id: c.id,
           titulo: c.titulo,
@@ -209,17 +214,16 @@ export async function GET() {
         }))
         .sort((a, b) => new Date(b.fechaVencimiento!).getTime() - new Date(a.fechaVencimiento!).getTime())
         .slice(0, 5),
-    }
-    
+    };
+
     return NextResponse.json({
       stats,
       estadoPropiedades,
       recentOT,
       centrosConGasto,
       cumplimientoStats,
-    })
+    });
   } catch (error) {
-    console.error('Error fetching dashboard:', error)
-    return NextResponse.json({ error: 'Error fetching dashboard' }, { status: 500 })
+    return handlePrismaError(error);
   }
 }

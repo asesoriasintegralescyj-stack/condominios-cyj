@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
-// GET - List all residentes
+// GET - List residentes (con paginación opcional)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
@@ -14,25 +14,68 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const etapa = searchParams.get('etapa') || ''
-    
+
+    // Paginación opcional: si se pasa ?page=X&limit=Y, se pagina;
+    // si no, se devuelven todos (compatibilidad hacia atrás)
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
+    const usePagination = pageParam !== null || limitParam !== null
+    const page = Math.max(1, parseInt(pageParam || '1'))
+    const limit = Math.min(500, Math.max(1, parseInt(limitParam || '50')))
+
+    const where = {
+      AND: [
+        search ? {
+          OR: [
+            { nombre: { contains: search } },
+            { apellido: { contains: search } },
+            { rut: { contains: search } },
+            { unidad: { contains: search } },
+            { etapa: { contains: search } },
+          ]
+        } : {},
+        etapa ? { etapa: { equals: etapa } } : {},
+      ]
+    }
+
+    if (usePagination) {
+      const [residentes, total] = await Promise.all([
+        db.residente.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+          select: {
+            id: true, nombre: true, apellido: true, rut: true, unidad: true,
+            etapa: true, tipo: true, telefono: true, email: true,
+            fechaIngreso: true, estado: true, createdAt: true, updatedAt: true,
+            // Excluir vehiculos y notas (datos sensibles voluminosos) en listados
+          },
+        }),
+        db.residente.count({ where }),
+      ])
+
+      return NextResponse.json({
+        data: residentes,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      })
+    }
+
+    // Sin paginación: mantener formato original para compatibilidad
     const residentes = await db.residente.findMany({
-      where: {
-        AND: [
-          search ? {
-            OR: [
-              { nombre: { contains: search } },
-              { apellido: { contains: search } },
-              { rut: { contains: search } },
-              { unidad: { contains: search } },
-              { etapa: { contains: search } },
-            ]
-          } : {},
-          etapa ? { etapa: { equals: etapa } } : {},
-        ]
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true, nombre: true, apellido: true, rut: true, unidad: true,
+        etapa: true, tipo: true, telefono: true, email: true,
+        fechaIngreso: true, estado: true, vehiculos: true, notas: true,
+        propiedadId: true, createdAt: true, updatedAt: true,
       },
-      orderBy: { createdAt: 'desc' }
     })
-    
+
     return NextResponse.json(residentes)
   } catch (error) {
     console.error('Error fetching residentes:', error)

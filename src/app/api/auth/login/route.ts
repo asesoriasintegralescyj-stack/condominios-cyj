@@ -24,16 +24,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    const ip = request.headers.get('x-forwarded-for') || 
-               request.headers.get('x-real-ip') || 
-               'unknown';
+    const rawIp = request.headers.get('x-forwarded-for') ||
+                  request.headers.get('x-real-ip') ||
+                  'unknown';
+    const ip = Array.isArray(rawIp) ? rawIp[0] : rawIp.split(',')[0].trim();
     const userAgent = request.headers.get('user-agent') || 'unknown';
-    
+
     const result = await authenticateUser(
       email,
       password,
       userAgent,
-      Array.isArray(ip) ? ip : ip
+      ip
     );
     
     if (!result.success) {

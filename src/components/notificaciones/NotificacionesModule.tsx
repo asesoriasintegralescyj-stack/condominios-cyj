@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,7 +39,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Switch } from '@/components/ui/switch'
 import { 
   Plus, 
   Bell, 
@@ -68,9 +67,6 @@ interface Notificacion {
   fechaLeido?: string
   createdAt: string
 }
-
-const formatCLP = (n: number) => 
-  '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
 
 const tipoColors: Record<string, string> = {
   'Info': 'bg-blue-100 text-blue-700',

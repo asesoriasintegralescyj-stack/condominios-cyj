@@ -105,78 +105,82 @@ export async function PUT(
       }
     }
     
-    // Update main OT
-    const orden = await db.ordenTrabajo.update({
-      where: { id },
-      data: updateData
+    // Update main OT and all related records in a single transaction
+    const orden = await db.$transaction(async (tx) => {
+      const updated = await tx.ordenTrabajo.update({
+        where: { id },
+        data: updateData
+      })
+
+      // Update materials if provided
+      if (data.materiales !== undefined) {
+        await tx.oTMaterial.deleteMany({ where: { otId: id } })
+        if (data.materiales.length > 0) {
+          await tx.oTMaterial.createMany({
+            data: data.materiales.map((m: any) => ({
+              descripcion: m.descripcion,
+              cantidad: parseFloat(m.cantidad) || 1,
+              unidad: m.unidad || 'unidad',
+              precioUnit: parseFloat(m.precioUnit) || 0,
+              total: parseFloat(m.total) || 0,
+              otId: id
+            }))
+          })
+        }
+      }
+
+      // Update herramientas if provided
+      if (data.herramientas !== undefined) {
+        await tx.oTHerramienta.deleteMany({ where: { otId: id } })
+        if (data.herramientas.length > 0) {
+          await tx.oTHerramienta.createMany({
+            data: data.herramientas.map((h: any) => ({
+              nombre: h.nombre,
+              cantidad: parseInt(h.cantidad) || 1,
+              otId: id
+            }))
+          })
+        }
+      }
+
+      // Update tareas if provided
+      if (data.tareas !== undefined) {
+        await tx.oTTarea.deleteMany({ where: { otId: id } })
+        if (data.tareas.length > 0) {
+          await tx.oTTarea.createMany({
+            data: data.tareas.map((t: any) => ({
+              descripcion: t.descripcion,
+              cantidad: parseInt(t.cantidad) || 1,
+              estado: t.estado || 'Pendiente',
+              otId: id
+            }))
+          })
+        }
+      }
+
+      // Update personal if provided
+      if (data.personalOT !== undefined) {
+        await tx.oTPersonal.deleteMany({ where: { otId: id } })
+        if (data.personalOT.length > 0) {
+          await tx.oTPersonal.createMany({
+            data: data.personalOT.map((p: any) => ({
+              nombre: p.nombre,
+              tipo: p.tipo || 'Interno',
+              cantidad: parseInt(p.cantidad) || 1,
+              precioUnit: parseFloat(p.precioUnit) || 0,
+              horasTrabajadas: parseFloat(p.horasTrabajadas) || 0,
+              total: parseFloat(p.total) || 0,
+              cumple: p.cumple || null,
+              observaciones: p.observaciones || null,
+              otId: id
+            }))
+          })
+        }
+      }
+
+      return updated
     })
-    
-    // Update materials if provided
-    if (data.materiales !== undefined) {
-      await db.oTMaterial.deleteMany({ where: { otId: id } })
-      if (data.materiales.length > 0) {
-        await db.oTMaterial.createMany({
-          data: data.materiales.map((m: any) => ({
-            descripcion: m.descripcion,
-            cantidad: parseFloat(m.cantidad) || 1,
-            unidad: m.unidad || 'unidad',
-            precioUnit: parseFloat(m.precioUnit) || 0,
-            total: parseFloat(m.total) || 0,
-            otId: id
-          }))
-        })
-      }
-    }
-    
-    // Update herramientas if provided
-    if (data.herramientas !== undefined) {
-      await db.oTHerramienta.deleteMany({ where: { otId: id } })
-      if (data.herramientas.length > 0) {
-        await db.oTHerramienta.createMany({
-          data: data.herramientas.map((h: any) => ({
-            nombre: h.nombre,
-            cantidad: parseInt(h.cantidad) || 1,
-            otId: id
-          }))
-        })
-      }
-    }
-    
-    // Update tareas if provided
-    if (data.tareas !== undefined) {
-      await db.oTTarea.deleteMany({ where: { otId: id } })
-      if (data.tareas.length > 0) {
-        await db.oTTarea.createMany({
-          data: data.tareas.map((t: any) => ({
-            descripcion: t.descripcion,
-            cantidad: parseInt(t.cantidad) || 1,
-            estado: t.estado || 'Pendiente',
-            otId: id
-          }))
-        })
-      }
-    }
-    
-    // Update personal if provided
-    if (data.personalOT !== undefined) {
-      await db.oTPersonal.deleteMany({ where: { otId: id } })
-      if (data.personalOT.length > 0) {
-        await db.oTPersonal.createMany({
-          data: data.personalOT.map((p: any) => ({
-            nombre: p.nombre,
-            tipo: p.tipo || 'Interno',
-            cantidad: parseInt(p.cantidad) || 1,
-            precioUnit: parseFloat(p.precioUnit) || 0,
-            horasTrabajadas: parseFloat(p.horasTrabajadas) || 0,
-            total: parseFloat(p.total) || 0,
-            cumple: p.cumple || null,
-            observaciones: p.observaciones || null,
-            otId: id
-          }))
-        })
-      }
-    }
-    
+
     return NextResponse.json(orden)
   } catch (error) {
     console.error('Error updating orden:', error)

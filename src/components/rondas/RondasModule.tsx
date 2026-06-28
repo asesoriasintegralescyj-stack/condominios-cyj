@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,14 +28,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Search,
   Plus,
   MoreHorizontal,
   QrCode,
   MapPin,
-  Clock,
   User,
   Download,
   Trash2,
@@ -43,6 +41,7 @@ import {
   CheckCircle,
   Scan,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Ronda {
   id: string
@@ -123,7 +122,7 @@ export function RondasModule() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Está seguro de eliminar esta ronda?')) return
+    if (!window.confirm('¿Está seguro de eliminar esta ronda?')) return
     
     try {
       await fetch(`/api/rondas/${id}`, { method: 'DELETE' })
@@ -168,16 +167,16 @@ export function RondasModule() {
       const data = await res.json()
       
       if (res.ok) {
-        alert(`¡Ronda registrada exitosamente!\n${data.ronda?.nombre || ''}`)
+        toast.success(`¡Ronda registrada exitosamente! ${data.ronda?.nombre || ''}`)
         setScanDialogOpen(false)
         setScanResult('')
         fetchRondas()
       } else {
-        alert(data.error || 'Error al registrar ronda')
+        toast.error(data.error || 'Error al registrar ronda')
       }
     } catch (error) {
       console.error('Error registering scan:', error)
-      alert('Error al registrar ronda')
+      toast.error('Error al registrar ronda')
     }
   }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
@@ -107,49 +108,53 @@ export async function POST(request: NextRequest) {
     const tieneArchivo = !!(data.archivoBase64 || data.archivoUrl)
     const porcentajeCumplimiento = tieneArchivo ? 100 : 0
 
-    const documento = await db.documentoCumplimiento.create({
-      data: {
-        titulo: data.titulo,
-        descripcion: data.descripcion || null,
-        archivoNombre: data.archivoNombre || null,
-        archivoTipo: data.archivoTipo || null,
-        archivoBase64: data.archivoBase64 || null,
-        archivoUrl: data.archivoUrl || null,
-        fechaDocumento: data.fechaDocumento || null,
-        fechaVencimiento: data.fechaVencimiento || null,
-        fechaAprobacion: data.fechaAprobacion || null,
-        estado: data.estado || 'Pendiente',
-        cumple: tieneArchivo,
-        porcentajeCumplimiento,
-        verificadoPor: data.verificadoPor || null,
-        fechaVerificacion: data.fechaVerificacion || null,
-        observaciones: data.observaciones || null,
-        categoriaId: data.categoriaId || null,
-        condominioId: data.condominioId || null,
-        creadoPor: data.creadoPor || null,
-        creadoPorNombre: data.creadoPorNombre || null,
-      },
-      include: {
-        categoria: true
-      }
-    })
+    const documento = await db.$transaction(async (tx) => {
+      const created = await tx.documentoCumplimiento.create({
+        data: {
+          titulo: data.titulo,
+          descripcion: data.descripcion || null,
+          archivoNombre: data.archivoNombre || null,
+          archivoTipo: data.archivoTipo || null,
+          archivoBase64: data.archivoBase64 || null,
+          archivoUrl: data.archivoUrl || null,
+          fechaDocumento: data.fechaDocumento || null,
+          fechaVencimiento: data.fechaVencimiento || null,
+          fechaAprobacion: data.fechaAprobacion || null,
+          estado: data.estado || 'Pendiente',
+          cumple: tieneArchivo,
+          porcentajeCumplimiento,
+          verificadoPor: data.verificadoPor || null,
+          fechaVerificacion: data.fechaVerificacion || null,
+          observaciones: data.observaciones || null,
+          categoriaId: data.categoriaId || null,
+          condominioId: data.condominioId || null,
+          creadoPor: data.creadoPor || null,
+          creadoPorNombre: data.creadoPorNombre || null,
+        },
+        include: {
+          categoria: true
+        }
+      })
 
-    // Create history record
-    await db.historialCumplimiento.create({
-      data: {
-        documentoId: documento.id,
-        accion: 'Creación',
-        descripcion: `Documento "${data.titulo}" creado`,
-        estadoNuevo: data.estado || 'Pendiente',
-        usuarioId: data.creadoPor || null,
-        usuarioNombre: data.creadoPorNombre || null
-      }
-    })
+      // Create history record
+      await tx.historialCumplimiento.create({
+        data: {
+          documentoId: created.id,
+          accion: 'Creación',
+          descripcion: `Documento "${data.titulo}" creado`,
+          estadoNuevo: data.estado || 'Pendiente',
+          usuarioId: data.creadoPor || null,
+          usuarioNombre: data.creadoPorNombre || null
+        }
+      })
 
-    // Update summary if condominioId exists
-    if (data.condominioId) {
-      await actualizarResumen(data.condominioId)
-    }
+      // Update summary if condominioId exists
+      if (data.condominioId) {
+        await actualizarResumen(data.condominioId, tx)
+      }
+
+      return created
+    })
 
     return NextResponse.json(documento)
   } catch (error) {
@@ -185,48 +190,52 @@ export async function PUT(request: NextRequest) {
     const tieneArchivo = !!(data.archivoBase64 || data.archivoUrl)
     const porcentajeCumplimiento = tieneArchivo ? 100 : 0
 
-    const documento = await db.documentoCumplimiento.update({
-      where: { id: data.id },
-      data: {
-        titulo: data.titulo,
-        descripcion: data.descripcion || null,
-        archivoNombre: data.archivoNombre || null,
-        archivoTipo: data.archivoTipo || null,
-        archivoBase64: data.archivoBase64 || null,
-        archivoUrl: data.archivoUrl || null,
-        fechaDocumento: data.fechaDocumento || null,
-        fechaVencimiento: data.fechaVencimiento || null,
-        fechaAprobacion: data.fechaAprobacion || null,
-        estado: data.estado,
-        cumple: tieneArchivo && data.estado === 'Aprobado',
-        porcentajeCumplimiento,
-        verificadoPor: data.verificadoPor || null,
-        fechaVerificacion: data.fechaVerificacion ? new Date(data.fechaVerificacion) : null,
-        observaciones: data.observaciones || null,
-        categoriaId: data.categoriaId || null,
-      },
-      include: {
-        categoria: true
-      }
-    })
+    const documento = await db.$transaction(async (tx) => {
+      const updated = await tx.documentoCumplimiento.update({
+        where: { id: data.id },
+        data: {
+          titulo: data.titulo,
+          descripcion: data.descripcion || null,
+          archivoNombre: data.archivoNombre || null,
+          archivoTipo: data.archivoTipo || null,
+          archivoBase64: data.archivoBase64 || null,
+          archivoUrl: data.archivoUrl || null,
+          fechaDocumento: data.fechaDocumento || null,
+          fechaVencimiento: data.fechaVencimiento || null,
+          fechaAprobacion: data.fechaAprobacion || null,
+          estado: data.estado,
+          cumple: tieneArchivo && data.estado === 'Aprobado',
+          porcentajeCumplimiento,
+          verificadoPor: data.verificadoPor || null,
+          fechaVerificacion: data.fechaVerificacion ? new Date(data.fechaVerificacion) : null,
+          observaciones: data.observaciones || null,
+          categoriaId: data.categoriaId || null,
+        },
+        include: {
+          categoria: true
+        }
+      })
 
-    // Create history record
-    await db.historialCumplimiento.create({
-      data: {
-        documentoId: documento.id,
-        accion: 'Actualización',
-        descripcion: `Documento "${data.titulo}" actualizado`,
-        estadoAnterior: documentoAnterior.estado,
-        estadoNuevo: data.estado,
-        usuarioId: data.usuarioId || null,
-        usuarioNombre: data.usuarioNombre || null
-      }
-    })
+      // Create history record
+      await tx.historialCumplimiento.create({
+        data: {
+          documentoId: updated.id,
+          accion: 'Actualización',
+          descripcion: `Documento "${data.titulo}" actualizado`,
+          estadoAnterior: documentoAnterior.estado,
+          estadoNuevo: data.estado,
+          usuarioId: data.usuarioId || null,
+          usuarioNombre: data.usuarioNombre || null
+        }
+      })
 
-    // Update summary
-    if (documento.condominioId) {
-      await actualizarResumen(documento.condominioId)
-    }
+      // Update summary
+      if (updated.condominioId) {
+        await actualizarResumen(updated.condominioId, tx)
+      }
+
+      return updated
+    })
 
     return NextResponse.json(documento)
   } catch (error) {
@@ -258,20 +267,22 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    // Delete history records first
-    await db.historialCumplimiento.deleteMany({
-      where: { documentoId: id }
-    })
+    await db.$transaction(async (tx) => {
+      // Delete history records first
+      await tx.historialCumplimiento.deleteMany({
+        where: { documentoId: id }
+      })
 
-    // Delete document
-    await db.documentoCumplimiento.delete({
-      where: { id }
-    })
+      // Delete document
+      await tx.documentoCumplimiento.delete({
+        where: { id }
+      })
 
-    // Update summary
-    if (documento.condominioId) {
-      await actualizarResumen(documento.condominioId)
-    }
+      // Update summary
+      if (documento.condominioId) {
+        await actualizarResumen(documento.condominioId, tx)
+      }
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -281,9 +292,9 @@ export async function DELETE(request: NextRequest) {
 }
 
 // Helper function to update compliance summary
-async function actualizarResumen(condominioId: string) {
+async function actualizarResumen(condominioId: string, tx: Prisma.TransactionClient | typeof db = db) {
   try {
-    const documentos = await db.documentoCumplimiento.findMany({
+    const documentos = await tx.documentoCumplimiento.findMany({
       where: { condominioId },
       include: { categoria: true }
     })
@@ -312,7 +323,7 @@ async function actualizarResumen(condominioId: string) {
     }).length
 
     // Upsert summary
-    await db.resumenCumplimiento.upsert({
+    await tx.resumenCumplimiento.upsert({
       where: { condominioId },
       update: {
         totalRequisitos,

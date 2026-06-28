@@ -11,7 +11,6 @@ import {
   Building2, 
   Receipt, 
   PiggyBank, 
-  BookOpen, 
   FileText,
   LogOut,
   ChevronUp,
@@ -129,7 +128,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
 
 export function Sidebar() {
   const { currentModule, setCurrentModule } = useAppStore()
-  const { user, loading, authenticated, logout, hasPermission, isAdmin, isAuditor } = useSession()
+  const { user, loading, authenticated, logout, hasPermission, isAdmin } = useSession()
   const router = useRouter()
 
   // Filtrar menú según permisos

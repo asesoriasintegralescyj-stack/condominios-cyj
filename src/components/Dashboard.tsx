@@ -8,11 +8,8 @@ import { useAppStore } from '@/lib/store'
 import { formatCLP } from '@/lib/utils'
 import { 
   Home, 
-  Users, 
   Wrench, 
   AlertTriangle, 
-  User, 
-  DollarSign,
   TrendingUp,
   Shield,
   CheckCircle,

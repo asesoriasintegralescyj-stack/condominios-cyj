@@ -44,33 +44,37 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    const gasto = await db.gasto.create({
-      data: {
-        descripcion: data.descripcion,
-        categoria: data.categoria || 'Mantenimiento',
-        estado: data.estado || 'Pendiente',
-        monto: parseFloat(data.monto) || 0,
-        fecha: data.fecha || new Date().toISOString().split('T')[0],
-        propiedad: data.propiedad || '',
-        proveedorId: data.proveedorId || null,
-        nDoc: data.nDoc || '',
-        centroCosto: data.centroCosto || '',
-        notas: data.notas || '',
-        comprobante: data.comprobante || '',
+    const gasto = await db.$transaction(async (tx) => {
+      const created = await tx.gasto.create({
+        data: {
+          descripcion: data.descripcion,
+          categoria: data.categoria || 'Mantenimiento',
+          estado: data.estado || 'Pendiente',
+          monto: parseFloat(data.monto) || 0,
+          fecha: data.fecha || new Date().toISOString().split('T')[0],
+          propiedad: data.propiedad || '',
+          proveedorId: data.proveedorId || null,
+          nDoc: data.nDoc || '',
+          centroCostoId: data.centroCostoId || null,
+          notas: data.notas || '',
+          comprobante: data.comprobante || '',
+        }
+      })
+
+      // Update caja chica if estado is Pagado
+      if (data.estado === 'Pagado') {
+        const caja = await tx.cajaChica.findFirst()
+        if (caja) {
+          await tx.cajaChica.update({
+            where: { id: caja.id },
+            data: { saldo: caja.saldo - (parseFloat(data.monto) || 0) }
+          })
+        }
       }
+
+      return created
     })
-    
-    // Update caja chica if estado is Pagado
-    if (data.estado === 'Pagado') {
-      const caja = await db.cajaChica.findFirst()
-      if (caja) {
-        await db.cajaChica.update({
-          where: { id: caja.id },
-          data: { saldo: caja.saldo - (parseFloat(data.monto) || 0) }
-        })
-      }
-    }
-    
+
     return NextResponse.json(gasto)
   } catch (error) {
     console.error('Error creating gasto:', error)

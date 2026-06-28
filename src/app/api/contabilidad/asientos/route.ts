@@ -70,22 +70,18 @@ export async function POST(request: NextRequest) {
         totalHaber,
         documento: asientoData.documento,
         documentoId: asientoData.documentoId,
-        notas: asientoData.notas
-      }
+        notas: asientoData.notas,
+        detalles: {
+          create: (detalles || []).map((d: { cuentaId: string; glosa?: string; debe: number; haber: number }) => ({
+            cuentaId: d.cuentaId,
+            glosa: d.glosa,
+            debe: d.debe,
+            haber: d.haber
+          }))
+        }
+      },
+      include: { detalles: true }
     })
-
-    // Crear detalles
-    if (detalles && detalles.length > 0) {
-      await db.detalleAsiento.createMany({
-        data: detalles.map((d: { cuentaId: string; glosa?: string; debe: number; haber: number }) => ({
-          cuentaId: d.cuentaId,
-          glosa: d.glosa,
-          debe: d.debe,
-          haber: d.haber,
-          asientoId: asiento.id
-        }))
-      })
-    }
 
     return NextResponse.json(asiento)
   } catch (error) {

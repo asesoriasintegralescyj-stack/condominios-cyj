@@ -28,6 +28,7 @@ import { DatePicker, dateToISO, isoToDate } from '@/components/ui/date-picker'
 import { Separator } from '@/components/ui/separator'
 import { useSession } from '@/hooks/use-session'
 import { formatCLP, HORAS_OPTIONS } from '@/lib/utils'
+import { toast } from 'sonner'
 import { 
   Plus, Pencil, Trash2, Search, Printer, Clock, Users, 
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
@@ -293,11 +294,11 @@ export function OrdenesTrabajoModule() {
     try {
       const res = await fetch('/api/seed-catalogos', { method: 'POST' })
       const data = await res.json()
-      alert(`Catálogos cargados:\n- ${data.centrosCosto || 0} centros de costo\n- ${data.tareas} tareas\n- ${data.herramientas} herramientas\n- ${data.materiales} materiales`)
+      toast.success(`Catálogos cargados: ${data.centrosCosto || 0} centros de costo, ${data.tareas} tareas, ${data.herramientas} herramientas, ${data.materiales} materiales`)
       fetchCatalogs()
     } catch (error) {
       console.error('Error seeding catalogs:', error)
-      alert('Error al cargar catálogos')
+      toast.error('Error al cargar catálogos')
     }
   }
 
@@ -492,7 +493,7 @@ export function OrdenesTrabajoModule() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('¿Eliminar esta orden de trabajo?')) return
+    if (!window.confirm('¿Eliminar esta orden de trabajo?')) return
     try {
       await fetch(`/api/ordenes-trabajo/${id}`, { method: 'DELETE' })
       fetchOrdenes(search)

@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +36,7 @@ import {
 import { 
   Plus, Pencil, Trash2, Search, FileText, Shield, AlertTriangle,
   CheckCircle, Clock, Upload, Download, Eye, Building2,
-  FileCheck, FileWarning, FileX, RefreshCw, Info, Calendar
+  FileCheck, FileWarning, FileX, Info, Calendar
 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 

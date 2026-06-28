@@ -1,7 +1,6 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { 
   Home, 
   Users, 
@@ -11,9 +10,19 @@ import {
   Building2, 
   Receipt, 
   PiggyBank,
-  FileText,
   Printer
 } from 'lucide-react'
+import { toast } from 'sonner'
+
+function escapeHtml(str: string | null | undefined): string {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 const reportTypes = [
   { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades', endpoint: 'propiedades' },
@@ -38,7 +47,7 @@ export function ReportesModule() {
       // Open in new window for printing
       const w = window.open('', '_blank', 'width=960,height=720')
       if (!w) {
-        alert('Habilita ventanas emergentes')
+        toast.error('Habilita ventanas emergentes')
         return
       }
       w.document.open()
@@ -126,9 +135,9 @@ function generateReportHTML(tipo: string, data: any[]): string {
           <thead><tr><th>Nombre</th><th>Tipo</th><th>Estado</th><th>Dirección</th><th>Hab.</th><th>Baños</th><th>m²</th><th>Precio</th><th>Contacto</th></tr></thead>
           <tbody>
             ${data.map((p: any) => `<tr>
-              <td><b>${p.nombre}</b></td><td>${p.tipo}</td><td>${p.estado}</td>
-              <td>${p.direccion || '–'}</td><td>${p.habitaciones}</td><td>${p.banos}</td><td>${p.mts2}</td>
-              <td>${formatCLP(p.precio)}</td><td>${p.contacto || '–'}</td>
+              <td><b>${escapeHtml(p.nombre)}</b></td><td>${escapeHtml(p.tipo)}</td><td>${escapeHtml(p.estado)}</td>
+              <td>${escapeHtml(p.direccion) || '–'}</td><td>${p.habitaciones}</td><td>${p.banos}</td><td>${p.mts2}</td>
+              <td>${formatCLP(p.precio)}</td><td>${escapeHtml(p.contacto) || '–'}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -140,9 +149,9 @@ function generateReportHTML(tipo: string, data: any[]): string {
           <thead><tr><th>Nombre</th><th>RUT</th><th>Unidad</th><th>Tipo</th><th>Estado</th><th>Teléfono</th><th>Email</th><th>Ingreso</th></tr></thead>
           <tbody>
             ${data.map((r: any) => `<tr>
-              <td><b>${r.nombre}</b></td><td>${r.rut || '–'}</td><td>${r.unidad || '–'}</td>
-              <td>${r.tipo}</td><td>${r.estado}</td><td>${r.telefono || '–'}</td>
-              <td>${r.email || '–'}</td><td>${formatDate(r.fechaIngreso)}</td>
+              <td><b>${escapeHtml(r.nombre)}</b></td><td>${escapeHtml(r.rut) || '–'}</td><td>${escapeHtml(r.unidad) || '–'}</td>
+              <td>${escapeHtml(r.tipo)}</td><td>${escapeHtml(r.estado)}</td><td>${escapeHtml(r.telefono) || '–'}</td>
+              <td>${escapeHtml(r.email) || '–'}</td><td>${formatDate(r.fechaIngreso)}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -154,9 +163,9 @@ function generateReportHTML(tipo: string, data: any[]): string {
           <thead><tr><th>Nombre</th><th>RUT</th><th>Cargo</th><th>Contrato</th><th>AFP</th><th>Salud</th><th>Sueldo Base</th><th>Estado</th></tr></thead>
           <tbody>
             ${data.map((p: any) => `<tr>
-              <td><b>${p.nombre}</b></td><td>${p.rut || '–'}</td><td>${p.cargo || '–'}</td>
-              <td>${p.contrato}</td><td>${p.afp}</td><td>${p.salud}</td>
-              <td style="text-align:right">${formatCLP(p.sueldoBase)}</td><td>${p.estado}</td>
+              <td><b>${escapeHtml(p.nombre)}</b></td><td>${escapeHtml(p.rut) || '–'}</td><td>${escapeHtml(p.cargo) || '–'}</td>
+              <td>${escapeHtml(p.contrato)}</td><td>${escapeHtml(p.afp)}</td><td>${escapeHtml(p.salud)}</td>
+              <td style="text-align:right">${formatCLP(p.sueldoBase)}</td><td>${escapeHtml(p.estado)}</td>
             </tr>`).join('')}
           </tbody>
         </table>
@@ -168,8 +177,8 @@ function generateReportHTML(tipo: string, data: any[]): string {
           <thead><tr><th>Nombre</th><th>Categoría</th><th>Estado</th><th>Ubicación</th><th>N° Serie</th><th>Costo</th><th>Valor Actual</th></tr></thead>
           <tbody>
             ${data.map((a: any) => `<tr>
-              <td><b>${a.nombre}</b></td><td>${a.categoria}</td><td>${a.estado}</td>
-              <td>${a.ubicacion || '–'}</td><td>${a.serie || '–'}</td>
+              <td><b>${escapeHtml(a.nombre)}</b></td><td>${escapeHtml(a.categoria)}</td><td>${escapeHtml(a.estado)}</td>
+              <td>${escapeHtml(a.ubicacion) || '–'}</td><td>${escapeHtml(a.serie) || '–'}</td>
               <td style="text-align:right">${formatCLP(a.costoCompra)}</td>
               <td style="text-align:right">${formatCLP(a.valorActual)}</td>
             </tr>`).join('')}
@@ -184,9 +193,9 @@ function generateReportHTML(tipo: string, data: any[]): string {
           <thead><tr><th>N° Doc.</th><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Centro Costo</th><th>Monto</th><th>Estado</th></tr></thead>
           <tbody>
             ${data.map((g: any) => `<tr>
-              <td>${g.nDoc || '–'}</td><td>${formatDate(g.fecha)}</td><td>${g.descripcion}</td>
-              <td>${g.categoria}</td><td>${g.centroCosto || '–'}</td>
-              <td style="text-align:right;font-weight:bold">${formatCLP(g.monto)}</td><td>${g.estado}</td>
+              <td>${escapeHtml(g.nDoc) || '–'}</td><td>${formatDate(g.fecha)}</td><td>${escapeHtml(g.descripcion)}</td>
+              <td>${escapeHtml(g.categoria)}</td><td>${escapeHtml(g.centroCosto) || '–'}</td>
+              <td style="text-align:right;font-weight:bold">${formatCLP(g.monto)}</td><td>${escapeHtml(g.estado)}</td>
             </tr>`).join('')}
           </tbody>
         </table>

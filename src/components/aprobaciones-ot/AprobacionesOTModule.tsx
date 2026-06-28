@@ -759,7 +759,7 @@ export function AprobacionesOTModule() {
           
           {selectedOT && selectedOT.historialAprobaciones?.length > 0 ? (
             <div className="space-y-3">
-              {selectedOT.historialAprobaciones.map((h, index) => (
+              {selectedOT.historialAprobaciones.map((h) => (
                 <div key={h.id} className="border rounded-lg p-3 bg-slate-50">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">

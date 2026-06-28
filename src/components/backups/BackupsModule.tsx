@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -41,7 +41,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { 
   Database, 
   Download, 
@@ -58,12 +57,10 @@ import {
   RotateCcw,
   Calendar,
   FileText,
-  Shield,
-  Play,
-  Pause,
   Archive,
   Info
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 interface Backup {
   id: string
@@ -226,11 +223,11 @@ export function BackupsModule() {
         fetchData()
       } else {
         const error = await res.json()
-        alert(error.error || 'Error al crear respaldo')
+        toast.error(error.error || 'Error al crear respaldo')
       }
     } catch (error) {
       console.error('Error creating backup:', error)
-      alert('Error al crear respaldo')
+      toast.error('Error al crear respaldo')
     } finally {
       setCreating(false)
     }
@@ -255,7 +252,7 @@ export function BackupsModule() {
       }
     } catch (error) {
       console.error('Error downloading backup:', error)
-      alert('Error al descargar respaldo')
+      toast.error('Error al descargar respaldo')
     }
   }
 
@@ -277,16 +274,16 @@ export function BackupsModule() {
           setRestoreDialogOpen(false)
           setRestoreProgress(0)
           fetchData()
-          alert('Base de datos restaurada correctamente')
+          toast.success('Base de datos restaurada correctamente')
         }, 500)
       } else {
         const error = await res.json()
-        alert(error.error || 'Error al restaurar respaldo')
+        toast.error(error.error || 'Error al restaurar respaldo')
         setRestoreProgress(0)
       }
     } catch (error) {
       console.error('Error restoring backup:', error)
-      alert('Error al restaurar respaldo')
+      toast.error('Error al restaurar respaldo')
       setRestoreProgress(0)
     }
   }
@@ -305,11 +302,11 @@ export function BackupsModule() {
         fetchData()
       } else {
         const error = await res.json()
-        alert(error.error || 'Error al eliminar respaldo')
+        toast.error(error.error || 'Error al eliminar respaldo')
       }
     } catch (error) {
       console.error('Error deleting backup:', error)
-      alert('Error al eliminar respaldo')
+      toast.error('Error al eliminar respaldo')
     }
   }
 
@@ -326,11 +323,11 @@ export function BackupsModule() {
         setConfigDialogOpen(false)
       } else {
         const error = await res.json()
-        alert(error.error || 'Error al guardar configuración')
+        toast.error(error.error || 'Error al guardar configuración')
       }
     } catch (error) {
       console.error('Error saving config:', error)
-      alert('Error al guardar configuración')
+      toast.error('Error al guardar configuración')
     }
   }
 
@@ -342,12 +339,12 @@ export function BackupsModule() {
       
       if (res.ok) {
         const data = await res.json()
-        alert(`Limpieza completada: ${data.eliminados} respaldos eliminados`)
+        toast.success(`Limpieza completada: ${data.eliminados} respaldos eliminados`)
         fetchData()
       }
     } catch (error) {
       console.error('Error cleaning backups:', error)
-      alert('Error al limpiar respaldos antiguos')
+      toast.error('Error al limpiar respaldos antiguos')
     }
   }
 

@@ -123,6 +123,7 @@ model Session {
   ip           String?
   expiresAt    DateTime
   createdAt    DateTime @default(now())
+  @@index([userId, expiresAt])
 }
 
 // ============================================
@@ -157,6 +158,9 @@ model LogAuditoria {
   ip          String?
   userAgent   String?
   createdAt   DateTime @default(now())
+  @@index([userId, createdAt])
+  @@index([entidad])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -186,6 +190,8 @@ model Propiedad {
 
   residentes   Residente[]
   otPropiedad  OrdenTrabajo[] @relation("OTPropiedad")
+  @@index([condominioId])
+  @@index([estado])
 }
 
 // ============================================
@@ -195,7 +201,7 @@ model Residente {
   id            String   @id @default(cuid())
   nombre        String
   apellido      String?
-  rut           String?
+  rut           String?  @unique
   unidad        String?
   etapa         String?  // BANDURRIAS, BECACINAS, etc.
   tipo          String   @default("Residente") // Residente, Propietario, Arrendatario, Visita
@@ -223,6 +229,11 @@ model Residente {
   cartasCobranza CartaCobranza[]
   accesosPortal AccesoPortal[]
   solicitudes   SolicitudMantenimiento[]
+  @@index([condominioId, estado])
+  @@index([rut])
+  @@index([unidad])
+  @@index([etapa])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -231,7 +242,7 @@ model Residente {
 model Personal {
   id            String   @id @default(cuid())
   nombre        String
-  rut           String?
+  rut           String?  @unique
   cargo         String?
   contrato      String   @default("Indefinido") // Indefinido, Plazo Fijo, Por Obra, Part-Time
   afp           String   @default("ProVida")
@@ -259,6 +270,9 @@ model Personal {
   activos       Activo[] @relation("ActivoAsignado")
   otPersonal    OrdenTrabajo[] @relation("OTPersonal")
   asistencias   Asistencia[]
+  @@index([condominioId, estado])
+  @@index([rut])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -285,6 +299,8 @@ model Activo {
   asignadoId    String?
   asignado      Personal? @relation("ActivoAsignado", fields: [asignadoId], references: [id])
   otActivo      OrdenTrabajo[] @relation("OTActivo")
+  @@index([condominioId, estado])
+  @@index([categoria])
 }
 
 // ============================================
@@ -315,6 +331,7 @@ model Proveedor {
   condominio     Condominio? @relation(fields: [condominioId], references: [id])
 
   gastos         Gasto[]
+  @@index([estado])
 }
 
 // ============================================
@@ -411,6 +428,13 @@ model OrdenTrabajo {
   personalOT      OTPersonal[]
   documentos      OTDocumento[]
   historialAprobaciones HistorialAprobacionOT[]
+  @@index([condominioId, estado])
+  @@index([estadoAprobacion])
+  @@index([asignadoId])
+  @@index([propiedadId])
+  @@index([centroCostoId])
+  @@index([createdAt])
+  @@index([fechaInicio])
 }
 
 model OTMaterial {
@@ -492,6 +516,7 @@ model Proyecto {
   tareas        ProyectoTarea[]
   personal      ProyectoPersonal[]
   documentos    ProyectoDocumento[]
+  @@index([condominioId, estado])
 }
 
 model ProyectoMaterial {
@@ -569,6 +594,7 @@ model Inspeccion {
   // Relación con Condominio
   condominioId  String?
   condominio    Condominio? @relation(fields: [condominioId], references: [id])
+  @@index([condominioId, estado])
 }
 
 // ============================================
@@ -598,6 +624,11 @@ model Gasto {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  @@index([condominioId, fecha])
+  @@index([proveedorId])
+  @@index([centroCostoId])
+  @@index([estado])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -722,6 +753,8 @@ model Reserva {
   
   residenteId   String?
   residenteRel  Residente? @relation(fields: [residenteId], references: [id])
+  @@index([condominioId, fecha])
+  @@index([estado])
 }
 
 // ============================================
@@ -787,6 +820,9 @@ model PagoGastoComun {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  @@index([residenteId, createdAt])
+  @@index([gastoComunId])
+  @@index([estado])
 }
 
 // ============================================
@@ -810,6 +846,8 @@ model Notificacion {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  @@index([destino, createdAt])
+  @@index([categoria])
 }
 
 // ============================================
@@ -828,6 +866,7 @@ model Asistencia {
   updatedAt     DateTime  @updatedAt
 
   @@unique([personalId, fecha]) // Una asistencia por personal por día
+  @@index([personalId, fecha])
 }
 
 // ============================================
@@ -866,6 +905,8 @@ model AsientoContable {
   updatedAt     DateTime @updatedAt
 
   detalles      DetalleAsiento[]
+  @@index([estado, createdAt])
+  @@index([tipo])
 }
 
 model DetalleAsiento {
@@ -880,6 +921,8 @@ model DetalleAsiento {
   asiento         AsientoContable @relation(fields: [asientoId], references: [id], onDelete: Cascade)
   
   createdAt       DateTime @default(now())
+  @@index([asientoId])
+  @@index([cuentaId])
 }
 
 // ============================================
@@ -897,6 +940,7 @@ model HistorialAprobacionOT {
   fechaAccion     String   // Fecha de la acción
   
   createdAt       DateTime @default(now())
+  @@index([otId, createdAt])
 }
 
 // ============================================
@@ -924,6 +968,7 @@ model Comite {
   updatedAt     DateTime @updatedAt
   
   @@unique([cargo, condominioId]) // Un cargo por condominio
+  @@index([condominioId, estado])
 }
 
 // ============================================
@@ -950,6 +995,8 @@ model SesionComite {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  @@index([estado])
+  @@index([fecha])
 }
 
 // ============================================
@@ -972,6 +1019,10 @@ model AuditoriaSistema {
   mensajeError    String?
   
   createdAt       DateTime @default(now())
+  @@index([tipoAccion, createdAt])
+  @@index([modulo])
+  @@index([resultado])
+  @@index([createdAt])
 }
 
 // ============================================
@@ -1003,6 +1054,8 @@ model Deuda {
   
   @@index([residenteId, estado])
   @@index([periodo])
+  @@index([condominioId, periodo])
+  @@index([estado])
 }
 
 // ============================================
@@ -1036,6 +1089,9 @@ model EstadoCuenta {
   updatedAt       DateTime @updatedAt
   
   @@unique([residenteId, periodo])
+  @@index([residenteId])
+  @@index([condominioId, periodo])
+  @@index([estado])
 }
 
 model DetalleEstadoCuenta {
@@ -1080,6 +1136,8 @@ model CartaCobranza {
   updatedAt       DateTime @updatedAt
   
   @@index([residenteId, estado])
+  @@index([residenteId, createdAt])
+  @@index([estado])
 }
 
 // ============================================
@@ -1130,6 +1188,7 @@ model MovimientoInventario {
   
   @@index([materialId])
   @@index([tipo, createdAt])
+  @@index([materialId, createdAt])
 }
 
 // ============================================
@@ -1442,6 +1501,7 @@ model DocumentoCumplimiento {
   @@index([condominioId, estado])
   @@index([categoriaId])
   @@index([fechaVencimiento])
+  @@index([estado])
 }
 
 // Historial de cambios en documentos de cumplimiento

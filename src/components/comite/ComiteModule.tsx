@@ -23,7 +23,6 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   AlertDialog,
   AlertDialogAction,

@@ -109,28 +109,32 @@ export async function POST(request: NextRequest) {
     const nuevoEstado = accion === 'aprobar' ? 'Aprobada' : 'Rechazada'
     const fechaAccion = new Date().toISOString()
     
-    // Actualizar OT
-    const ordenActualizada = await db.ordenTrabajo.update({
-      where: { id: otId },
-      data: {
-        estadoAprobacion: nuevoEstado,
-        fechaAprobacion: fechaAccion,
-        aprobadoPor: aprobadoPor || null,
-        observacionesAprob: observaciones || null,
-      }
-    })
-    
-    // Crear registro en historial
-    await db.historialAprobacionOT.create({
-      data: {
-        otId: otId,
-        estadoAnterior: otActual.estadoAprobacion || 'Pendiente',
-        estadoNuevo: nuevoEstado,
-        observaciones: observaciones || null,
-        aprobadoPor: aprobadoPor || null,
-        nombreAprobador: nombreAprobador || null,
-        fechaAccion: fechaAccion,
-      }
+    // Actualizar OT y crear registro en historial en una transacción
+    const ordenActualizada = await db.$transaction(async (tx) => {
+      const updated = await tx.ordenTrabajo.update({
+        where: { id: otId },
+        data: {
+          estadoAprobacion: nuevoEstado,
+          fechaAprobacion: fechaAccion,
+          aprobadoPor: aprobadoPor || null,
+          observacionesAprob: observaciones || null,
+        }
+      })
+
+      // Crear registro en historial
+      await tx.historialAprobacionOT.create({
+        data: {
+          otId: otId,
+          estadoAnterior: otActual.estadoAprobacion || 'Pendiente',
+          estadoNuevo: nuevoEstado,
+          observaciones: observaciones || null,
+          aprobadoPor: aprobadoPor || null,
+          nombreAprobador: nombreAprobador || null,
+          fechaAccion: fechaAccion,
+        }
+      })
+
+      return updated
     })
     
     return NextResponse.json({

@@ -76,23 +76,19 @@ export async function POST(request: NextRequest) {
         totalCobrar: gastoData.totalCobrar || 0,
         montoPorUnidad: gastoData.montoPorUnidad || 0,
         notas: gastoData.notas,
-        estado: 'Pendiente'
-      }
+        estado: 'Pendiente',
+        detalles: {
+          create: (detalles || []).map((d: { concepto: string; categoria: string; monto: number; centroCosto?: string; notas?: string }) => ({
+            concepto: d.concepto,
+            categoria: d.categoria,
+            monto: d.monto,
+            centroCosto: d.centroCosto,
+            notas: d.notas
+          }))
+        }
+      },
+      include: { detalles: true }
     })
-
-    // Crear detalles si existen
-    if (detalles && detalles.length > 0) {
-      await db.detalleGastoComun.createMany({
-        data: detalles.map((d: { concepto: string; categoria: string; monto: number; centroCosto?: string; notas?: string }) => ({
-          concepto: d.concepto,
-          categoria: d.categoria,
-          monto: d.monto,
-          centroCosto: d.centroCosto,
-          notas: d.notas,
-          gastoComunId: gastoComun.id
-        }))
-      })
-    }
 
     return NextResponse.json(gastoComun)
   } catch (error) {
