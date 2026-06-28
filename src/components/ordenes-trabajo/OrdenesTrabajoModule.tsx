@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
@@ -703,7 +704,7 @@ export function OrdenesTrabajoModule() {
       <div className="grid grid-cols-4 gap-3">
         {Object.entries(stats).map(([estado, count]) => (
           <Card key={estado} className="p-3">
-            <div className="text-[10px] text-slate-500 font-semibold uppercase">{estado}</div>
+            <div className="text-xs text-slate-500 font-semibold uppercase">{estado}</div>
             <div className="text-xl font-bold text-[#0f2040]">{count}</div>
           </Card>
         ))}
@@ -712,7 +713,7 @@ export function OrdenesTrabajoModule() {
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <Input
             placeholder="Buscar OT..."
             value={search}
@@ -752,23 +753,23 @@ export function OrdenesTrabajoModule() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">N° OT</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Título</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Tipo</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Prioridad</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Centro Costo</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Tiempo</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Costo Real</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Progreso</th>
-                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">N° OT</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Título</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tipo</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Prioridad</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Centro Costo</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tiempo</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Costo Real</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Progreso</th>
+                  <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Cargando...</td></tr>
                 ) : ordenes.length === 0 ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Sin órdenes de trabajo</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
                 ) : (
                   ordenes.map((ot) => (
                     <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
@@ -799,7 +800,7 @@ export function OrdenesTrabajoModule() {
                       <td className="p-3 min-w-[100px]">
                         <div className="flex items-center gap-2">
                           <Progress value={ot.progreso} className="h-1.5 flex-1" />
-                          <span className="text-[10px] text-slate-500">{ot.progreso}%</span>
+                          <span className="text-xs text-slate-500">{ot.progreso}%</span>
                         </div>
                       </td>
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -809,6 +810,7 @@ export function OrdenesTrabajoModule() {
                             variant="ghost" 
                             className="h-7 w-7 text-slate-600 hover:text-slate-700" 
                             title="Descargar PDF"
+                            aria-label="Descargar PDF"
                             onClick={() => {
                               window.open(`/api/pdf/orden-trabajo/${ot.id}`, '_blank')
                             }}
@@ -821,16 +823,17 @@ export function OrdenesTrabajoModule() {
                               variant="ghost" 
                               className="h-7 w-7 text-green-600 hover:text-green-700" 
                               title="Actualizar Progreso"
+                              aria-label="Actualizar progreso"
                               onClick={() => openProgressDialog(ot)}
                             >
                               <CheckSquare className="w-3.5 h-3.5" />
                             </Button>
                           ) : (
                             <>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(ot)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => handleDelete(ot.id)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </>
@@ -851,6 +854,7 @@ export function OrdenesTrabajoModule() {
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">{editingOT ? 'Editar' : 'Nueva'} Orden de Trabajo</DialogTitle>
+            <DialogDescription className="text-muted-foreground">Completa los detalles de la orden de trabajo</DialogDescription>
           </DialogHeader>
           
           <Tabs defaultValue="general" className="w-full">
@@ -869,7 +873,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Información Básica */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">1</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
                     Información Básica
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -893,7 +897,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Clasificación */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">2</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">2</span>
                     Clasificación
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -942,7 +946,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Centro de Costo */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">3</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
                     <Building2 className="w-4 h-4" /> Centro de Costo e Imputación
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -960,7 +964,7 @@ export function OrdenesTrabajoModule() {
                         </SelectContent>
                       </Select>
                       {formData.centroCostoId && formData.centroCostoId !== 'none' && (
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-xs text-slate-500">
                           Presupuesto: {formatCLP(centrosCosto.find(cc => cc.id === formData.centroCostoId)?.presupuestoMens || 0)}/mes
                         </p>
                       )}
@@ -997,7 +1001,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Fechas */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">4</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
                     <Calendar className="w-4 h-4" /> Fechas
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1041,7 +1045,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Asignación */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">5</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">5</span>
                     <Users className="w-4 h-4" /> Asignación
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1079,7 +1083,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Control de Tiempo */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px]">6</span>
+                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">6</span>
                     <Clock className="w-4 h-4" /> Control de Tiempo
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1092,7 +1096,7 @@ export function OrdenesTrabajoModule() {
                         className="h-9"
                       />
                       {tiempoEstimadoTareas > 0 && (
-                        <p className="text-[10px] text-blue-600">De tareas: {formatMinutes(tiempoEstimadoTareas)}</p>
+                        <p className="text-xs text-blue-600">De tareas: {formatMinutes(tiempoEstimadoTareas)}</p>
                       )}
                     </div>
                     <div className="space-y-1.5">
@@ -1151,7 +1155,7 @@ export function OrdenesTrabajoModule() {
                 </div>
                 
                 {materiales.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin materiales - seleccione del catálogo o agregue manualmente</div>
+                  <div className="text-center py-8 text-slate-500 border rounded-lg bg-slate-50">Sin materiales - seleccione del catálogo o agregue manualmente</div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
@@ -1189,7 +1193,7 @@ export function OrdenesTrabajoModule() {
                             </td>
                             <td className="p-2 text-right font-mono font-semibold">{formatCLP(m.total)}</td>
                             <td className="p-2 text-center">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeMaterial(i)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar material" onClick={() => removeMaterial(i)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </td>
@@ -1232,7 +1236,7 @@ export function OrdenesTrabajoModule() {
                 </div>
                 
                 {herramientas.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin herramientas - seleccione del catálogo o agregue manualmente</div>
+                  <div className="text-center py-8 text-slate-500 border rounded-lg bg-slate-50">Sin herramientas - seleccione del catálogo o agregue manualmente</div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
@@ -1253,7 +1257,7 @@ export function OrdenesTrabajoModule() {
                               <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 text-center" />
                             </td>
                             <td className="p-2 text-center">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeHerramienta(i)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar herramienta" onClick={() => removeHerramienta(i)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </td>
@@ -1292,7 +1296,7 @@ export function OrdenesTrabajoModule() {
                 </div>
                 
                 {tareas.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin tareas - seleccione del catálogo o agregue manualmente</div>
+                  <div className="text-center py-8 text-slate-500 border rounded-lg bg-slate-50">Sin tareas - seleccione del catálogo o agregue manualmente</div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
@@ -1331,7 +1335,7 @@ export function OrdenesTrabajoModule() {
                               />
                             </td>
                             <td className="p-2 text-center">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removeTarea(i)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar tarea" onClick={() => removeTarea(i)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </td>
@@ -1377,7 +1381,7 @@ export function OrdenesTrabajoModule() {
                 </div>
                 
                 {personalOT.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400 border rounded-lg bg-slate-50">Sin personal asignado - seleccione un empleado o agregue personal externo</div>
+                  <div className="text-center py-8 text-slate-500 border rounded-lg bg-slate-50">Sin personal asignado - seleccione un empleado o agregue personal externo</div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
@@ -1432,7 +1436,7 @@ export function OrdenesTrabajoModule() {
                             </td>
                             <td className="p-2 text-right font-mono font-semibold">{formatCLP(p.total)}</td>
                             <td className="p-2 text-center">
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" onClick={() => removePersonalOT(i)}>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600" aria-label="Eliminar personal" onClick={() => removePersonalOT(i)}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </td>
@@ -1485,19 +1489,20 @@ export function OrdenesTrabajoModule() {
                     {fotosAntes.map((foto, i) => (
                       <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
                         <img src={foto} alt={`Antes ${i+1}`} className="w-full h-full object-cover" />
-                        <div className="absolute top-1 left-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                        <div className="absolute top-1 left-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
                           ANTES
                         </div>
                         <button
+                          aria-label="Eliminar foto"
                           onClick={() => setFotosAntes(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                         >
                           <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
                     {fotosAntes.length === 0 && (
-                      <div className="col-span-full py-8 text-center text-slate-400 border-2 border-dashed rounded-lg">
+                      <div className="col-span-full py-8 text-center text-slate-500 border-2 border-dashed rounded-lg">
                         <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">Sin fotos antes del trabajo</p>
                       </div>
@@ -1542,19 +1547,20 @@ export function OrdenesTrabajoModule() {
                     {fotosDespues.map((foto, i) => (
                       <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-green-200">
                         <img src={foto} alt={`Después ${i+1}`} className="w-full h-full object-cover" />
-                        <div className="absolute top-1 left-1 bg-green-500 text-white text-[10px] px-1.5 py-0.5 rounded font-semibold">
+                        <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
                           DESPUÉS
                         </div>
                         <button
+                          aria-label="Eliminar foto"
                           onClick={() => setFotosDespues(prev => prev.filter((_, idx) => idx !== i))}
-                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                         >
                           <X className="w-3 h-3" />
                         </button>
                       </div>
                     ))}
                     {fotosDespues.length === 0 && (
-                      <div className="col-span-full py-8 text-center text-slate-400 border-2 border-dashed rounded-lg">
+                      <div className="col-span-full py-8 text-center text-slate-500 border-2 border-dashed rounded-lg">
                         <Camera className="w-8 h-8 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">Sin fotos después del trabajo</p>
                       </div>
@@ -1595,6 +1601,7 @@ export function OrdenesTrabajoModule() {
                     </Badge>
                   )}
                 </DialogTitle>
+                <DialogDescription className="text-muted-foreground">Detalle de la orden de trabajo seleccionada</DialogDescription>
               </DialogHeader>
               
               <div className="space-y-4">
@@ -1845,6 +1852,7 @@ export function OrdenesTrabajoModule() {
               <Lock className="w-4 h-4" />
               Actualizar Progreso
             </DialogTitle>
+            <DialogDescription className="text-muted-foreground">Registra el avance y estado de las tareas</DialogDescription>
           </DialogHeader>
           {progressOT && (
             <div className="space-y-4 py-4">

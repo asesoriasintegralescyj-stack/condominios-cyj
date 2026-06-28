@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -390,7 +391,7 @@ export function PersonalModule() {
                         <div className="flex items-center gap-2">
                           <Avatar className="h-7 w-7">
                             {per.foto ? (
-                              <img src={per.foto} alt={per.nombre} className="h-7 w-7 rounded-full object-cover" />
+                              <Image unoptimized src={per.foto} alt={`Foto de ${per.nombre}`} width={28} height={28} className="h-7 w-7 rounded-full object-cover" />
                             ) : (
                             <AvatarFallback className="bg-[#0f2040] text-white text-xs font-bold">
                               {per.nombre.charAt(0)}
@@ -647,7 +648,7 @@ export function PersonalModule() {
                 <div className="relative">
                   <Avatar className="h-20 w-20">
                     {formData.foto ? (
-                      <img src={formData.foto} alt="Foto" className="h-20 w-20 rounded-full object-cover" />
+                      <Image unoptimized src={formData.foto} alt="Foto del empleado" width={80} height={80} className="h-20 w-20 rounded-full object-cover" />
                     ) : (
                       <AvatarFallback className="bg-[#0f2040] text-white text-2xl font-bold">
                         {formData.nombre ? formData.nombre.charAt(0).toUpperCase() : '?'}

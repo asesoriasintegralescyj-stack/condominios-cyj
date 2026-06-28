@@ -495,6 +495,7 @@ export function InventarioModule() {
                                   size="icon"
                                   variant="ghost"
                                   className="h-6 w-6"
+                                  aria-label="Disminuir stock"
                                   onClick={() => adjustStock(mat, -1)}
                                 >
                                   <Minus className="w-3 h-3" />
@@ -506,6 +507,7 @@ export function InventarioModule() {
                                   size="icon"
                                   variant="ghost"
                                   className="h-6 w-6"
+                                  aria-label="Aumentar stock"
                                   onClick={() => adjustStock(mat, 1)}
                                 >
                                   <Plus className="w-3 h-3" />
@@ -535,6 +537,7 @@ export function InventarioModule() {
                                   className="h-7 w-7" 
                                   onClick={() => openAdjustDialog(mat)}
                                   title="Ajustar Stock"
+                                  aria-label="Ver movimientos"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5" />
                                 </Button>
@@ -544,6 +547,7 @@ export function InventarioModule() {
                                   className="h-7 w-7" 
                                   onClick={() => openDialog(mat)}
                                   title="Editar"
+                                  aria-label="Editar"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                 </Button>

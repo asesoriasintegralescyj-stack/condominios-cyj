@@ -550,10 +550,10 @@ export function ResidentesModule() {
                         <td className="p-3 text-xs">{res.email || '–'}</td>
                         <td className="p-3">
                           <div className="flex justify-center gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(res)}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar residente" onClick={() => openDialog(res)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => handleDelete(res.id)}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar residente" onClick={() => handleDelete(res.id)}>
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>

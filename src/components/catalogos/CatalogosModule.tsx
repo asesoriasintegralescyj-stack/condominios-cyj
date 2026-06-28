@@ -304,8 +304,8 @@ export function CatalogosModule() {
                       {canEdit && (
                         <td className="p-3">
                           <div className="flex justify-center gap-1">
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openMatDialog(m)}><Pencil className="w-3 h-3" /></Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteMat(m.id)}><Trash2 className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Editar material" onClick={() => openMatDialog(m)}><Pencil className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" aria-label="Eliminar material" onClick={() => deleteMat(m.id)}><Trash2 className="w-3 h-3" /></Button>
                           </div>
                         </td>
                       )}
@@ -359,8 +359,8 @@ export function CatalogosModule() {
                       {canEdit && (
                         <td className="p-3">
                           <div className="flex justify-center gap-1">
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openTarDialog(t)}><Pencil className="w-3 h-3" /></Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" onClick={() => deleteTar(t.id)}><Trash2 className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" aria-label="Editar tarea" onClick={() => openTarDialog(t)}><Pencil className="w-3 h-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-red-600" aria-label="Eliminar tarea" onClick={() => deleteTar(t.id)}><Trash2 className="w-3 h-3" /></Button>
                           </div>
                         </td>
                       )}
