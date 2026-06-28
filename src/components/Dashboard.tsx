@@ -92,29 +92,40 @@ interface CardConfig {
   numero: number | string
   icon: React.ReactNode
   color: string
+  bgColor?: string
   subtitulo?: string
   onClick?: () => void
 }
 
-function MetricCard({ titulo, numero, icon, color, subtitulo, onClick }: CardConfig) {
+function MetricCard({ titulo, numero, icon, color, bgColor, subtitulo, onClick }: CardConfig) {
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-lg border p-5 transition-all hover:shadow-md hover:border-current/30 cursor-pointer group"
-      style={{ borderColor: colors.grisClaro }}
+      className="rounded-lg p-5 transition-all hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group relative overflow-hidden"
+      style={{
+        backgroundColor: bgColor || '#ffffff',
+        border: `1px solid ${colors.grisClaro}`,
+        borderTop: `4px solid ${color}`,
+      }}
     >
-      <div className="flex items-center gap-2 mb-2">
+      {/* Decoración: círculo de color semi-transparente en esquina */}
+      <div
+        className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-10 transition-opacity group-hover:opacity-20"
+        style={{ backgroundColor: color }}
+      />
+
+      <div className="flex items-center gap-2 mb-2 relative">
         <span style={{ color }} className="shrink-0">{icon}</span>
         <span className="text-sm font-normal" style={{ color: colors.grisMedio }}>{titulo}</span>
       </div>
-      <div className="text-3xl font-bold" style={{ color }}>
+      <div className="text-3xl font-bold relative" style={{ color }}>
         {numero}
       </div>
       {subtitulo && (
-        <div className="text-xs mt-1" style={{ color: colors.grisMedio }}>{subtitulo}</div>
+        <div className="text-xs mt-1 relative" style={{ color: colors.grisMedio }}>{subtitulo}</div>
       )}
       {onClick && (
-        <div className="flex items-center gap-1 mt-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity" style={{ color }}>
+        <div className="flex items-center gap-1 mt-2 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity relative" style={{ color }}>
           Ver detalles <ArrowRight className="w-3 h-3" />
         </div>
       )}
@@ -192,6 +203,7 @@ export function Dashboard() {
             numero={totalOT}
             icon={<Wrench className="w-4 h-4" />}
             color={colors.grisOscuro}
+            bgColor="#f8f9fa"
             subtitulo="Todas las órdenes"
             onClick={() => setCurrentModule('ot')}
           />
@@ -200,6 +212,7 @@ export function Dashboard() {
             numero={stats.otPendientes}
             icon={<AlertTriangle className="w-4 h-4" />}
             color={colors.naranja}
+            bgColor="#fff5ec"
             subtitulo={`${stats.otPendientesAprobacion} por aprobar`}
             onClick={() => setCurrentModule('ot')}
           />
@@ -208,6 +221,7 @@ export function Dashboard() {
             numero={stats.otEnProgreso}
             icon={<Clock className="w-4 h-4" />}
             color={colors.azul}
+            bgColor="#eef5ff"
             subtitulo="En ejecución"
             onClick={() => setCurrentModule('ot')}
           />
@@ -216,6 +230,7 @@ export function Dashboard() {
             numero={stats.otCompletadas}
             icon={<CheckCircle className="w-4 h-4" />}
             color={colors.verde}
+            bgColor="#eaf7f0"
             subtitulo="Terminadas"
             onClick={() => setCurrentModule('ot')}
           />
@@ -231,6 +246,7 @@ export function Dashboard() {
             numero={stats.scTotal}
             icon={<ShoppingCart className="w-4 h-4" />}
             color={colors.grisOscuro}
+            bgColor="#f8f9fa"
             subtitulo={`Monto: ${formatCLP(stats.scMontoTotal)}`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
@@ -239,6 +255,7 @@ export function Dashboard() {
             numero={stats.scSolicitadas}
             icon={<Clock className="w-4 h-4" />}
             color={colors.naranja}
+            bgColor="#fff5ec"
             subtitulo={`${Math.round(stats.scSolicitadas / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
@@ -247,6 +264,7 @@ export function Dashboard() {
             numero={stats.scEnProceso}
             icon={<AlertTriangle className="w-4 h-4" />}
             color={colors.azul}
+            bgColor="#eef5ff"
             subtitulo={`${Math.round(stats.scEnProceso / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
@@ -255,6 +273,7 @@ export function Dashboard() {
             numero={stats.scCompradas}
             icon={<CheckCircle className="w-4 h-4" />}
             color={colors.verde}
+            bgColor="#eaf7f0"
             subtitulo={`${Math.round(stats.scCompradas / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
@@ -270,6 +289,7 @@ export function Dashboard() {
             numero={stats.totalPersonal}
             icon={<Users className="w-4 h-4" />}
             color={colors.azul}
+            bgColor="#eef5ff"
             subtitulo="Empleados"
             onClick={() => setCurrentModule('personal')}
           />
@@ -278,6 +298,7 @@ export function Dashboard() {
             numero={stats.totalActivos}
             icon={<Package className="w-4 h-4" />}
             color={colors.grisOscuro}
+            bgColor="#f8f9fa"
             subtitulo={`Valor: ${formatCLP(stats.valorActivos)}`}
             onClick={() => setCurrentModule('activos')}
           />
@@ -286,6 +307,7 @@ export function Dashboard() {
             numero={`${cumplimientoStats.porcentajeGeneral}%`}
             icon={<Shield className="w-4 h-4" />}
             color={cumplimientoStats.porcentajeGeneral >= 80 ? colors.verde : colors.naranja}
+            bgColor={cumplimientoStats.porcentajeGeneral >= 80 ? "#eaf7f0" : "#fff5ec"}
             subtitulo={`${cumplimientoStats.completados} de ${cumplimientoStats.total} documentos`}
             onClick={() => setCurrentModule('cumplimiento')}
           />
@@ -294,6 +316,7 @@ export function Dashboard() {
             numero={formatCLP(stats.saldoCaja)}
             icon={<DollarSign className="w-4 h-4" />}
             color={colors.verde}
+            bgColor="#eaf7f0"
             subtitulo="Saldo disponible"
             onClick={() => setCurrentModule('centrocostos')}
           />
