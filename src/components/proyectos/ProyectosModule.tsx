@@ -27,12 +27,10 @@ import { Separator } from '@/components/ui/separator'
 import {
   Plus, Pencil, Trash2, Search, Download, Package, Wrench,
   CheckSquare, Users, FileText, Upload, Eye, X, Paperclip,
-  FileSpreadsheet, FileDown, Settings, Camera, Image as ImageIcon,
+  FileSpreadsheet, FileDown, Camera, Image as ImageIcon,
   ShoppingCart,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 
 // ============================================
 // Interfaces
@@ -84,6 +82,13 @@ interface Cotizacion {
   tipo: string
 }
 
+interface PersonalItem {
+  id: string
+  nombre: string
+  cargo?: string | null
+  estado?: string | null
+}
+
 interface Proyecto {
   id: string
   nombre: string
@@ -124,14 +129,56 @@ interface Proyecto {
   cotizacionesCount?: number
 }
 
-interface ListaDesplegable {
-  id: string
-  nombre: string
-  tipo: string
-  valor: string
-  activo: boolean
-  condominioId: string | null
-}
+// ============================================
+// Listas desplegables (hardcodeadas, editables en código)
+// ============================================
+const SECTORES = [
+  'Activos',
+  'Club House',
+  'Av. Principal',
+  'Áreas Verdes',
+  'Portería',
+  'Canchas',
+  'Piscina',
+  'Parque Inundable',
+  'Quincho',
+  'Casino',
+  'Gimnasio',
+  'Otros',
+]
+
+const TIPOS_REPARACION = [
+  'Seguridad',
+  'Impermeabilización',
+  'Pavimentación',
+  'Electricidad',
+  'Plomería',
+  'Carpintería',
+  'Pintura',
+  'Jardinería',
+  'Techado',
+  'Revestimiento',
+  'Equipamiento',
+  'Otros',
+]
+
+const PRIORIDADES = ['Alta', 'Media', 'Baja']
+
+const ESTADOS_PROYECTO = [
+  'Planificado',
+  'En Ejecución',
+  'Completado',
+  'Cancelado',
+  'Pausado',
+]
+
+const ESTADOS_APROBACION = [
+  'Pendiente',
+  'Aprobado',
+  'En espera',
+  'Rechazado',
+  'Aprobado por Supervisor',
+]
 
 // ============================================
 // Helpers
@@ -152,6 +199,11 @@ const formatDate = (d: string | null | undefined) => {
 function extraerNumProyecto(nombre: string): string {
   const m = nombre.match(/#(\d+)/)
   return m ? m[1] : '–'
+}
+
+function extraerCodigoProyecto(nombre: string): string {
+  const m = nombre.match(/#\d+/)
+  return m ? m[0] : ''
 }
 
 function extraerDescripcion(nombre: string): string {
@@ -221,38 +273,18 @@ const documentoTipoColors: Record<string, string> = {
   'otro': 'bg-slate-100 text-slate-700',
 }
 
-const TIPOS_LISTA = [
-  { value: 'sector', label: 'Sector' },
-  { value: 'tipoReparacion', label: 'Tipo de Reparación' },
-  { value: 'prioridad', label: 'Prioridad' },
-  { value: 'estadoProyecto', label: 'Estado de Proyecto' },
-  { value: 'estadoAprobacion', label: 'Estado de Aprobación' },
-] as const
-
 // ============================================
 // Component
 // ============================================
 export function ProyectosModule() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
+  const [personalList, setPersonalList] = useState<PersonalItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
   const [editingProy, setEditingProy] = useState<Proyecto | null>(null)
   const [selectedProy, setSelectedProy] = useState<Proyecto | null>(null)
-
-  // Listas desplegables
-  const [listas, setListas] = useState<Record<string, ListaDesplegable[]>>({
-    sector: [],
-    tipoReparacion: [],
-    prioridad: [],
-    estadoProyecto: [],
-    estadoAprobacion: [],
-  })
-  const [configListasOpen, setConfigListasOpen] = useState(false)
-  const [configTipo, setConfigTipo] = useState<string>('sector')
-  const [nuevoValorLista, setNuevoValorLista] = useState('')
-  const [configLoading, setConfigLoading] = useState(false)
 
   // Form state (incluye nuevos campos)
   const [formData, setFormData] = useState({
@@ -311,34 +343,33 @@ export function ProyectosModule() {
     setLoading(false)
   }, [])
 
-  const fetchListas = useCallback(async () => {
+  const fetchPersonal = useCallback(async () => {
     try {
-      const res = await fetch('/api/listas-desplegables')
+      const res = await fetch('/api/personal')
       const data = await res.json()
-      const agrupado: Record<string, ListaDesplegable[]> = {
-        sector: [],
-        tipoReparacion: [],
-        prioridad: [],
-        estadoProyecto: [],
-        estadoAprobacion: [],
-      }
       if (Array.isArray(data)) {
-        for (const item of data as ListaDesplegable[]) {
-          if (agrupado[item.tipo]) agrupado[item.tipo].push(item)
-        }
+        setPersonalList(
+          data
+            .filter((p: PersonalItem) => p.nombre)
+            .map((p: PersonalItem) => ({
+              id: p.id,
+              nombre: p.nombre,
+              cargo: p.cargo,
+              estado: p.estado,
+            }))
+        )
       }
-      setListas(agrupado)
     } catch (error) {
-      console.error('Error fetching listas:', error)
+      console.error('Error fetching personal:', error)
     }
   }, [])
 
   useEffect(() => {
     void (async () => {
       await fetchProyectos()
-      await fetchListas()
+      await fetchPersonal()
     })()
-  }, [fetchProyectos, fetchListas])
+  }, [fetchProyectos, fetchPersonal])
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchProyectos(search), 300)
@@ -609,7 +640,7 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Fotos handlers (nuevo)
+  // Fotos handlers
   // ============================================
   const handleFotosChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -657,7 +688,7 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Cotizaciones handlers (nuevo)
+  // Cotizaciones handlers
   // ============================================
   const handleCotizacionesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
@@ -719,14 +750,17 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Exportar PDF (nuevo)
+  // Exportar PDF (dynamic import)
   // ============================================
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     if (proyectos.length === 0) {
       toast.error('No hay proyectos para exportar')
       return
     }
     try {
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+
       const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
       doc.setFontSize(14)
       doc.text('Planificación de Mantención — Tabla de Tareas', 40, 30)
@@ -774,7 +808,7 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Exportar Excel (nuevo, dynamic import)
+  // Exportar Excel (dynamic import)
   // ============================================
   const exportToExcel = async () => {
     if (proyectos.length === 0) {
@@ -818,7 +852,7 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Enviar Solicitud de Compra (nuevo)
+  // Enviar Solicitud de Compra
   // ============================================
   const enviarSolicitudCompra = async () => {
     if (!selectedProy) return
@@ -828,6 +862,9 @@ export function ProyectosModule() {
     }
     setEnviandoSolicitud(true)
     try {
+      const codigoProy = extraerCodigoProyecto(selectedProy.nombre) // "#NN"
+      const descripcionProy = extraerDescripcion(selectedProy.nombre)
+
       const materialesSolicitud = selectedProy.materiales
         .filter((m) => (m.descripcion || '').trim() !== '')
         .map((m) => ({
@@ -847,14 +884,20 @@ export function ProyectosModule() {
       const total = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
 
       const payload = {
-        titulo: `Solicitud de compra para Proyecto - ${extraerDescripcion(selectedProy.nombre)}`.slice(0, 200),
-        descripcion: `Solicitud generada automáticamente desde el Proyecto ${selectedProy.nombre}.`,
-        prioridad: selectedProy.prioridad === 'Urgente' ? 'Alta' : (selectedProy.prioridad as 'Media' | 'Alta' | 'Baja' | 'Urgente') || 'Media',
+        titulo: `Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
+        descripcion:
+          selectedProy.descripcion ||
+          `Solicitud generada desde el Proyecto ${selectedProy.nombre}.`,
+        prioridad:
+          (selectedProy.prioridad === 'Urgente'
+            ? 'Alta'
+            : (selectedProy.prioridad as 'Media' | 'Alta' | 'Baja' | 'Urgente')) ||
+          'Media',
         materiales: materialesSolicitud,
         totalEstimado: total,
         origenTipo: 'Proyecto',
         origenId: selectedProy.id,
-        origenCodigo: selectedProy.nombre,
+        origenCodigo: codigoProy,
       }
 
       const res = await fetch('/api/solicitudes-compra', {
@@ -869,7 +912,7 @@ export function ProyectosModule() {
       const emailMsg = data?.emailSkipped
         ? ' (SMTP no configurado, email no enviado)'
         : data?.emailEnviado
-          ? ' y email enviado'
+          ? ' y email enviado a administracionlagunanorte@gmail.com'
           : ''
       toast.success(`Solicitud ${data.codigo} creada${emailMsg}`)
     } catch (error) {
@@ -877,64 +920,6 @@ export function ProyectosModule() {
       toast.error(error instanceof Error ? error.message : 'Error al crear la solicitud de compra')
     } finally {
       setEnviandoSolicitud(false)
-    }
-  }
-
-  // ============================================
-  // Configurar Listas Desplegables (nuevo)
-  // ============================================
-  const openConfigListas = () => {
-    setConfigTipo('sector')
-    setNuevoValorLista('')
-    setConfigListasOpen(true)
-  }
-
-  const addLista = async () => {
-    const valor = nuevoValorLista.trim()
-    if (!valor) {
-      toast.error('Ingrese un valor')
-      return
-    }
-    setConfigLoading(true)
-    try {
-      const res = await fetch('/api/listas-desplegables', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: configTipo,
-          valor,
-          nombre: valor,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error al crear')
-      toast.success(`Valor "${valor}" agregado a la lista`)
-      setNuevoValorLista('')
-      await fetchListas()
-    } catch (error) {
-      console.error('Error agregando valor:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al agregar valor')
-    } finally {
-      setConfigLoading(false)
-    }
-  }
-
-  const removeLista = async (id: string, valor: string) => {
-    if (!confirm(`¿Desactivar el valor "${valor}"?`)) return
-    setConfigLoading(true)
-    try {
-      const res = await fetch(`/api/listas-desplegables/${id}`, { method: 'DELETE' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Error al desactivar')
-      }
-      toast.success(`Valor "${valor}" desactivado`)
-      await fetchListas()
-    } catch (error) {
-      console.error('Error desactivando valor:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al desactivar')
-    } finally {
-      setConfigLoading(false)
     }
   }
 
@@ -959,13 +944,10 @@ export function ProyectosModule() {
           />
         </div>
         <Button variant="outline" onClick={exportToPDF} title="Exportar a PDF">
-          <FileDown className="w-4 h-4 mr-1" /> PDF
+          <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
         </Button>
         <Button variant="outline" onClick={exportToExcel} title="Exportar a Excel">
-          <FileSpreadsheet className="w-4 h-4 mr-1" /> Excel
-        </Button>
-        <Button variant="outline" onClick={openConfigListas} title="Configurar Listas Desplegables">
-          <Settings className="w-4 h-4 mr-1" /> Configurar Listas
+          <FileSpreadsheet className="w-4 h-4 mr-1" /> Exportar Excel
         </Button>
         <Button onClick={() => openDialog()}>
           <Plus className="w-4 h-4 mr-1" /> Nuevo Proyecto
@@ -1212,16 +1194,18 @@ export function ProyectosModule() {
           )}
           <DialogFooter className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
-            <Button
-              variant="secondary"
-              onClick={enviarSolicitudCompra}
-              disabled={enviandoSolicitud}
-              title="Crea una Solicitud de Compra con los materiales del proyecto"
-            >
-              <ShoppingCart className="w-4 h-4 mr-1" />
-              {enviandoSolicitud ? 'Enviando...' : 'Enviar Solicitud de Compra'}
-            </Button>
-            <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedProy!); }}>
+            {selectedProy && (selectedProy.materiales?.length || 0) > 0 && (
+              <Button
+                variant="secondary"
+                onClick={enviarSolicitudCompra}
+                disabled={enviandoSolicitud}
+                title="Crea una Solicitud de Compra con los materiales del proyecto"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                {enviandoSolicitud ? 'Enviando...' : 'Enviar a Solicitud de Compra'}
+              </Button>
+            )}
+            <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedProy!) }}>
               <Pencil className="w-4 h-4 mr-1" /> Editar
             </Button>
           </DialogFooter>
@@ -1236,171 +1220,343 @@ export function ProyectosModule() {
           </DialogHeader>
 
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid grid-cols-8 w-full h-9">
+            <TabsList className="grid grid-cols-6 w-full h-9">
               <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
               <TabsTrigger value="materiales" className="text-xs">Materiales</TabsTrigger>
               <TabsTrigger value="herramientas" className="text-xs">Herramientas</TabsTrigger>
               <TabsTrigger value="tareas" className="text-xs">Tareas</TabsTrigger>
               <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
-              <TabsTrigger value="fotos" className="text-xs">Fotos</TabsTrigger>
-              <TabsTrigger value="cotizaciones" className="text-xs">Cotizaciones</TabsTrigger>
-              <TabsTrigger value="documentos" className="text-xs">Adjuntos</TabsTrigger>
+              <TabsTrigger value="documentos" className="text-xs">Documentos</TabsTrigger>
             </TabsList>
 
             <div className="py-4">
-              {/* General Tab */}
-              <TabsContent value="general" className="space-y-4 mt-0">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <Label>Nombre</Label>
-                    <Input value={formData.nombre} onChange={(e) => setFormData({ ...formData, nombre: e.target.value })} className="w-full" />
+              {/* General Tab — Secciones 1-4 */}
+              <TabsContent value="general" className="space-y-6 mt-0">
+                {/* Section 1: Información Básica */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 1 · Información Básica</span>
+                    <Separator className="flex-1" />
                   </div>
                   <div className="space-y-2 min-w-0">
-                    <Label>Categoría</Label>
-                    <Select value={formData.categoria} onValueChange={(v) => setFormData({ ...formData, categoria: v })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {['Áreas Verdes', 'Eléctrico', 'Sanitario', 'Infraestructura', 'Seguridad', 'Administración', 'Otro'].map((c) => (
-                          <SelectItem key={c} value={c}>{c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label>Descripción</Label>
+                    <Input
+                      value={formData.nombre}
+                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      className="w-full"
+                      placeholder="Ej: #12 - Reparación bomba piscina"
+                    />
+                    <p className="text-[10px] text-slate-500">
+                      Use el formato <code>#NN - Descripción</code> para generar el código de proyecto.
+                    </p>
                   </div>
-                </div>
 
-                {/* Nuevos campos: Sector / Tipo de Reparación / Prioridad / Estado */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <Label>Sector</Label>
-                    <Select value={formData.sector} onValueChange={(v) => setFormData({ ...formData, sector: v })}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {listas.sector.map((l) => (
-                          <SelectItem key={l.id} value={l.valor}>{l.valor}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Tipo de Reparación</Label>
-                    <Select value={formData.tipoReparacion} onValueChange={(v) => setFormData({ ...formData, tipoReparacion: v })}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {listas.tipoReparacion.map((l) => (
-                          <SelectItem key={l.id} value={l.valor}>{l.valor}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Prioridad</Label>
-                    <Select value={formData.prioridad} onValueChange={(v) => setFormData({ ...formData, prioridad: v })}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {listas.prioridad.map((l) => (
-                          <SelectItem key={l.id} value={l.valor}>{l.valor}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Estado</Label>
-                    <Select value={formData.estado} onValueChange={(v) => setFormData({ ...formData, estado: v })}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {listas.estadoProyecto.length > 0 ? (
-                          listas.estadoProyecto.map((l) => (
-                            <SelectItem key={l.id} value={l.valor}>{l.valor}</SelectItem>
-                          ))
-                        ) : (
-                          ['Planificado', 'En Ejecución', 'Completado', 'Cancelado', 'Pausado'].map((s) => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="space-y-2 min-w-0">
+                      <Label>Sector</Label>
+                      <Select value={formData.sector} onValueChange={(v) => setFormData({ ...formData, sector: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {SECTORES.map((s) => (
                             <SelectItem key={s} value={s}>{s}</SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Estado de Aprobación</Label>
-                    <Select value={formData.estadoAprobacion} onValueChange={(v) => setFormData({ ...formData, estadoAprobacion: v })}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                      <SelectContent>
-                        {listas.estadoAprobacion.map((l) => (
-                          <SelectItem key={l.id} value={l.valor}>{l.valor}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Responsable</Label>
-                    <Input value={formData.responsable} onChange={(e) => setFormData({ ...formData, responsable: e.target.value })} className="w-full" placeholder="Nombre del responsable" />
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Tiempo Estimado</Label>
-                    <Input value={formData.tiempoEstimado} onChange={(e) => setFormData({ ...formData, tiempoEstimado: e.target.value })} className="w-full" placeholder="Ej: 3 días" />
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Monto ($)</Label>
-                    <Input type="number" value={formData.monto} onChange={(e) => setFormData({ ...formData, monto: parseFloat(e.target.value) || 0 })} className="w-full text-right" />
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Ubicación</Label>
-                    <Input value={formData.ubicacion} onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })} className="w-full" />
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Tipo de Reparación</Label>
+                      <Select value={formData.tipoReparacion} onValueChange={(v) => setFormData({ ...formData, tipoReparacion: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {TIPOS_REPARACION.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Prioridad</Label>
+                      <Select value={formData.prioridad} onValueChange={(v) => setFormData({ ...formData, prioridad: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {PRIORIDADES.map((p) => (
+                            <SelectItem key={p} value={p}>{p}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Estado</Label>
+                      <Select value={formData.estado} onValueChange={(v) => setFormData({ ...formData, estado: v })}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {ESTADOS_PROYECTO.map((s) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Estado de Aprobación</Label>
+                      <Select value={formData.estadoAprobacion} onValueChange={(v) => setFormData({ ...formData, estadoAprobacion: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {ESTADOS_APROBACION.map((a) => (
+                            <SelectItem key={a} value={a}>{a}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Responsable</Label>
+                      <Select value={formData.responsable} onValueChange={(v) => setFormData({ ...formData, responsable: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {personalList.length === 0 ? (
+                            <SelectItem value="__sin_personal" disabled>Sin personal cargado</SelectItem>
+                          ) : (
+                            personalList.map((p) => (
+                              <SelectItem key={p.id} value={p.nombre}>
+                                {p.nombre}{p.cargo ? ` · ${p.cargo}` : ''}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-slate-500">Lista cargada desde /api/personal</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <Label>Presupuesto Programado ($)</Label>
-                    <Input type="number" value={formData.presProg} onChange={(e) => setFormData({ ...formData, presProg: parseFloat(e.target.value) || 0 })} className="w-full text-right" />
+                {/* Section 2: Fechas y Tiempo */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 2 · Fechas y Tiempo</span>
+                    <Separator className="flex-1" />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2 min-w-0">
+                      <Label>Fecha de Inicio</Label>
+                      <Input
+                        type="date"
+                        value={formData.fechaInicio}
+                        onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Fecha de Término</Label>
+                      <Input
+                        type="date"
+                        value={formData.fechaFin}
+                        onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Tiempo Estimado</Label>
+                      <Input
+                        value={formData.tiempoEstimado}
+                        onChange={(e) => setFormData({ ...formData, tiempoEstimado: e.target.value })}
+                        className="w-full"
+                        placeholder="Ej: 5 días, 1 día"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Monto (CLP)</Label>
+                      <Input
+                        type="number"
+                        value={formData.monto}
+                        onChange={(e) => setFormData({ ...formData, monto: parseFloat(e.target.value) || 0 })}
+                        className="w-full text-right"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fechas reales (opcional) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 min-w-0">
+                      <Label className="text-xs text-slate-500">Fecha Inicio Real (opcional)</Label>
+                      <Input
+                        type="date"
+                        value={formData.fechaInicioReal}
+                        onChange={(e) => setFormData({ ...formData, fechaInicioReal: e.target.value })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label className="text-xs text-slate-500">Fecha Término Real (opcional)</Label>
+                      <Input
+                        type="date"
+                        value={formData.fechaFinReal}
+                        onChange={(e) => setFormData({ ...formData, fechaFinReal: e.target.value })}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Avance y presupuesto */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 min-w-0">
+                      <Label>Avance: {formData.avance}%</Label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={formData.avance}
+                        onChange={(e) => setFormData({ ...formData, avance: parseInt(e.target.value) })}
+                        className="w-full"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Presupuesto Programado (CLP)</Label>
+                      <Input
+                        type="number"
+                        value={formData.presProg}
+                        onChange={(e) => setFormData({ ...formData, presProg: parseFloat(e.target.value) || 0 })}
+                        className="w-full text-right"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2 min-w-0">
-                    <Label>Presupuesto Usado (calculado) ($)</Label>
+                    <Label>Presupuesto Usado (calculado)</Label>
                     <Input type="number" value={granTotal} disabled className="w-full bg-slate-100 text-right" />
-                    <p className="text-xs text-slate-500">Se calcula desde materiales y personal</p>
+                    <p className="text-xs text-slate-500">Se calcula automáticamente desde materiales y personal</p>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Avance: {formData.avance}%</Label>
-                  <input type="range" min="0" max="100" value={formData.avance} onChange={(e) => setFormData({ ...formData, avance: parseInt(e.target.value) })} className="w-full" />
+                {/* Section 3: Comentarios */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 3 · Comentarios</span>
+                    <Separator className="flex-1" />
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label>Comentarios</Label>
+                    <Textarea
+                      value={formData.comentarios}
+                      onChange={(e) => setFormData({ ...formData, comentarios: e.target.value })}
+                      className="w-full"
+                      rows={4}
+                      placeholder="Comentarios internos del proyecto..."
+                    />
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label className="text-xs text-slate-500">Descripción extendida (opcional)</Label>
+                    <Textarea
+                      value={formData.descripcion}
+                      onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                      className="w-full"
+                      rows={3}
+                      placeholder="Descripción larga del proyecto..."
+                    />
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <Label className="text-xs text-slate-500">Ubicación (opcional)</Label>
+                    <Input
+                      value={formData.ubicacion}
+                      onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
+                      className="w-full"
+                    />
+                  </div>
                 </div>
 
-                {/* Fechas programadas */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <Label>Fecha Inicio Programada</Label>
-                    <Input type="date" value={formData.fechaInicio} onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })} className="w-full" />
+                {/* Section 4: Fotos */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 4 · Fotos</span>
+                    <Separator className="flex-1" />
                   </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Fecha Término Programada</Label>
-                    <Input type="date" value={formData.fechaFin} onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })} className="w-full" />
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Fotos Antes */}
+                    <div className="space-y-3 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2">
+                          <Camera className="w-4 h-4" /> Fotos Antes ({fotosAntes.length})
+                        </Label>
+                        <label className="cursor-pointer">
+                          <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 h-8 px-3">
+                            <Upload className="w-3.5 h-3.5 mr-1" /> Subir
+                          </span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleFotosChange(e, 'antes')}
+                          />
+                        </label>
+                      </div>
+                      {fotosAntes.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {fotosAntes.map((foto, i) => (
+                            <div key={i} className="relative group aspect-square bg-slate-100 rounded overflow-hidden border">
+                              <img src={foto} alt={`Antes ${i + 1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeFoto(i, 'antes')}
+                                className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Eliminar"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded">
+                          <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs">Sin fotos antes</p>
+                        </div>
+                      )}
+                    </div>
 
-                {/* Fechas reales */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2 min-w-0">
-                    <Label>Fecha Inicio Real</Label>
-                    <Input type="date" value={formData.fechaInicioReal} onChange={(e) => setFormData({ ...formData, fechaInicioReal: e.target.value })} className="w-full" />
+                    {/* Fotos Después */}
+                    <div className="space-y-3 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2">
+                          <Camera className="w-4 h-4" /> Fotos Después ({fotosDespues.length})
+                        </Label>
+                        <label className="cursor-pointer">
+                          <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-green-600 text-white hover:bg-green-700 h-8 px-3">
+                            <Upload className="w-3.5 h-3.5 mr-1" /> Subir
+                          </span>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleFotosChange(e, 'despues')}
+                          />
+                        </label>
+                      </div>
+                      {fotosDespues.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          {fotosDespues.map((foto, i) => (
+                            <div key={i} className="relative group aspect-square bg-slate-100 rounded overflow-hidden border">
+                              <img src={foto} alt={`Después ${i + 1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeFoto(i, 'despues')}
+                                className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Eliminar"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded">
+                          <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs">Sin fotos después</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="space-y-2 min-w-0">
-                    <Label>Fecha Término Real</Label>
-                    <Input type="date" value={formData.fechaFinReal} onChange={(e) => setFormData({ ...formData, fechaFinReal: e.target.value })} className="w-full" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Descripción</Label>
-                  <Textarea value={formData.descripcion} onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })} className="w-full" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Notas</Label>
-                  <Textarea value={formData.notas} onChange={(e) => setFormData({ ...formData, notas: e.target.value })} className="w-full" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Comentarios</Label>
-                  <Textarea value={formData.comentarios} onChange={(e) => setFormData({ ...formData, comentarios: e.target.value })} className="w-full" placeholder="Comentarios internos del proyecto..." />
+                  <p className="text-xs text-slate-500">
+                    Las imágenes se guardan como base64 en la base de datos. Tamaño máximo: 3MB por imagen.
+                  </p>
                 </div>
               </TabsContent>
 
@@ -1593,204 +1749,120 @@ export function ProyectosModule() {
                 )}
               </TabsContent>
 
-              {/* Fotos Tab (nuevo) */}
-              <TabsContent value="fotos" className="space-y-4 mt-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Fotos Antes */}
-                  <div className="space-y-3 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <Label className="flex items-center gap-2">
-                        <Camera className="w-4 h-4" /> Fotos Antes ({fotosAntes.length})
-                      </Label>
-                      <label className="cursor-pointer">
-                        <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-blue-600 text-white hover:bg-blue-700 h-8 px-3">
-                          <Upload className="w-3.5 h-3.5 mr-1" /> Subir
-                        </span>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleFotosChange(e, 'antes')}
-                        />
-                      </label>
-                    </div>
-                    {fotosAntes.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {fotosAntes.map((foto, i) => (
-                          <div key={i} className="relative group aspect-square bg-slate-100 rounded overflow-hidden border">
-                            <img src={foto} alt={`Antes ${i + 1}`} className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => removeFoto(i, 'antes')}
-                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Eliminar"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded">
-                        <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                        <p className="text-xs">Sin fotos antes</p>
-                      </div>
-                    )}
+              {/* Documentos y Cotizaciones Tab (merged) */}
+              <TabsContent value="documentos" className="space-y-6 mt-0">
+                {/* Cotizaciones */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Cotizaciones</span>
+                    <Separator className="flex-1" />
                   </div>
-
-                  {/* Fotos Después */}
-                  <div className="space-y-3 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <Label className="flex items-center gap-2">
-                        <Camera className="w-4 h-4" /> Fotos Después ({fotosDespues.length})
-                      </Label>
-                      <label className="cursor-pointer">
-                        <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-green-600 text-white hover:bg-green-700 h-8 px-3">
-                          <Upload className="w-3.5 h-3.5 mr-1" /> Subir
-                        </span>
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          className="hidden"
-                          onChange={(e) => handleFotosChange(e, 'despues')}
-                        />
-                      </label>
-                    </div>
-                    {fotosDespues.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
-                        {fotosDespues.map((foto, i) => (
-                          <div key={i} className="relative group aspect-square bg-slate-100 rounded overflow-hidden border">
-                            <img src={foto} alt={`Después ${i + 1}`} className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => removeFoto(i, 'despues')}
-                              className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Eliminar"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-400 border-2 border-dashed rounded">
-                        <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                        <p className="text-xs">Sin fotos después</p>
-                      </div>
-                    )}
+                  <div className="flex justify-between items-center">
+                    <Label>Cotizaciones y Respaldos (PDF o imágenes)</Label>
+                    <label className="cursor-pointer">
+                      <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-purple-600 text-white hover:bg-purple-700 h-8 px-3">
+                        <Upload className="w-3.5 h-3.5 mr-1" /> Subir Cotización
+                      </span>
+                      <input
+                        type="file"
+                        multiple
+                        accept=".pdf,image/*"
+                        className="hidden"
+                        onChange={handleCotizacionesChange}
+                      />
+                    </label>
                   </div>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Las imágenes se guardan como base64 en la base de datos. Tamaño máximo: 3MB por imagen.
-                </p>
-              </TabsContent>
-
-              {/* Cotizaciones Tab (nuevo) */}
-              <TabsContent value="cotizaciones" className="space-y-4 mt-0">
-                <div className="flex justify-between items-center">
-                  <Label>Cotizaciones y Documentos</Label>
-                  <label className="cursor-pointer">
-                    <span className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors bg-purple-600 text-white hover:bg-purple-700 h-8 px-3">
-                      <Upload className="w-3.5 h-3.5 mr-1" /> Subir Cotización
-                    </span>
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,image/*"
-                      className="hidden"
-                      onChange={handleCotizacionesChange}
-                    />
-                  </label>
-                </div>
-                {cotizaciones.length > 0 ? (
-                  <div className="space-y-2">
-                    {cotizaciones.map((cot, i) => (
-                      <div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{cot.nombre}</p>
-                            <p className="text-[10px] text-slate-500">{cot.tipo}</p>
+                  {cotizaciones.length > 0 ? (
+                    <div className="space-y-2">
+                      {cotizaciones.map((cot, i) => (
+                        <div key={i} className="flex items-center justify-between bg-slate-50 p-3 rounded gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium truncate">{cot.nombre}</p>
+                              <p className="text-[10px] text-slate-500">{cot.tipo}</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex gap-1 shrink-0">
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => viewCotizacion(cot)} title="Ver">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => downloadCotizacion(cot)} title="Descargar">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeCotizacion(i)} title="Eliminar">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Sin cotizaciones adjuntas</p>
-                    <p className="text-xs mt-1">Sube cotizaciones en PDF o imágenes (máx 5MB)</p>
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Documentos Tab (sistema existente) */}
-              <TabsContent value="documentos" className="space-y-4 mt-0">
-                <div className="flex justify-between items-center">
-                  <Label>Documentos Adjuntos (Cotizaciones, Respaldos, etc.)</Label>
-                  <Button size="sm" onClick={addDocumento}><Upload className="w-4 h-4 mr-1" /> Subir Archivo</Button>
-                </div>
-                {documentos.length > 0 ? (
-                  <div className="space-y-2">
-                    {documentos.map((d, i) => (
-                      <div key={d.id} className="bg-slate-50 p-3 rounded">
-                        <div className="grid grid-cols-12 gap-3 items-end">
-                          <div className="col-span-4 min-w-0">
-                            <Label className="text-[10px]">Nombre del archivo</Label>
-                            <Input value={d.nombre} onChange={(e) => updateDocumento(i, 'nombre', e.target.value)} className="h-8 w-full" />
-                          </div>
-                          <div className="col-span-2 min-w-0">
-                            <Label className="text-[10px]">Tipo</Label>
-                            <Select value={d.tipo} onValueChange={(v) => updateDocumento(i, 'tipo', v)}>
-                              <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="cotizacion">Cotización</SelectItem>
-                                <SelectItem value="respaldo">Respaldo</SelectItem>
-                                <SelectItem value="contrato">Contrato</SelectItem>
-                                <SelectItem value="factura">Factura</SelectItem>
-                                <SelectItem value="otro">Otro</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="col-span-4 min-w-0">
-                            <Label className="text-[10px]">Descripción</Label>
-                            <Input value={d.descripcion || ''} onChange={(e) => updateDocumento(i, 'descripcion', e.target.value)} className="h-8 w-full" />
-                          </div>
-                          <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
-                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => viewDocumento(d)}>
+                          <div className="flex gap-1 shrink-0">
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => viewCotizacion(cot)} title="Ver">
                               <Eye className="w-4 h-4" />
                             </Button>
-                          </div>
-                          <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
-                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeDocumento(i)}>
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => downloadCotizacion(cot)} title="Descargar">
+                              <Download className="w-4 h-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeCotizacion(i)} title="Eliminar">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400">
+                      <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Sin cotizaciones adjuntas</p>
+                      <p className="text-xs mt-1">Sube cotizaciones en PDF o imágenes (máx 5MB)</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Documentos (sistema legacy) */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Documentos Adjuntos</span>
+                    <Separator className="flex-1" />
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400">
-                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Sin documentos adjuntos</p>
-                    <p className="text-xs mt-1">Sistema legacy de documentos. Para cotizaciones PDF/imágenes usar la pestaña Cotizaciones.</p>
+                  <div className="flex justify-between items-center">
+                    <Label>Cotizaciones, Respaldos, Contratos, Facturas, etc.</Label>
+                    <Button size="sm" onClick={addDocumento}><Upload className="w-4 h-4 mr-1" /> Subir Archivo</Button>
                   </div>
-                )}
+                  {documentos.length > 0 ? (
+                    <div className="space-y-2">
+                      {documentos.map((d, i) => (
+                        <div key={d.id} className="bg-slate-50 p-3 rounded">
+                          <div className="grid grid-cols-12 gap-3 items-end">
+                            <div className="col-span-4 min-w-0">
+                              <Label className="text-[10px]">Nombre del archivo</Label>
+                              <Input value={d.nombre} onChange={(e) => updateDocumento(i, 'nombre', e.target.value)} className="h-8 w-full" />
+                            </div>
+                            <div className="col-span-2 min-w-0">
+                              <Label className="text-[10px]">Tipo</Label>
+                              <Select value={d.tipo} onValueChange={(v) => updateDocumento(i, 'tipo', v)}>
+                                <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="cotizacion">Cotización</SelectItem>
+                                  <SelectItem value="respaldo">Respaldo</SelectItem>
+                                  <SelectItem value="contrato">Contrato</SelectItem>
+                                  <SelectItem value="factura">Factura</SelectItem>
+                                  <SelectItem value="otro">Otro</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="col-span-4 min-w-0">
+                              <Label className="text-[10px]">Descripción</Label>
+                              <Input value={d.descripcion || ''} onChange={(e) => updateDocumento(i, 'descripcion', e.target.value)} className="h-8 w-full" />
+                            </div>
+                            <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => viewDocumento(d)}>
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeDocumento(i)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400">
+                      <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Sin documentos adjuntos</p>
+                    </div>
+                  )}
+                </div>
               </TabsContent>
             </div>
           </Tabs>
@@ -1816,95 +1888,6 @@ export function ProyectosModule() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>Guardar Proyecto</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Configurar Listas Desplegables Dialog */}
-      <Dialog open={configListasOpen} onOpenChange={setConfigListasOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Settings className="w-5 h-5" /> Configurar Listas Desplegables
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2 min-w-0">
-              <Label>Tipo de Lista</Label>
-              <Select value={configTipo} onValueChange={(v) => setConfigTipo(v)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TIPOS_LISTA.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Agregar nuevo valor */}
-            <div className="flex gap-2">
-              <Input
-                value={nuevoValorLista}
-                onChange={(e) => setNuevoValorLista(e.target.value)}
-                placeholder="Nuevo valor..."
-                className="flex-1"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addLista()
-                  }
-                }}
-              />
-              <Button onClick={addLista} disabled={configLoading}>
-                <Plus className="w-4 h-4 mr-1" /> Agregar
-              </Button>
-            </div>
-
-            <Separator />
-
-            {/* Lista de valores actuales */}
-            <div className="space-y-2">
-              <Label>Valores actuales ({listas[configTipo]?.length || 0})</Label>
-              {listas[configTipo]?.length > 0 ? (
-                <div className="space-y-1 max-h-[400px] overflow-y-auto">
-                  {listas[configTipo].map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-slate-50 p-2 rounded border">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-medium">{item.valor}</span>
-                        {!item.activo && (
-                          <Badge className="bg-slate-200 text-slate-600">Inactivo</Badge>
-                        )}
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-red-600 shrink-0"
-                        onClick={() => removeLista(item.id, item.valor)}
-                        disabled={configLoading}
-                        title="Desactivar"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-slate-400">
-                  <Settings className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Sin valores para esta lista</p>
-                </div>
-              )}
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Los valores desactivados no aparecerán en los dropdowns del formulario de proyectos.
-              Si un proyecto ya usa ese valor, se conservará en la base de datos.
-            </p>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfigListasOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
