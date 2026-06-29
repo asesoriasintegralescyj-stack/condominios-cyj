@@ -92,7 +92,7 @@ interface Proyecto {
   documentos: ProyectoDocumento[]
 }
 
-const formatCLP = (n: number) => 
+const formatCLP = (n: number) =>
   '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
 
 const formatDate = (d: string | null) => {
@@ -103,6 +103,44 @@ const formatDate = (d: string | null) => {
   } catch {
     return d
   }
+}
+
+// Parsear campos desde la descripcion y notas del proyecto (formato del PDF original)
+function parseCampo(descripcion: string | null, notas: string | null, campo: string): string {
+  const buscar = [descripcion, notas].filter(Boolean).join(' | ')
+  const m = buscar.match(new RegExp(`${campo}:\\s*([^|]+)`, 'i'))
+  return m ? m[1].trim() : '–'
+}
+
+function extraerNumProyecto(nombre: string): string {
+  const m = nombre.match(/#(\d+)/)
+  return m ? m[1] : '–'
+}
+
+function extraerDescripcion(nombre: string): string {
+  // Quitar el "#NN - " del inicio
+  return nombre.replace(/^#\d+\s*-\s*/, '')
+}
+
+// Colores por estado
+const estadoBadgeColors: Record<string, string> = {
+  'Planificado': 'bg-blue-100 text-blue-700 border-blue-200',
+  'En Ejecución': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  'Completado': 'bg-green-100 text-green-700 border-green-200',
+  'Cancelado': 'bg-red-100 text-red-700 border-red-200',
+  'Pausado': 'bg-slate-100 text-slate-700 border-slate-200',
+}
+
+const aprobacionColors: Record<string, string> = {
+  'Aprobado': 'text-green-600 font-medium',
+  'En espera': 'text-orange-500 font-medium',
+  'Aprobado por Supervisor': 'text-blue-600 font-medium',
+}
+
+const prioridadColors: Record<string, string> = {
+  'Alta': 'bg-red-100 text-red-700',
+  'Media': 'bg-yellow-100 text-yellow-700',
+  'Baja': 'bg-green-100 text-green-700',
 }
 
 const exportToCSV = (data: Proyecto[]) => {
@@ -480,64 +518,87 @@ export function ProyectosModule() {
         </Button>
       </div>
 
-      {/* Table */}
+      {/* Table - Formato PDF: # | Descripción | Sector | Tipo | Prior. | Etapa | Estado | Aprobación | Responsable | T.E. | Monto | Inicio | Término | Adj. | Acc. */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-sm">Proyectos ({proyectos.length})</CardTitle>
+          <CardTitle className="text-sm">Planificación de Mantención — Tabla de Tareas ({proyectos.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs whitespace-nowrap" style={{ minWidth: '1600px' }}>
               <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Categoría</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Inicio</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fin</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Pres. Prog.</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Pres. Usado</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Avance</th>
-                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
+                <tr className="border-b bg-[#0f2040] text-white">
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '40px' }}>#</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '200px' }}>Descripción</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Sector</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Tipo</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Prior.</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '120px' }}>Etapa</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ minWidth: '90px' }}>Estado</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '120px' }}>Aprobación</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Responsable</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>T.E.</th>
+                  <th className="text-right p-2 text-[10px] font-bold uppercase" style={{ minWidth: '90px' }}>Monto</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '80px' }}>Inicio</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '80px' }}>Término</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '40px' }}>Adj.</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '70px' }}>Acc.</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : !proyectos || proyectos.length === 0 ? (
-                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Sin proyectos</td></tr>
+                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">Sin proyectos</td></tr>
                 ) : (
-                  proyectos.map((proy) => (
-                    <tr key={proy.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(proy)}>
-                      <td className="p-3 font-semibold">{proy.nombre}</td>
-                      <td className="p-3">
-                        <Badge className={categoriaColors[proy.categoria] || 'bg-slate-100'}>{proy.categoria}</Badge>
-                      </td>
-                      <td className="p-3">
-                        <Badge className={estadoColors[proy.estado] || 'bg-slate-100'}>{proy.estado}</Badge>
-                      </td>
-                      <td className="p-3 text-xs">{formatDate(proy.fechaInicio)}</td>
-                      <td className="p-3 text-xs">{formatDate(proy.fechaFin)}</td>
-                      <td className="p-3 font-mono text-xs">{formatCLP(proy.presProg)}</td>
-                      <td className="p-3 font-mono text-xs text-red-600">{formatCLP(proy.presUsado)}</td>
-                      <td className="p-3 min-w-[100px]">
-                        <div className="flex items-center gap-2">
-                          <Progress value={proy.avance} className="h-1.5 flex-1" />
-                          <span className="text-[10px] text-slate-500">{proy.avance}%</span>
-                        </div>
-                      </td>
-                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-center gap-1">
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(proy)}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" onClick={() => handleDelete(proy.id)}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  proyectos.map((proy, idx) => {
+                    const prioridad = parseCampo(proy.descripcion, proy.notas, 'Prioridad')
+                    const etapa = parseCampo(proy.descripcion, proy.notas, 'Etapa')
+                    const responsable = parseCampo(proy.descripcion, proy.notas, 'Responsable')
+                    const te = parseCampo(proy.descripcion, proy.notas, 'Tiempo estimado')
+                    const aprobacion = parseCampo(proy.descripcion, proy.notas, 'Aprobación')
+                    const adjuntos = parseCampo(proy.descripcion, proy.notas, 'Adjuntos')
+                    return (
+                      <tr key={proy.id} className={`border-b last:border-0 hover:bg-blue-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`} onClick={() => openDetailDialog(proy)}>
+                        <td className="text-center p-2 font-bold text-[#0f2040]">{extraerNumProyecto(proy.nombre)}</td>
+                        <td className="p-2 font-medium max-w-[250px] truncate" title={extraerDescripcion(proy.nombre)}>{extraerDescripcion(proy.nombre)}</td>
+                        <td className="p-2 text-slate-600">{proy.ubicacion || '–'}</td>
+                        <td className="p-2 text-slate-600">{proy.categoria}</td>
+                        <td className="text-center p-2">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${prioridadColors[prioridad] || 'bg-slate-100 text-slate-600'}`}>{prioridad}</span>
+                        </td>
+                        <td className="p-2 text-slate-600">{etapa}</td>
+                        <td className="text-center p-2">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${estadoBadgeColors[proy.estado] || 'bg-slate-100 text-slate-600'}`}>{proy.estado}</span>
+                        </td>
+                        <td className="p-2">
+                          <span className={`text-[10px] ${aprobacionColors[aprobacion] || 'text-slate-500'}`}>{aprobacion}</span>
+                        </td>
+                        <td className="p-2 text-slate-600">{responsable}</td>
+                        <td className="text-center p-2 text-slate-500">{te}</td>
+                        <td className="text-right p-2 font-mono font-medium">{proy.presProg > 0 ? formatCLP(proy.presProg) : '–'}</td>
+                        <td className="text-center p-2 text-slate-500">{formatDate(proy.fechaInicio)}</td>
+                        <td className="text-center p-2 text-slate-500">{formatDate(proy.fechaFin)}</td>
+                        <td className="text-center p-2">
+                          {adjuntos !== '–' ? (
+                            <span className="inline-flex items-center gap-0.5 text-blue-600">
+                              <Paperclip className="w-3 h-3" />{adjuntos}
+                            </span>
+                          ) : '–'}
+                        </td>
+                        <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center gap-0.5">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" aria-label="Editar" onClick={() => openDialog(proy)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" title="Eliminar" aria-label="Eliminar" onClick={() => handleDelete(proy.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
