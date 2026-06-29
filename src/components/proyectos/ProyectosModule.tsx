@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -286,6 +286,10 @@ export function ProyectosModule() {
   const [editingProy, setEditingProy] = useState<Proyecto | null>(null)
   const [selectedProy, setSelectedProy] = useState<Proyecto | null>(null)
 
+  // Ordenamiento
+  const [sortField, setSortField] = useState<string>('prioridad')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+
   // Form state (incluye nuevos campos)
   const [formData, setFormData] = useState({
     nombre: '',
@@ -342,6 +346,56 @@ export function ProyectosModule() {
     }
     setLoading(false)
   }, [])
+
+  // Mapa de prioridad a número para ordenar (Alta=1, Media=2, Baja=3)
+  const PRIORIDAD_ORDER: Record<string, number> = { 'Alta': 1, 'Media': 2, 'Baja': 3 }
+
+  // Proyectos ordenados según sortField y sortDirection
+  const proyectosOrdenados = useMemo(() => {
+    if (!proyectos.length) return []
+    const sorted = [...proyectos]
+    sorted.sort((a: any, b: any) => {
+      let valA = a[sortField]
+      let valB = b[sortField]
+
+      // Si es prioridad, usar el mapa numérico
+      if (sortField === 'prioridad') {
+        valA = PRIORIDAD_ORDER[valA] ?? 99
+        valB = PRIORIDAD_ORDER[valB] ?? 99
+      }
+      // Si es monto o número, comparar numéricamente
+      else if (sortField === 'monto' || sortField === 'presProg' || sortField === 'presUsado' || sortField === 'avance') {
+        valA = Number(valA) || 0
+        valB = Number(valB) || 0
+      }
+      // Si es string, comparar alfabéticamente
+      else {
+        valA = String(valA || '').toLowerCase()
+        valB = String(valB || '').toLowerCase()
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1
+      return 0
+    })
+    return sorted
+  }, [proyectos, sortField, sortDirection])
+
+  // Toggle de ordenamiento: click en header
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // Icono de dirección de ordenamiento
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <span className="text-slate-300 ml-0.5">↕</span>
+    return <span className="text-white ml-0.5">{sortDirection === 'asc' ? '↑' : '↓'}</span>
+  }
 
   const fetchPersonal = useCallback(async () => {
     try {
@@ -1348,17 +1402,17 @@ export function ProyectosModule() {
               <thead>
                 <tr className="border-b bg-[#0f2040] text-white">
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '40px' }}>#</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '200px' }}>Descripción</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Sector</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Tipo</th>
-                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Prior.</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '120px' }}>Estado</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '120px' }}>Aprobación</th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase" style={{ minWidth: '100px' }}>Responsable</th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '200px' }} onClick={() => toggleSort('nombre')}>Descripción <SortIcon field="nombre" /></th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('sector')}>Sector <SortIcon field="sector" /></th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('tipoReparacion')}>Tipo <SortIcon field="tipoReparacion" /></th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '60px' }} onClick={() => toggleSort('prioridad')}>Prior. <SortIcon field="prioridad" /></th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '120px' }} onClick={() => toggleSort('estado')}>Estado <SortIcon field="estado" /></th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '120px' }} onClick={() => toggleSort('estadoAprobacion')}>Aprobación <SortIcon field="estadoAprobacion" /></th>
+                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('responsable')}>Responsable <SortIcon field="responsable" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>T.E.</th>
-                  <th className="text-right p-2 text-[10px] font-bold uppercase" style={{ minWidth: '90px' }}>Monto</th>
-                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '80px' }}>Inicio</th>
-                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '80px' }}>Término</th>
+                  <th className="text-right p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '90px' }} onClick={() => toggleSort('monto')}>Monto <SortIcon field="monto" /></th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaInicio')}>Inicio <SortIcon field="fechaInicio" /></th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaFin')}>Término <SortIcon field="fechaFin" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Adj.</th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '70px' }}>Acc.</th>
                 </tr>
@@ -1369,7 +1423,7 @@ export function ProyectosModule() {
                 ) : !proyectos || proyectos.length === 0 ? (
                   <tr><td colSpan={14} className="p-8 text-center text-slate-400">Sin proyectos</td></tr>
                 ) : (
-                  proyectos.map((proy, idx) => {
+                  proyectosOrdenados.map((proy, idx) => {
                     const sector = proy.sector || proy.ubicacion || '–'
                     const tipo = proy.tipoReparacion || proy.categoria || '–'
                     const prioridad = proy.prioridad || '–'
