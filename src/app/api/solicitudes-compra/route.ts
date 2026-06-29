@@ -123,6 +123,37 @@ export async function POST(request: NextRequest) {
 
     const solicitud = await db.solicitudCompra.create({ data })
 
+    // If the solicitud originated from a Proyecto, fetch the project's
+    // fotosAntes / fotosDespues and cotizaciones links so they can be
+    // embedded into the PDF attachment that goes with the email.
+    let fotosAntes: string[] = []
+    let fotosDespues: string[] = []
+    let cotizacionesLinks: string[] = []
+    if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
+      try {
+        const proyectoOrigen = await db.proyecto.findUnique({
+          where: { id: solicitud.origenId },
+          select: {
+            fotosAntes: true,
+            fotosDespues: true,
+            cotizaciones: true,
+          },
+        })
+        if (proyectoOrigen) {
+          // Limit to a maximum of 3 photos per type to keep the PDF / email
+          // attachment from growing too large.
+          fotosAntes = parseStringArray(proyectoOrigen.fotosAntes).slice(0, 3)
+          fotosDespues = parseStringArray(proyectoOrigen.fotosDespues).slice(0, 3)
+          cotizacionesLinks = extractCotizacionLinks(proyectoOrigen.cotizaciones)
+        }
+      } catch (e) {
+        console.warn(
+          `[SolicitudCompra ${codigo}] No se pudo obtener fotos/cotizaciones del proyecto origen:`,
+          e
+        )
+      }
+    }
+
     // Intentar enviar email (no falla si SMTP no está configurado)
     const emailResult = await sendSolicitudCompraEmail({
       codigo: solicitud.codigo,
@@ -133,11 +164,17 @@ export async function POST(request: NextRequest) {
       materiales: materialesRaw,
       totalEstimado: solicitud.totalEstimado,
       solicitadoPor: solicitud.solicitadoPor,
+      fechaSolicitud: solicitud.fechaSolicitud
+        ? solicitud.fechaSolicitud.toISOString()
+        : null,
       fechaEspera: solicitud.fechaEspera,
       proveedorSugerido: solicitud.proveedorSugerido,
       observaciones: solicitud.observaciones,
       origenCodigo: solicitud.origenCodigo,
       origenTipo: solicitud.origenTipo,
+      fotosAntes,
+      fotosDespues,
+      cotizacionesLinks,
     })
 
     let updated = solicitud
@@ -183,4 +220,66 @@ function safeParseMateriales(raw: string): MaterialSolicitud[] {
   } catch {
     return []
   }
+}
+
+/**
+ * Parses a JSON-encoded string array (used for fotosAntes / fotosDespues
+ * in Proyecto) and returns a clean string[].
+ */
+function parseStringArray(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string')
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The cotizaciones field of a Proyecto can be either:
+ *  - A JSON array of { nombre, archivo, tipo } objects (base64 data URLs),
+ *    in which case we don't extract any "links" (the archive would be too
+ *    large to embed in the email PDF).
+ *  - A JSON array of plain URL strings.
+ *  - A free-text string containing URLs.
+ *
+ * We try to extract any http(s) URLs found and return them so they can be
+ * listed in the PDF attachment as references.
+ */
+function extractCotizacionLinks(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      const links: string[] = []
+      for (const item of parsed) {
+        if (typeof item === 'string' && /^https?:\/\//i.test(item)) {
+          links.push(item)
+        } else if (item && typeof item === 'object' && typeof item.archivo === 'string') {
+          if (/^https?:\/\//i.test(item.archivo)) {
+            links.push(item.archivo)
+          } else if (typeof item.nombre === 'string') {
+            // Not a link (likely a base64 data URL) — record its name only
+            links.push(item.nombre)
+          }
+        }
+      }
+      return links
+    }
+    if (typeof parsed === 'string') {
+      const matches = parsed.match(/https?:\/\/[^\s"',)]+/gi)
+      return matches || []
+    }
+  } catch {
+    // not JSON, treat as plain text
+  }
+  if (typeof raw === 'string') {
+    const matches = raw.match(/https?:\/\/[^\s"',)]+/gi)
+    return matches || []
+  }
+  return []
 }

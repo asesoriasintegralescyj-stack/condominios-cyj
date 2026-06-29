@@ -578,7 +578,7 @@ export function SolicitudesComprasModule() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editing ? `Editar Solicitud ${editing.codigo}` : 'Nueva Solicitud de Compra'}

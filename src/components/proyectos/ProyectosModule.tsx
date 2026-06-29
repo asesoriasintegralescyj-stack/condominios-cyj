@@ -852,6 +852,389 @@ export function ProyectosModule() {
   }
 
   // ============================================
+  // Exportar un solo proyecto a PDF (con todos los datos)
+  // ============================================
+  const exportProyectoToPdf = async (proy: Proyecto) => {
+    try {
+      toast.info('Generando PDF del proyecto...')
+
+      // Fetch the full detail (includes fotosAntes / fotosDespues / cotizaciones)
+      let fotosAntes: string[] = []
+      let fotosDespues: string[] = []
+      let materialesPdf: ProyectoMaterial[] = proy.materiales || []
+      let personalPdf: ProyectoPersonal[] = proy.personal || []
+      let tareasPdf: ProyectoTarea[] = proy.tareas || []
+      let herramientasPdf: ProyectoHerramienta[] = proy.herramientas || []
+      try {
+        const res = await fetch(`/api/proyectos/${proy.id}`)
+        if (res.ok) {
+          const detail = await res.json()
+          fotosAntes = parseJsonArray<string>(detail.fotosAntes)
+          fotosDespues = parseJsonArray<string>(detail.fotosDespues)
+          if (Array.isArray(detail.materiales)) materialesPdf = detail.materiales
+          if (Array.isArray(detail.personal)) personalPdf = detail.personal
+          if (Array.isArray(detail.tareas)) tareasPdf = detail.tareas
+          if (Array.isArray(detail.herramientas)) herramientasPdf = detail.herramientas
+        }
+      } catch (e) {
+        console.warn('No se pudo obtener detalle completo del proyecto para PDF:', e)
+      }
+
+      const { default: jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      const margin = 12
+      let y = 14
+
+      // ---------- Header ----------
+      doc.setFillColor(15, 32, 64) // #0f2040
+      doc.rect(margin, y, pageWidth - margin * 2, 18, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(15)
+      doc.setFont('helvetica', 'bold')
+      const codigoProy = extraerCodigoProyecto(proy.nombre) || `PROY-${proy.id.slice(-4)}`
+      doc.text(`PROYECTO ${codigoProy}`, margin + 4, y + 8)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text(
+        `Generado: ${new Date().toLocaleString('es-CL')}`,
+        pageWidth - margin - 4,
+        y + 8,
+        { align: 'right' }
+      )
+      doc.setFontSize(8)
+      doc.text('Condominio LAGUNA NORTE', pageWidth - margin - 4, y + 14, {
+        align: 'right',
+      })
+      y += 22
+
+      // ---------- Nombre del proyecto ----------
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 32, 64)
+      const nombreLines = doc.splitTextToSize(
+        extraerDescripcion(proy.nombre),
+        pageWidth - margin * 2
+      )
+      doc.text(nombreLines, margin, y)
+      y += nombreLines.length * 5 + 2
+
+      // ---------- Info section ----------
+      const infoRows: [string, string][] = [
+        ['Sector', proy.sector || proy.ubicacion || '–'],
+        ['Tipo', proy.tipoReparacion || proy.categoria || '–'],
+        ['Prioridad', proy.prioridad || '–'],
+        ['Estado', proy.estado || '–'],
+        ['Aprobación', proy.estadoAprobacion || '–'],
+        ['Responsable', proy.responsable || '–'],
+        ['Tiempo Estimado', proy.tiempoEstimado || '–'],
+        ['Monto', (proy.monto || proy.presProg) > 0 ? formatCLP(proy.monto || proy.presProg) : '–'],
+        ['Fecha Inicio', formatDate(proy.fechaInicio)],
+        ['Fecha Término', formatDate(proy.fechaFin)],
+        ['Avance', `${proy.avance ?? 0}%`],
+        ['Pres. Programado', proy.presProg ? formatCLP(proy.presProg) : '–'],
+        ['Pres. Usado', proy.presUsado ? formatCLP(proy.presUsado) : '–'],
+      ]
+
+      autoTable(doc, {
+        startY: y,
+        body: infoRows,
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+        columnStyles: {
+          0: {
+            cellWidth: 45,
+            fontStyle: 'bold',
+            fillColor: [241, 245, 249],
+            textColor: [15, 32, 64],
+          },
+          1: { cellWidth: 'auto' },
+        },
+        margin: { left: margin, right: margin },
+      })
+      y = (doc as any).lastAutoTable.finalY + 4
+
+      // ---------- Comentarios ----------
+      if (proy.comentarios) {
+        if (y > pageHeight - 30) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text('Comentarios:', margin, y + 3)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(20, 20, 20)
+        const cLines = doc.splitTextToSize(proy.comentarios, pageWidth - margin * 2)
+        doc.text(cLines, margin, y + 8)
+        y += 8 + cLines.length * 4 + 2
+      }
+
+      // ---------- Descripción ----------
+      if (proy.descripcion) {
+        if (y > pageHeight - 30) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text('Descripción:', margin, y + 3)
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(20, 20, 20)
+        const dLines = doc.splitTextToSize(proy.descripcion, pageWidth - margin * 2)
+        doc.text(dLines, margin, y + 8)
+        y += 8 + dLines.length * 4 + 2
+      }
+
+      // ---------- Materiales ----------
+      if (materialesPdf.length > 0) {
+        if (y > pageHeight - 40) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text(`Materiales (${materialesPdf.length})`, margin, y + 3)
+        y += 6
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'Descripción', 'Cant.', 'Unidad', 'P. Unit', 'Total']],
+          body: materialesPdf.map((m, i) => [
+            String(i + 1),
+            m.descripcion || '',
+            String(m.cantidad ?? 0),
+            m.unidad || 'unidad',
+            formatCLP(m.precioUnit),
+            formatCLP(m.total),
+          ]),
+          foot: [
+            [
+              '',
+              '',
+              '',
+              '',
+              'Total',
+              formatCLP(materialesPdf.reduce((s, m) => s + (m.total || m.cantidad * m.precioUnit), 0)),
+            ],
+          ],
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+          headStyles: { fillColor: [15, 32, 64], textColor: 255, fontSize: 8 },
+          footStyles: { fillColor: [254, 243, 199], textColor: [180, 83, 9], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 18, halign: 'center' },
+            3: { cellWidth: 20, halign: 'center' },
+            4: { cellWidth: 28, halign: 'right' },
+            5: { cellWidth: 28, halign: 'right' },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 4
+      }
+
+      // ---------- Personal ----------
+      if (personalPdf.length > 0) {
+        if (y > pageHeight - 40) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text(`Personal (${personalPdf.length})`, margin, y + 3)
+        y += 6
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'Nombre', 'Tipo', 'Cant.', 'P. Unit', 'Total']],
+          body: personalPdf.map((p, i) => [
+            String(i + 1),
+            p.nombre || '',
+            p.tipo || 'Interno',
+            String(p.cantidad ?? 0),
+            formatCLP(p.precioUnit),
+            formatCLP(p.total),
+          ]),
+          foot: [
+            [
+              '',
+              '',
+              '',
+              '',
+              'Total',
+              formatCLP(personalPdf.reduce((s, p) => s + (p.total || p.precioUnit * p.cantidad), 0)),
+            ],
+          ],
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+          headStyles: { fillColor: [15, 32, 64], textColor: 255, fontSize: 8 },
+          footStyles: { fillColor: [254, 243, 199], textColor: [180, 83, 9], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 22, halign: 'center' },
+            3: { cellWidth: 18, halign: 'center' },
+            4: { cellWidth: 28, halign: 'right' },
+            5: { cellWidth: 28, halign: 'right' },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 4
+      }
+
+      // ---------- Tareas ----------
+      if (tareasPdf.length > 0) {
+        if (y > pageHeight - 40) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text(`Tareas (${tareasPdf.length})`, margin, y + 3)
+        y += 6
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'Descripción', 'Cant.', 'Estado']],
+          body: tareasPdf.map((t, i) => [
+            String(i + 1),
+            t.descripcion || '',
+            String(t.cantidad ?? 0),
+            t.estado || 'Pendiente',
+          ]),
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+          headStyles: { fillColor: [15, 32, 64], textColor: 255, fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 22, halign: 'center' },
+            3: { cellWidth: 30, halign: 'center' },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 4
+      }
+
+      // ---------- Herramientas ----------
+      if (herramientasPdf.length > 0) {
+        if (y > pageHeight - 40) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text(`Herramientas (${herramientasPdf.length})`, margin, y + 3)
+        y += 6
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'Nombre', 'Cantidad']],
+          body: herramientasPdf.map((h, i) => [
+            String(i + 1),
+            h.nombre || '',
+            String(h.cantidad ?? 0),
+          ]),
+          theme: 'striped',
+          styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+          headStyles: { fillColor: [15, 32, 64], textColor: 255, fontSize: 8 },
+          columnStyles: {
+            0: { cellWidth: 12, halign: 'center' },
+            1: { cellWidth: 'auto' },
+            2: { cellWidth: 28, halign: 'center' },
+          },
+          margin: { left: margin, right: margin },
+        })
+        y = (doc as any).lastAutoTable.finalY + 4
+      }
+
+      // ---------- Fotos ----------
+      const renderPhotoSection = (title: string, photos: string[]) => {
+        if (!photos || photos.length === 0) return
+        if (y > pageHeight - 40) {
+          doc.addPage()
+          y = 14
+        }
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 64)
+        doc.text(`${title} (${photos.length})`, margin, y + 4)
+        y += 8
+
+        const imgW = (pageWidth - margin * 2 - 6) / 3 // 3 per row
+        const imgH = imgW * 0.75
+        const startY = y
+
+        photos.forEach((photo, idx) => {
+          const col = idx % 3
+          const row = Math.floor(idx / 3)
+          const x = margin + col * (imgW + 3)
+          let py = startY + row * (imgH + 3)
+          if (py + imgH > pageHeight - 14) {
+            doc.addPage()
+            y = 14
+            py = 14
+            // Restart row positioning on new page
+            const newX = margin
+            try {
+              doc.addImage(photo, 'JPEG' /* will be auto-detected */, newX, py, imgW, imgH)
+            } catch (err) {
+              console.warn('addImage failed:', err)
+            }
+            y = py + imgH + 3
+            return
+          }
+          try {
+            // jsPDF auto-detects PNG/JPEG from data URL
+            doc.addImage(photo, 'PNG', x, py, imgW, imgH)
+          } catch {
+            // Retry with JPEG if PNG failed
+            try {
+              doc.addImage(photo, 'JPEG', x, py, imgW, imgH)
+            } catch (err2) {
+              console.warn('addImage failed (PNG and JPEG):', err2)
+            }
+          }
+        })
+
+        const totalRows = Math.ceil(photos.length / 3)
+        y = startY + totalRows * (imgH + 3) + 4
+      }
+
+      renderPhotoSection('Fotos Antes', fotosAntes)
+      renderPhotoSection('Fotos Después', fotosDespues)
+
+      // ---------- Footer (on every page) ----------
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.setTextColor(120, 120, 120)
+        doc.setFont('helvetica', 'normal')
+        const footerText = 'Condominio LAGUNA NORTE · Asesorías Integrales CyJ'
+        doc.text(footerText, pageWidth / 2, pageHeight - 6, { align: 'center' })
+        doc.text(`Pág. ${i}/${pageCount}`, pageWidth - margin, pageHeight - 6, {
+          align: 'right',
+        })
+      }
+
+      const safeCodigo = codigoProy.replace(/[^a-zA-Z0-9-_]/g, '')
+      doc.save(`proyecto_${safeCodigo || proy.id}.pdf`)
+      toast.success('PDF generado')
+    } catch (error) {
+      console.error('Error generando PDF del proyecto:', error)
+      toast.error('Error al generar PDF del proyecto')
+    }
+  }
+
+  // ============================================
   // Enviar Solicitud de Compra
   // ============================================
   const enviarSolicitudCompra = async () => {
@@ -1024,6 +1407,9 @@ export function ProyectosModule() {
                         </td>
                         <td className="p-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center gap-0.5">
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Exportar proyecto a PDF" aria-label="PDF" onClick={() => void exportProyectoToPdf(proy)}>
+                              <FileDown className="w-3.5 h-3.5" />
+                            </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" aria-label="Editar" onClick={() => openDialog(proy)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -1194,6 +1580,15 @@ export function ProyectosModule() {
           )}
           <DialogFooter className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
+            {selectedProy && (
+              <Button
+                variant="outline"
+                onClick={() => void exportProyectoToPdf(selectedProy)}
+                title="Exportar este proyecto a PDF con todos los datos"
+              >
+                <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
+              </Button>
+            )}
             {selectedProy && (selectedProy.materiales?.length || 0) > 0 && (
               <Button
                 variant="secondary"

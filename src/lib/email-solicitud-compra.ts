@@ -8,19 +8,17 @@
  */
 
 import nodemailer, { type Transporter } from 'nodemailer'
+import {
+  generateSolicitudCompraPdfBuffer,
+  type MaterialSolicitud,
+} from '@/lib/pdf-solicitud-compra'
 
 // El email se envía DESDE asesoriasintegralescyj@gmail.com (remitente, configurado via SMTP_USER)
 // HACIA administracionlagunanorte@gmail.com (destinatario fijo)
 export const SOLICITUD_COMPRA_EMAIL_TO = 'administracionlagunanorte@gmail.com'
 export const SOLICITUD_COMPRA_EMAIL_FROM = process.env.SMTP_USER || 'asesoriasintegralescyj@gmail.com'
 
-export interface MaterialSolicitud {
-  nombre: string
-  cantidad: number
-  unidad: string
-  precioEstimado: number
-  total: number
-}
+export type { MaterialSolicitud }
 
 export interface EmailSolicitudPayload {
   codigo: string
@@ -31,11 +29,16 @@ export interface EmailSolicitudPayload {
   materiales: MaterialSolicitud[]
   totalEstimado: number
   solicitadoPor?: string | null
+  fechaSolicitud?: string | null
   fechaEspera?: string | null
   proveedorSugerido?: string | null
   observaciones?: string | null
   origenCodigo?: string | null
   origenTipo?: string | null
+  // Optional: photos and cotizaciones links from origin proyecto/OT
+  fotosAntes?: string[]
+  fotosDespues?: string[]
+  cotizacionesLinks?: string[]
 }
 
 let cachedTransport: Transporter | null = null
@@ -222,6 +225,10 @@ export interface SendSolicitudEmailResult {
  * Sends the solicitud de compra email. Returns gracefully if SMTP is not
  * configured (ok=false, skipped=true) so the caller can mark emailEnviado=false
  * but still succeed the HTTP request.
+ *
+ * The email includes an HTML body AND a PDF attachment generated with jspdf
+ * (see generateSolicitudCompraPdfBuffer). If the PDF generation fails the
+ * email is still sent without the attachment, and the error is logged.
  */
 export async function sendSolicitudCompraEmail(
   payload: EmailSolicitudPayload
@@ -238,6 +245,46 @@ export async function sendSolicitudCompraEmail(
   const subject = `Nueva Solicitud de Compra ${payload.codigo} - ${payload.titulo}`
   const html = buildSolicitudHtml(payload)
 
+  // Generate the PDF attachment
+  let pdfBuffer: Buffer | null = null
+  try {
+    pdfBuffer = generateSolicitudCompraPdfBuffer({
+      codigo: payload.codigo,
+      titulo: payload.titulo,
+      descripcion: payload.descripcion,
+      prioridad: payload.prioridad,
+      estado: payload.estado,
+      materiales: payload.materiales,
+      totalEstimado: payload.totalEstimado,
+      solicitadoPor: payload.solicitadoPor,
+      fechaSolicitud: payload.fechaSolicitud,
+      fechaEspera: payload.fechaEspera,
+      proveedorSugerido: payload.proveedorSugerido,
+      observaciones: payload.observaciones,
+      origenTipo: payload.origenTipo,
+      origenCodigo: payload.origenCodigo,
+      fotosAntes: payload.fotosAntes,
+      fotosDespues: payload.fotosDespues,
+      cotizacionesLinks: payload.cotizacionesLinks,
+    })
+  } catch (error) {
+    console.error(
+      '[SolicitudCompra] Error generando PDF adjunto (email se enviará sin adjunto):',
+      error
+    )
+  }
+
+  const attachments =
+    pdfBuffer !== null
+      ? [
+          {
+            filename: `Solicitud_${payload.codigo}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          },
+        ]
+      : undefined
+
   try {
     const info = await transport.sendMail({
       from: `"Sistema Condominios CyJ" <${SOLICITUD_COMPRA_EMAIL_FROM}>`,
@@ -248,6 +295,7 @@ export async function sendSolicitudCompraEmail(
       text: `Nueva Solicitud de Compra ${payload.codigo} - ${payload.titulo}. Total estimado: ${formatCLP(
         payload.totalEstimado
       )}. Ingrese al sistema para ver el detalle.`,
+      attachments,
     })
     return { ok: true, messageId: info.messageId }
   } catch (error) {
