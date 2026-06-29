@@ -30,13 +30,22 @@ export async function GET(
     }
 
     if (!incluirManual) {
-      const { manualBase64: _manualBase64, ...rest } = herramienta
-      return NextResponse.json({ ...rest, tieneManual: Boolean(rest.manualNombre) })
+      const {
+        manualBase64: _manualBase64,
+        informeMantencionBase64: _informeMantencionBase64,
+        ...rest
+      } = herramienta
+      return NextResponse.json({
+        ...rest,
+        tieneManual: Boolean(rest.manualNombre),
+        tieneInformeMantencion: Boolean(rest.informeMantencionNombre),
+      })
     }
     
     return NextResponse.json({
       ...herramienta,
       tieneManual: Boolean(herramienta.manualNombre),
+      tieneInformeMantencion: Boolean(herramienta.informeMantencionNombre),
     })
   } catch (error) {
     console.error('Error fetching herramienta:', error)
@@ -67,6 +76,20 @@ export async function PUT(
           manualNombre: data.manualNombre ?? undefined,
           manualTipo: data.manualTipo ?? undefined,
         }
+
+    // Si viene la bandera eliminarInformeMantencion, se limpian los campos del informe
+    const eliminarInformeMantencion = data.eliminarInformeMantencion === true
+    const dataInformeMantencion = eliminarInformeMantencion
+      ? {
+          informeMantencionBase64: null,
+          informeMantencionNombre: null,
+          informeMantencionTipo: null,
+        }
+      : {
+          informeMantencionBase64: data.informeMantencionBase64 ?? undefined,
+          informeMantencionNombre: data.informeMantencionNombre ?? undefined,
+          informeMantencionTipo: data.informeMantencionTipo ?? undefined,
+        }
     
     const herramienta = await db.catHerramienta.update({
       where: { id },
@@ -81,7 +104,9 @@ export async function PUT(
         valorReposicion: parseFloat(data.valorReposicion) || 0,
         fechaAdquisicion: data.fechaAdquisicion || null,
         descripcion: data.descripcion || null,
+        fechaUltimoMantencion: data.fechaUltimoMantencion || null,
         ...dataManual,
+        ...dataInformeMantencion,
       }
     })
     

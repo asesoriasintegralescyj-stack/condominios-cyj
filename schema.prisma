@@ -694,6 +694,12 @@ model CatHerramienta {
   manualNombre    String?  // Nombre original del archivo
   manualTipo      String?  // Tipo MIME (application/pdf, etc.)
 
+  // Mantenimiento
+  fechaUltimoMantencion String? // Fecha del último mantenimiento (yyyy-mm-dd)
+  informeMantencionBase64 String? // Informe de mantenimiento en base64 (PDF)
+  informeMantencionNombre String? // Nombre del archivo
+  informeMantencionTipo   String? // Tipo MIME
+
   // Código QR (URL para acceder a la info de la herramienta)
   qrCodigo        String?  // URL: https://condominios-cyj.vercel.app/h/{id}
 

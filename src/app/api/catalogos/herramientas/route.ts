@@ -18,11 +18,18 @@ export async function GET() {
         centroCosto: true,
       },
     })
-    // Ocultar manualBase64 en la lista (puede ser muy pesado); solo enviar metadatos
-    const result = herramientas.map(({ manualBase64: _manualBase64, ...rest }) => ({
-      ...rest,
-      tieneManual: Boolean(rest.manualNombre),
-    }))
+    // Ocultar manualBase64 e informeMantencionBase64 en la lista (puede ser muy pesado); solo enviar metadatos
+    const result = herramientas.map(
+      ({
+        manualBase64: _manualBase64,
+        informeMantencionBase64: _informeMantencionBase64,
+        ...rest
+      }) => ({
+        ...rest,
+        tieneManual: Boolean(rest.manualNombre),
+        tieneInformeMantencion: Boolean(rest.informeMantencionNombre),
+      })
+    )
     
     return NextResponse.json(result)
   } catch (error) {
@@ -56,6 +63,10 @@ export async function POST(request: NextRequest) {
         manualBase64: data.manualBase64 || null,
         manualNombre: data.manualNombre || null,
         manualTipo: data.manualTipo || null,
+        fechaUltimoMantencion: data.fechaUltimoMantencion || null,
+        informeMantencionBase64: data.informeMantencionBase64 || null,
+        informeMantencionNombre: data.informeMantencionNombre || null,
+        informeMantencionTipo: data.informeMantencionTipo || null,
       }
     })
     

@@ -47,6 +47,12 @@ export default async function HerramientaPage({ params }: HerramientaPageProps) 
 
   const manualDownloadName = herramienta.manualNombre || `manual-${herramienta.codigo || herramienta.id}.pdf`
 
+  const informeHref = herramienta.informeMantencionBase64
+    ? `data:${herramienta.informeMantencionTipo || 'application/pdf'};base64,${herramienta.informeMantencionBase64}`
+    : null
+
+  const informeDownloadName = herramienta.informeMantencionNombre || `informe-mantencion-${herramienta.codigo || herramienta.id}.pdf`
+
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Header LAGUNA NORTE */}
@@ -117,6 +123,11 @@ export default async function HerramientaPage({ params }: HerramientaPageProps) 
             icon={<Calendar className="w-4 h-4" />}
             label="Fecha Adquisición"
             value={formatDate(herramienta.fechaAdquisicion)}
+          />
+          <SpecCard
+            icon={<Settings className="w-4 h-4" />}
+            label="Fecha Últ. Mantenimiento"
+            value={formatDate(herramienta.fechaUltimoMantencion)}
           />
           <SpecCard
             icon={<DollarSign className="w-4 h-4" />}
@@ -190,6 +201,46 @@ export default async function HerramientaPage({ params }: HerramientaPageProps) 
               <FileText className="w-5 h-5 text-slate-400 shrink-0" />
               <p className="text-sm text-slate-500">
                 Esta herramienta no tiene manual adjunto.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Informe de Mantenimiento */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Settings className="w-5 h-5 text-[#0f2040]" />
+            <h3 className="text-sm uppercase tracking-wider text-slate-500 font-bold">
+              Informe de Mantenimiento
+            </h3>
+          </div>
+          {informeHref ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800 truncate">
+                    {informeDownloadName}
+                  </p>
+                  <p className="text-xs text-slate-500">Informe de mantenimiento adjunto</p>
+                </div>
+              </div>
+              <a
+                href={informeHref}
+                download={informeDownloadName}
+                className="inline-flex items-center justify-center gap-2 w-full sm:w-auto bg-[#0f2040] hover:bg-[#1a3060] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                Descargar Informe de Mantenimiento
+              </a>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <Settings className="w-5 h-5 text-slate-400 shrink-0" />
+              <p className="text-sm text-slate-500">
+                Esta herramienta no tiene informe de mantenimiento adjunto.
               </p>
             </div>
           )}

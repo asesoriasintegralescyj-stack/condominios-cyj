@@ -60,10 +60,23 @@ interface Herramienta {
   manualNombre?: string | null
   manualTipo?: string | null
   tieneManual?: boolean
+  // Mantenimiento
+  fechaUltimoMantencion?: string | null
+  informeMantencionNombre?: string | null
+  informeMantencionTipo?: string | null
+  tieneInformeMantencion?: boolean
   centroCosto: CentroCosto | null
 }
 
 interface ManualState {
+  base64: string | null
+  nombre: string | null
+  tipo: string | null
+  removed: boolean
+  isNew: boolean
+}
+
+interface InformeMantencionState {
   base64: string | null
   nombre: string | null
   tipo: string | null
@@ -100,6 +113,14 @@ const emptyManual: ManualState = {
   isNew: false,
 }
 
+const emptyInformeMantencion: InformeMantencionState = {
+  base64: null,
+  nombre: null,
+  tipo: null,
+  removed: false,
+  isNew: false,
+}
+
 export function HerramientasModule() {
   const [herramientas, setHerramientas] = useState<Herramienta[]>([])
   const [loading, setLoading] = useState(true)
@@ -121,9 +142,12 @@ export function HerramientasModule() {
     valorReposicion: 0,
     fechaAdquisicion: '',
     descripcion: '',
+    fechaUltimoMantencion: '',
   })
   const [manual, setManual] = useState<ManualState>(emptyManual)
   const [manualDownloading, setManualDownloading] = useState(false)
+  const [informeMantencion, setInformeMantencion] = useState<InformeMantencionState>(emptyInformeMantencion)
+  const [informeDownloading, setInformeDownloading] = useState(false)
 
   // QR dialog
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
@@ -193,8 +217,10 @@ export function HerramientasModule() {
       valorReposicion: 0,
       fechaAdquisicion: '',
       descripcion: '',
+      fechaUltimoMantencion: '',
     })
     setManual(emptyManual)
+    setInformeMantencion(emptyInformeMantencion)
     setDialogOpen(true)
   }
 
@@ -212,12 +238,21 @@ export function HerramientasModule() {
       valorReposicion: herramienta.valorReposicion,
       fechaAdquisicion: herramienta.fechaAdquisicion || '',
       descripcion: herramienta.descripcion || '',
+      fechaUltimoMantencion: herramienta.fechaUltimoMantencion || '',
     })
     // Cargar el manual existente (sin el base64 para no inflar el formulario)
     setManual({
       base64: null,
       nombre: herramienta.manualNombre || null,
       tipo: herramienta.manualTipo || null,
+      removed: false,
+      isNew: false,
+    })
+    // Cargar el informe de mantención existente (sin el base64)
+    setInformeMantencion({
+      base64: null,
+      nombre: herramienta.informeMantencionNombre || null,
+      tipo: herramienta.informeMantencionTipo || null,
       removed: false,
       isNew: false,
     })
@@ -269,6 +304,74 @@ export function HerramientasModule() {
     })
   }
 
+  const handleInformeMantencionUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      alert('Solo se permiten archivos PDF')
+      e.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      const base64 = result.split(',')[1] || result
+      setInformeMantencion({
+        base64,
+        nombre: file.name,
+        tipo: file.type || 'application/pdf',
+        removed: false,
+        isNew: true,
+      })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleInformeMantencionRemove = () => {
+    setInformeMantencion({
+      base64: null,
+      nombre: null,
+      tipo: null,
+      removed: true,
+      isNew: false,
+    })
+  }
+
+  const handleDownloadInforme = async () => {
+    if (!selectedHerramienta) return
+    setInformeDownloading(true)
+    try {
+      // Si el usuario acaba de subir un informe nuevo, descargarlo directamente
+      if (informeMantencion.isNew && informeMantencion.base64 && informeMantencion.nombre) {
+        const blob = base64ToBlob(informeMantencion.base64, informeMantencion.tipo || 'application/pdf')
+        triggerDownload(blob, informeMantencion.nombre)
+        setInformeDownloading(false)
+        return
+      }
+      // Si no, obtener el informe existente del backend
+      const res = await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
+        headers: { 'x-incluir-manual': 'true' },
+      })
+      if (!res.ok) {
+        alert('No se pudo descargar el informe')
+        return
+      }
+      const data = await res.json()
+      if (!data.informeMantencionBase64) {
+        alert('Esta herramienta no tiene informe de mantención adjunto')
+        return
+      }
+      const blob = base64ToBlob(data.informeMantencionBase64, data.informeMantencionTipo || 'application/pdf')
+      triggerDownload(blob, data.informeMantencionNombre || 'informe-mantencion.pdf')
+    } catch (error) {
+      console.error('Error descargando informe:', error)
+      alert('Error al descargar el informe')
+    } finally {
+      setInformeDownloading(false)
+    }
+  }
+
   const handleDownloadManual = async () => {
     if (!selectedHerramienta) return
     setManualDownloading(true)
@@ -316,7 +419,17 @@ export function HerramientasModule() {
         manualBody.eliminarManual = true
       }
 
-      const body = { ...formData, ...manualBody }
+      // Construir el body del informe de mantención
+      const informeBody: Record<string, string | boolean | null> = {}
+      if (informeMantencion.isNew && informeMantencion.base64) {
+        informeBody.informeMantencionBase64 = informeMantencion.base64
+        informeBody.informeMantencionNombre = informeMantencion.nombre
+        informeBody.informeMantencionTipo = informeMantencion.tipo
+      } else if (informeMantencion.removed) {
+        informeBody.eliminarInformeMantencion = true
+      }
+
+      const body = { ...formData, ...manualBody, ...informeBody }
 
       if (isEditing && selectedHerramienta) {
         await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
@@ -527,15 +640,16 @@ export function HerramientasModule() {
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
                   <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Últ. Mant.</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Manual</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : filteredHerramientas.length === 0 ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
                 ) : (
                   filteredHerramientas.map((herr) => (
                     <tr key={herr.id} className="border-b last:border-0 hover:bg-slate-50">
@@ -559,6 +673,13 @@ export function HerramientasModule() {
                         </Badge>
                       </td>
                       <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(herr.valorReposicion)}</td>
+                      <td className="p-3 text-center text-xs whitespace-nowrap">
+                        {herr.fechaUltimoMantencion ? (
+                          <span title={herr.fechaUltimoMantencion}>{herr.fechaUltimoMantencion}</span>
+                        ) : (
+                          <span className="text-slate-300">–</span>
+                        )}
+                      </td>
                       <td className="p-3 text-center">
                         {herr.tieneManual ? (
                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-50 text-red-600" title="Tiene manual adjunto">
@@ -614,60 +735,65 @@ export function HerramientasModule() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Editar Herramienta' : 'Nueva Herramienta'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Código</Label>
-                <Input 
-                  value={formData.codigo} 
-                  onChange={(e) => setFormData({...formData, codigo: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={formData.codigo}
+                  onChange={(e) => setFormData({...formData, codigo: e.target.value})}
                   placeholder="Ej: HERR-01"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Nombre *</Label>
-                <Input 
-                  value={formData.nombre} 
-                  onChange={(e) => setFormData({...formData, nombre: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({...formData, nombre: e.target.value})}
                   placeholder="Nombre de la herramienta"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Marca</Label>
-                <Input 
-                  value={formData.marca} 
-                  onChange={(e) => setFormData({...formData, marca: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={formData.marca}
+                  onChange={(e) => setFormData({...formData, marca: e.target.value})}
                   placeholder="Ej: Bosch, Makita"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Modelo</Label>
-                <Input 
-                  value={formData.modelo} 
-                  onChange={(e) => setFormData({...formData, modelo: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={formData.modelo}
+                  onChange={(e) => setFormData({...formData, modelo: e.target.value})}
                   placeholder="Modelo del equipo"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Cantidad</Label>
-                <Input 
-                  type="number" 
-                  value={formData.cantidad} 
-                  onChange={(e) => setFormData({...formData, cantidad: parseInt(e.target.value) || 1})} 
+                <Input
+                  className="w-full"
+                  type="number"
+                  value={formData.cantidad}
+                  onChange={(e) => setFormData({...formData, cantidad: parseInt(e.target.value) || 1})}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Estado</Label>
                 <Select value={formData.estado} onValueChange={(v) => setFormData({...formData, estado: v})}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleccionar estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -679,44 +805,132 @@ export function HerramientasModule() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Ubicación</Label>
-                <Input 
-                  value={formData.ubicacion} 
-                  onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} 
+                <Input
+                  className="w-full"
+                  value={formData.ubicacion}
+                  onChange={(e) => setFormData({...formData, ubicacion: e.target.value})}
                   placeholder="Ej: Bodega A, Estante 2"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5 min-w-0">
                 <Label>Fecha Adquisición</Label>
-                <Input 
-                  type="date" 
-                  value={formData.fechaAdquisicion} 
-                  onChange={(e) => setFormData({...formData, fechaAdquisicion: e.target.value})} 
+                <Input
+                  className="w-full"
+                  type="date"
+                  value={formData.fechaAdquisicion}
+                  onChange={(e) => setFormData({...formData, fechaAdquisicion: e.target.value})}
                 />
               </div>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 min-w-0">
               <Label>Valor Reposición</Label>
-              <Input 
-                type="number" 
-                value={formData.valorReposicion} 
-                onChange={(e) => setFormData({...formData, valorReposicion: parseFloat(e.target.value) || 0})} 
+              <Input
+                className="w-full"
+                type="number"
+                value={formData.valorReposicion}
+                onChange={(e) => setFormData({...formData, valorReposicion: parseFloat(e.target.value) || 0})}
                 placeholder="Valor en CLP"
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 min-w-0">
               <Label>Descripción</Label>
-              <Textarea 
-                value={formData.descripcion} 
-                onChange={(e) => setFormData({...formData, descripcion: e.target.value})} 
+              <Textarea
+                className="w-full"
+                value={formData.descripcion}
+                onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
                 placeholder="Notas adicionales..."
                 rows={2}
               />
             </div>
 
+            {/* Mantenimiento */}
+            <div className="space-y-3 border-t pt-4">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <Settings className="w-4 h-4 text-[#0f2040]" />
+                Mantenimiento
+              </Label>
+              <div className="space-y-1.5 min-w-0">
+                <Label>Fecha Último Mantenimiento</Label>
+                <Input
+                  className="w-full"
+                  type="date"
+                  value={formData.fechaUltimoMantencion}
+                  onChange={(e) => setFormData({...formData, fechaUltimoMantencion: e.target.value})}
+                />
+              </div>
+              <div className="space-y-2 min-w-0">
+                <Label className="text-xs text-slate-600">Informe de Mantenimiento (PDF)</Label>
+                {informeMantencion.nombre && !informeMantencion.removed ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {informeMantencion.nombre}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {informeMantencion.isNew ? 'Nuevo informe (se subirá al guardar)' : 'Informe adjunto'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          className="hidden"
+                          onChange={handleInformeMantencionUpload}
+                        />
+                        <Button size="sm" variant="outline" asChild>
+                          <span><Upload className="w-3.5 h-3.5 mr-1" /> Reemplazar</span>
+                        </Button>
+                      </label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDownloadInforme}
+                        disabled={informeDownloading}
+                      >
+                        <Download className="w-3.5 h-3.5 mr-1" />
+                        {informeDownloading ? 'Descargando...' : 'Descargar'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={handleInformeMantencionRemove}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                        Eliminar Informe
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer block">
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      className="hidden"
+                      onChange={handleInformeMantencionUpload}
+                    />
+                    <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                      <Upload className="w-6 h-6 text-slate-400" />
+                      <p className="text-sm text-slate-600">
+                        <span className="text-[#0f2040] font-semibold">Haz clic para subir</span> un PDF
+                      </p>
+                      <p className="text-xs text-slate-400">Solo archivos PDF · máx. ~5 MB recomendado</p>
+                    </div>
+                  </label>
+                )}
+              </div>
+            </div>
+
             {/* Manual de Usuario */}
-            <div className="space-y-2 border-t pt-4">
+            <div className="space-y-2 border-t pt-4 min-w-0">
               <Label className="flex items-center gap-2 text-sm font-semibold">
                 <FileText className="w-4 h-4 text-[#0f2040]" />
                 Manual de Usuario (PDF)
