@@ -35,6 +35,8 @@ import {
   RefreshCw,
   ShoppingCart,
   Eye,
+  Link2,
+  ExternalLink,
 } from 'lucide-react'
 
 interface MaterialSolicitud {
@@ -63,6 +65,7 @@ interface SolicitudCompra {
   fechaEspera: string | null
   proveedorSugerido: string | null
   observaciones: string | null
+  links?: string[]
   emailEnviado: boolean
   emailEnviadoA: string | null
   emailFechaEnvio: string | null
@@ -110,6 +113,7 @@ export function SolicitudesComprasModule() {
   const [editing, setEditing] = useState<SolicitudCompra | null>(null)
   const [formData, setFormData] = useState({ ...emptyForm })
   const [materiales, setMateriales] = useState<MaterialSolicitud[]>([])
+  const [links, setLinks] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   const [detailOpen, setDetailOpen] = useState(false)
@@ -162,6 +166,7 @@ export function SolicitudesComprasModule() {
     setMateriales([
       { nombre: '', cantidad: 1, unidad: 'unidad', precioEstimado: 0, total: 0 },
     ])
+    setLinks([])
     setDialogOpen(true)
   }
 
@@ -181,6 +186,7 @@ export function SolicitudesComprasModule() {
         ? s.materiales.map((m) => ({ ...m }))
         : [{ nombre: '', cantidad: 1, unidad: 'unidad', precioEstimado: 0, total: 0 }]
     )
+    setLinks(Array.isArray(s.links) ? s.links.map((l) => String(l || '')) : [])
     setDialogOpen(true)
   }
 
@@ -210,6 +216,14 @@ export function SolicitudesComprasModule() {
     setMateriales(materiales.filter((_, i) => i !== index))
   }
 
+  const addLink = () => setLinks([...links, ''])
+  const updateLink = (index: number, value: string) => {
+    const next = [...links]
+    next[index] = value
+    setLinks(next)
+  }
+  const removeLink = (index: number) => setLinks(links.filter((_, i) => i !== index))
+
   const totalEstimado = useMemo(
     () => materiales.reduce((acc, m) => acc + (Number(m.total) || 0), 0),
     [materiales]
@@ -234,6 +248,7 @@ export function SolicitudesComprasModule() {
       ...formData,
       materiales: cleanMateriales,
       totalEstimado,
+      links: links.map((l) => l.trim()).filter((l) => l !== ''),
     }
 
     setSaving(true)
@@ -802,6 +817,44 @@ export function SolicitudesComprasModule() {
                 placeholder="Observaciones adicionales para administración..."
               />
             </div>
+
+            {/* Links de Compra */}
+            <div className="space-y-2 min-w-0">
+              <div className="flex justify-between items-center">
+                <Label>Links de Compra ({links.length})</Label>
+                <Button size="sm" variant="outline" onClick={addLink}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Agregar link
+                </Button>
+              </div>
+              {links.length === 0 ? (
+                <p className="text-xs text-slate-500 italic">
+                  Sin links de compra. Agrega URLs de productos (opcional).
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {links.map((l, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <Input
+                        value={l}
+                        onChange={(e) => updateLink(i, e.target.value)}
+                        className="h-9 flex-1"
+                        placeholder="https://..."
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-red-600 shrink-0"
+                        aria-label="Eliminar link"
+                        onClick={() => removeLink(i)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
@@ -930,6 +983,26 @@ export function SolicitudesComprasModule() {
                     <Label className="text-xs">Observaciones</Label>
                     <div className="text-sm text-slate-700 whitespace-pre-wrap mt-1">
                       {detail.observaciones}
+                    </div>
+                  </div>
+                )}
+
+                {detail.links && detail.links.length > 0 && (
+                  <div>
+                    <Label className="text-xs">Links de Compra</Label>
+                    <div className="space-y-1 mt-1">
+                      {detail.links.map((l, i) => (
+                        <a
+                          key={i}
+                          href={l}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 text-sm text-blue-600 hover:underline break-all"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                          <span className="truncate">{l}</span>
+                        </a>
+                      ))}
                     </div>
                   </div>
                 )}

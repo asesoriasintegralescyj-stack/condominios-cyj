@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
     const parsed = solicitudes.map((s) => ({
       ...s,
       materiales: s.materiales ? safeParseMateriales(s.materiales) : [],
+      links: safeParseLinks(s.links),
     }))
 
     return NextResponse.json(parsed)
@@ -113,6 +114,9 @@ export async function POST(request: NextRequest) {
       fechaEspera: body.fechaEspera ? String(body.fechaEspera) : null,
       proveedorSugerido: body.proveedorSugerido ? String(body.proveedorSugerido) : null,
       observaciones: body.observaciones ? String(body.observaciones) : null,
+      links: Array.isArray(body.links) && body.links.length > 0
+        ? JSON.stringify(body.links.map((l: any) => String(l || '').trim()).filter((l: string) => l !== ''))
+        : null,
       emailEnviado: false,
       condominioId: CONDOMINIO_LAGUNA_NORTE,
     }
@@ -129,6 +133,7 @@ export async function POST(request: NextRequest) {
     let fotosAntes: string[] = []
     let fotosDespues: string[] = []
     let cotizacionesLinks: string[] = []
+    let materialesLinks: string[] = []
     if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
       try {
         const proyectoOrigen = await db.proyecto.findUnique({
@@ -137,6 +142,7 @@ export async function POST(request: NextRequest) {
             fotosAntes: true,
             fotosDespues: true,
             cotizaciones: true,
+            materiales: { select: { linkCompra: true } },
           },
         })
         if (proyectoOrigen) {
@@ -145,6 +151,9 @@ export async function POST(request: NextRequest) {
           fotosAntes = parseStringArray(proyectoOrigen.fotosAntes).slice(0, 3)
           fotosDespues = parseStringArray(proyectoOrigen.fotosDespues).slice(0, 3)
           cotizacionesLinks = extractCotizacionLinks(proyectoOrigen.cotizaciones)
+          materialesLinks = proyectoOrigen.materiales
+            .map((m) => (m.linkCompra || '').trim())
+            .filter((l) => l !== '')
         }
       } catch (e) {
         console.warn(
@@ -153,6 +162,17 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+
+    // Also include any linkCompra provided in the materiales payload itself
+    const linksFromMateriales = materialesRaw
+      .map((m: any) => (m.linkCompra || '').trim())
+      .filter((l: string) => l !== '')
+    if (linksFromMateriales.length > 0) {
+      materialesLinks = Array.from(new Set([...materialesLinks, ...linksFromMateriales]))
+    }
+
+    // Parsear links persistidos en la SC
+    const scLinks = parseStringArray(solicitud.links)
 
     // Intentar enviar email (no falla si SMTP no está configurado)
     const emailResult = await sendSolicitudCompraEmail({
@@ -175,6 +195,8 @@ export async function POST(request: NextRequest) {
       fotosAntes,
       fotosDespues,
       cotizacionesLinks,
+      links: scLinks,
+      materialesLinks,
     })
 
     let updated = solicitud
@@ -201,6 +223,7 @@ export async function POST(request: NextRequest) {
       {
         ...updated,
         materiales: materialesRaw,
+        links: scLinks,
         emailEnviado: updated.emailEnviado,
         emailSkipped: emailResult.skipped === true,
       },
@@ -216,6 +239,19 @@ function safeParseMateriales(raw: string): MaterialSolicitud[] {
   try {
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed)) return parsed
+    return []
+  } catch {
+    return []
+  }
+}
+
+function safeParseLinks(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string')
+    }
     return []
   } catch {
     return []

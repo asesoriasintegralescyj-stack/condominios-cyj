@@ -39,6 +39,10 @@ export interface EmailSolicitudPayload {
   fotosAntes?: string[]
   fotosDespues?: string[]
   cotizacionesLinks?: string[]
+  // Optional: dynamic purchase links added to the SC
+  links?: string[]
+  // Optional: linkCompra URLs extracted from the origin project's materiales
+  materialesLinks?: string[]
 }
 
 let cachedTransport: Transporter | null = null
@@ -124,6 +128,27 @@ function buildMaterialesTable(materiales: MaterialSolicitud[]): string {
     </table>`
 }
 
+function buildLinksSection(
+  title: string,
+  links: string[] | undefined
+): string {
+  if (!links || links.length === 0) return ''
+  const items = links
+    .map(
+      (l) => `
+        <li style="margin-bottom:6px;">
+          <a href="${escapeHtml(l)}" style="color:#0d6efd;text-decoration:none;word-break:break-all;">🔗 Ver producto / Comprar</a>
+          <div style="font-size:11px;color:#64748b;word-break:break-all;">${escapeHtml(l)}</div>
+        </li>`
+    )
+    .join('')
+  return `
+    <h2 style="font-size:15px;color:#0f2040;margin:20px 0 8px;">${escapeHtml(title)}</h2>
+    <ul style="list-style:none;padding:0;margin:0;font-size:13px;">
+      ${items}
+    </ul>`
+}
+
 export function buildSolicitudHtml(payload: EmailSolicitudPayload): string {
   const {
     codigo,
@@ -205,6 +230,8 @@ export function buildSolicitudHtml(payload: EmailSolicitudPayload): string {
       ${descripcionHtml}
       <h2 style="font-size:15px;color:#0f2040;margin:20px 0 8px;">Materiales solicitados</h2>
       ${buildMaterialesTable(materiales)}
+      ${buildLinksSection('Links de Compra', payload.links)}
+      ${buildLinksSection('Links de los Materiales', payload.materialesLinks)}
       ${observacionesHtml}
       <p style="margin-top:24px;font-size:12px;color:#64748b;">
         Total estimado: <strong style="color:#0f2040;">${formatCLP(totalEstimado)}</strong><br/>
@@ -266,6 +293,8 @@ export async function sendSolicitudCompraEmail(
       fotosAntes: payload.fotosAntes,
       fotosDespues: payload.fotosDespues,
       cotizacionesLinks: payload.cotizacionesLinks,
+      links: payload.links,
+      materialesLinks: payload.materialesLinks,
     })
   } catch (error) {
     console.error(

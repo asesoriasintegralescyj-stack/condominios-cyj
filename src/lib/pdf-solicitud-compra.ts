@@ -47,6 +47,10 @@ export interface PdfSolicitudCompraInput {
   fotosDespues?: string[]
   // Optional list of cotizaciones/links from the origin project
   cotizacionesLinks?: string[]
+  // Optional: dynamic purchase links added to the SC
+  links?: string[]
+  // Optional: linkCompra URLs extracted from the origin project's materiales
+  materialesLinks?: string[]
 }
 
 const EMPRESA = {
@@ -264,6 +268,48 @@ export function generateSolicitudCompraPdfBuffer(
     doc.text(obsLines, margin, y + 8)
     y += 8 + obsLines.length * 4 + 2
   }
+
+  // ============================================
+  // Links de Compra (links dinámicos + materialesLinks)
+  // ============================================
+  const renderLinksSection = (
+    title: string,
+    sectionLinks: string[] | undefined
+  ) => {
+    if (!sectionLinks || sectionLinks.length === 0) return
+    if (y > pageHeight - 30) {
+      doc.addPage()
+      y = 14
+    }
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(15, 32, 64)
+    doc.text(title, margin, y + 4)
+    y += 8
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(20, 20, 20)
+    let linkY = y
+    for (const link of sectionLinks) {
+      if (linkY > pageHeight - 16) {
+        doc.addPage()
+        linkY = 14
+      }
+      const label = '🔗 Click aquí para comprar'
+      const urlLines = doc.splitTextToSize(link, pageWidth - margin * 2 - 50)
+      const blockH = Math.max(6, urlLines.length * 4 + 2)
+      doc.setTextColor(13, 110, 253) // #0d6efd
+      doc.textWithLink(label, margin, linkY, { url: link })
+      doc.setTextColor(120, 120, 120)
+      doc.setFontSize(8)
+      doc.text(urlLines, margin, linkY + 4)
+      doc.setFontSize(9)
+      linkY += blockH + 2
+    }
+    y = linkY + 2
+  }
+
+  renderLinksSection('Links de Compra', input.links)
+  renderLinksSection('Links de los Materiales', input.materialesLinks)
 
   // ============================================
   // Cotizaciones links (from origin proyecto)

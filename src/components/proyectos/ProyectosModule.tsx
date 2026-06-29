@@ -28,7 +28,7 @@ import {
   Plus, Pencil, Trash2, Search, Download, Package, Wrench,
   CheckSquare, Users, FileText, Upload, Eye, X, Paperclip,
   FileSpreadsheet, FileDown, Camera, Image as ImageIcon,
-  ShoppingCart,
+  ShoppingCart, Link2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -42,6 +42,7 @@ interface ProyectoMaterial {
   unidad: string
   precioUnit: number
   total: number
+  linkCompra: string
 }
 
 interface ProyectoHerramienta {
@@ -476,7 +477,7 @@ export function ProyectosModule() {
         fechaFinReal: proy.fechaFinReal || '',
         comentarios: proy.comentarios || '',
       })
-      setMateriales(proy.materiales || [])
+      setMateriales((proy.materiales || []).map((m) => ({ ...m, linkCompra: m.linkCompra || '' })))
       setHerramientas(proy.herramientas || [])
       setTareas(proy.tareas || [])
       setPersonal(proy.personal || [])
@@ -602,6 +603,7 @@ export function ProyectosModule() {
       unidad: 'unidad',
       precioUnit: 0,
       total: 0,
+      linkCompra: '',
     }])
   }
   const updateMaterial = (index: number, field: string, value: string | number) => {
@@ -1311,6 +1313,7 @@ export function ProyectosModule() {
           unidad: m.unidad || 'unidad',
           precioEstimado: Number(m.precioUnit) || 0,
           total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
+          linkCompra: m.linkCompra || '',
         }))
 
       if (materialesSolicitud.length === 0) {
@@ -1318,6 +1321,11 @@ export function ProyectosModule() {
         setEnviandoSolicitud(false)
         return
       }
+
+      // Recopilar todos los linkCompra no vacíos en un array de links
+      const links = selectedProy.materiales
+        .map((m) => (m.linkCompra || '').trim())
+        .filter((l) => l !== '')
 
       const total = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
 
@@ -1336,6 +1344,7 @@ export function ProyectosModule() {
         origenTipo: 'Proyecto',
         origenId: selectedProy.id,
         origenCodigo: codigoProy,
+        links,
       }
 
       const res = await fetch('/api/solicitudes-compra', {
@@ -2027,26 +2036,37 @@ export function ProyectosModule() {
                       <div className="col-span-1"></div>
                     </div>
                     {materiales.map((m, i) => (
-                      <div key={m.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded">
-                        <div className="col-span-4 min-w-0">
-                          <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8 w-full" placeholder="Descripción" />
+                      <div key={m.id} className="bg-slate-50 p-2 rounded space-y-1">
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-4 min-w-0">
+                            <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8 w-full" placeholder="Descripción" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="0" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Input value={m.unidad} onChange={(e) => updateMaterial(i, 'unidad', e.target.value)} className="h-8 w-full" placeholder="unidad" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
+                          </div>
+                          <div className="col-span-1 min-w-0">
+                            <div className="h-8 px-1 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(m.total)}</div>
+                          </div>
+                          <div className="col-span-1 flex justify-center">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeMaterial(i)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="col-span-2 min-w-0">
-                          <Input type="number" value={m.cantidad} onChange={(e) => updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="0" />
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <Input value={m.unidad} onChange={(e) => updateMaterial(i, 'unidad', e.target.value)} className="h-8 w-full" placeholder="unidad" />
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <Input type="number" value={m.precioUnit} onChange={(e) => updateMaterial(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
-                        </div>
-                        <div className="col-span-1 min-w-0">
-                          <div className="h-8 px-1 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(m.total)}</div>
-                        </div>
-                        <div className="col-span-1 flex justify-center">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeMaterial(i)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        <div className="col-span-12 flex items-center gap-2 mt-1">
+                          <Link2 className="w-3 h-3 text-slate-400 shrink-0" />
+                          <Input
+                            value={m.linkCompra || ''}
+                            onChange={(e) => updateMaterial(i, 'linkCompra', e.target.value)}
+                            className="h-7 w-full text-xs"
+                            placeholder="https://... link de compra (opcional)"
+                          />
                         </div>
                       </div>
                     ))}

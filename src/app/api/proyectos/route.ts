@@ -6,7 +6,7 @@ import { apiError, handlePrismaError } from '@/lib/api-helpers'
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
 // Tipo para los recursos relacionados
-type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number }
+type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number; linkCompra?: string }
 type HerramientaInput = { nombre: string; cantidad: number }
 type TareaInput = { descripcion: string; cantidad: number; estado: string }
 type PersonalInput = { nombre: string; tipo: string; cantidad: number; precioUnit: number; total: number }
@@ -191,6 +191,7 @@ export async function POST(request: NextRequest) {
                   unidad: m.unidad || 'unidad',
                   precioUnit: parseFloat(String(m.precioUnit)) || 0,
                   total: parseFloat(String(m.total)) || 0,
+                  linkCompra: m.linkCompra || null,
                 })),
               }
             : undefined,

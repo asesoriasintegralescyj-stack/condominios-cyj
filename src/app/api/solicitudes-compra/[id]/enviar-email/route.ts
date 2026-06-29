@@ -21,6 +21,19 @@ function safeParseMateriales(raw: string | null): MaterialSolicitud[] {
   }
 }
 
+function safeParseLinks(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string')
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
 // POST - Reenviar email de una solicitud de compra
 export async function POST(_request: NextRequest, { params }: Context) {
   const session = await getCurrentSession()
@@ -32,6 +45,33 @@ export async function POST(_request: NextRequest, { params }: Context) {
     if (!solicitud) return apiError('Solicitud no encontrada', 404)
 
     const materiales = safeParseMateriales(solicitud.materiales)
+    const scLinks = safeParseLinks(solicitud.links)
+
+    // If the SC originated from a Proyecto, fetch the project's materiales
+    // to extract their linkCompra URLs.
+    let materialesLinks: string[] = []
+    if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
+      try {
+        const proyectoOrigen = await db.proyecto.findUnique({
+          where: { id: solicitud.origenId },
+          select: { materiales: { select: { linkCompra: true } } },
+        })
+        if (proyectoOrigen) {
+          materialesLinks = proyectoOrigen.materiales
+            .map((m) => (m.linkCompra || '').trim())
+            .filter((l) => l !== '')
+        }
+      } catch (e) {
+        console.warn('[Reenviar email] No se pudo obtener materiales del proyecto origen:', e)
+      }
+    }
+    // Also include any linkCompra present in the SC's own materiales
+    const linksFromMateriales = materiales
+      .map((m: any) => (m.linkCompra || '').trim())
+      .filter((l: string) => l !== '')
+    if (linksFromMateriales.length > 0) {
+      materialesLinks = Array.from(new Set([...materialesLinks, ...linksFromMateriales]))
+    }
 
     const emailResult = await sendSolicitudCompraEmail({
       codigo: solicitud.codigo,
@@ -47,6 +87,8 @@ export async function POST(_request: NextRequest, { params }: Context) {
       observaciones: solicitud.observaciones,
       origenCodigo: solicitud.origenCodigo,
       origenTipo: solicitud.origenTipo,
+      links: scLinks,
+      materialesLinks,
     })
 
     if (emailResult.skipped) {

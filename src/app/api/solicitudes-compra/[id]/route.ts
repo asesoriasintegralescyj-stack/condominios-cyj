@@ -18,6 +18,19 @@ function safeParseMateriales(raw: string | null): MaterialSolicitud[] {
   }
 }
 
+function safeParseLinks(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string')
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
 // GET - Detalle de una solicitud
 export async function GET(_request: NextRequest, { params }: Context) {
   const session = await getCurrentSession()
@@ -34,6 +47,7 @@ export async function GET(_request: NextRequest, { params }: Context) {
     return NextResponse.json({
       ...solicitud,
       materiales: safeParseMateriales(solicitud.materiales),
+      links: safeParseLinks(solicitud.links),
     })
   } catch (error) {
     console.error('Error fetching solicitud de compra:', error)
@@ -89,6 +103,11 @@ export async function PUT(request: NextRequest, { params }: Context) {
     if (body.solicitadoPor !== undefined) data.solicitadoPor = body.solicitadoPor || null
     if (body.materiales !== undefined)
       data.materiales = materialesRaw.length > 0 ? JSON.stringify(materialesRaw) : null
+    if (body.links !== undefined) {
+      data.links = Array.isArray(body.links) && body.links.length > 0
+        ? JSON.stringify(body.links.map((l: any) => String(l || '').trim()).filter((l: string) => l !== ''))
+        : null
+    }
     if (totalEstimado !== undefined) data.totalEstimado = totalEstimado
 
     const updated = await db.solicitudCompra.update({ where: { id }, data })
@@ -96,6 +115,7 @@ export async function PUT(request: NextRequest, { params }: Context) {
     return NextResponse.json({
       ...updated,
       materiales: safeParseMateriales(updated.materiales),
+      links: safeParseLinks(updated.links),
     })
   } catch (error) {
     console.error('Error updating solicitud de compra:', error)

@@ -561,6 +561,7 @@ model ProyectoMaterial {
   precioUnit  Float    @default(0)
   total       Float    @default(0)
   unidad      String   @default("unidad")
+  linkCompra  String?  // URL de compra del material
   proyectoId  String
   proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 }
@@ -1675,6 +1676,8 @@ model SolicitudCompra {
   fechaEspera     String?  // Fecha esperada de entrega
   proveedorSugerido String?
   observaciones   String?
+  // Links de compra (JSON array de URLs)
+  links           String?
   // Email
   emailEnviado    Boolean  @default(false)
   emailEnviadoA   String?  // administracionlagunanorte@gmail.com
