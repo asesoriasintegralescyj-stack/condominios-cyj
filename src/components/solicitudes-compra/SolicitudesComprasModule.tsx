@@ -692,12 +692,12 @@ export function SolicitudesComprasModule() {
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-left p-2 text-xs" style={{ width: '35%' }}>Nombre</th>
+                      <th className="text-left p-2 text-xs" style={{ width: '40%' }}>Nombre</th>
                       <th className="text-center p-2 text-xs" style={{ width: '10%' }}>Cant.</th>
-                      <th className="text-center p-2 text-xs" style={{ width: '12%' }}>Unidad</th>
+                      <th className="text-center p-2 text-xs" style={{ width: '10%' }}>Unidad</th>
                       <th className="text-right p-2 text-xs" style={{ width: '15%' }}>P. Estimado</th>
                       <th className="text-right p-2 text-xs" style={{ width: '15%' }}>Total</th>
-                      <th className="p-2" style={{ width: '5%' }}></th>
+                      <th className="p-2" style={{ width: '10%' }}></th>
                     </tr>
                   </thead>
                   <tbody>
