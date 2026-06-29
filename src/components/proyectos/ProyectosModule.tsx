@@ -542,11 +542,12 @@ export function ProyectosModule() {
     const dataToSend = {
       ...formData,
       presUsado: presUsadoCalculado,
-      materiales,
-      herramientas,
-      tareas,
-      personal,
-      documentos,
+      // Limpiar IDs de recursos (Prisma genera nuevos cuid() en createMany)
+      materiales: materiales.map(({ id, ...rest }) => rest),
+      herramientas: herramientas.map(({ id, ...rest }) => rest),
+      tareas: tareas.map(({ id, ...rest }) => rest),
+      personal: personal.map(({ id, ...rest }) => rest),
+      documentos: documentos.map(({ id, ...rest }) => rest),
       // Solo enviar fotos/cotizaciones si hay datos (evita sobreescribir con null si no se cargaron)
       ...(fotosAntes.length > 0 ? { fotosAntes } : { fotosAntes: [] }),
       ...(fotosDespues.length > 0 ? { fotosDespues } : { fotosDespues: [] }),
