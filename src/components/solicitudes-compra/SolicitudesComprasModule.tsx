@@ -688,7 +688,7 @@ export function SolicitudesComprasModule() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Agregar material
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-x-auto" style={{ minWidth: '600px' }}>
+              <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
