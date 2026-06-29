@@ -39,7 +39,31 @@ const PUBLIC_ROUTES = [
   '/h',
   // QR de herramientas (imagen pública accesible sin auth)
   '/api/herramientas',
+  // Página pública de activos accedida desde QR
+  '/a',
 ];
+
+// Rutas públicas adicionales evaluadas por patrón regex
+// (ej: /api/activos/<id>/qr — la imagen QR debe ser accesible sin auth,
+// pero el resto de /api/activos sigue protegido)
+const PUBLIC_ROUTE_PATTERNS: RegExp[] = [
+  /^\/api\/activos\/[^/]+\/qr$/,
+];
+
+// Verificar si una ruta es pública
+function isPublicRoute(pathname: string): boolean {
+  // Chequeo por patrón regex (rutas QR públicas de activos)
+  if (PUBLIC_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname))) {
+    return true;
+  }
+  return PUBLIC_ROUTES.some(route => {
+    if (route.includes('[...')) {
+      const baseRoute = route.replace('[...nextauth]', '');
+      return pathname.startsWith(baseRoute);
+    }
+    return pathname === route || pathname.startsWith(route + '/');
+  });
+}
 
 // Rutas de API que requieren autenticación admin
 const PROTECTED_API_ROUTES = [
@@ -68,17 +92,6 @@ const PROTECTED_API_ROUTES = [
   '/api/aprobaciones-ot',
   '/api/solicitudes-compra',
 ];
-
-// Verificar si una ruta es pública
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some(route => {
-    if (route.includes('[...')) {
-      const baseRoute = route.replace('[...nextauth]', '');
-      return pathname.startsWith(baseRoute);
-    }
-    return pathname === route || pathname.startsWith(route + '/');
-  });
-}
 
 // Verificar si una ruta de API necesita protección
 function isProtectedApiRoute(pathname: string): boolean {

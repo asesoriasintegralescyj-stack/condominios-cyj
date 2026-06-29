@@ -688,16 +688,16 @@ export function SolicitudesComprasModule() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Agregar material
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-x-auto">
-                <table className="w-full text-sm table-fixed">
+              <div className="border rounded-lg overflow-x-auto" style={{ minWidth: '600px' }}>
+                <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
-                      <th className="text-left p-2 text-xs w-[40%]">Nombre</th>
-                      <th className="text-center p-2 text-xs w-20">Cant.</th>
-                      <th className="text-center p-2 text-xs w-24">Unidad</th>
-                      <th className="text-right p-2 text-xs w-28">P. Estimado</th>
-                      <th className="text-right p-2 text-xs w-28">Total</th>
-                      <th className="p-2 w-12"></th>
+                      <th className="text-left p-2 text-xs" style={{ width: '35%' }}>Nombre</th>
+                      <th className="text-center p-2 text-xs" style={{ width: '10%' }}>Cant.</th>
+                      <th className="text-center p-2 text-xs" style={{ width: '12%' }}>Unidad</th>
+                      <th className="text-right p-2 text-xs" style={{ width: '15%' }}>P. Estimado</th>
+                      <th className="text-right p-2 text-xs" style={{ width: '15%' }}>Total</th>
+                      <th className="p-2" style={{ width: '5%' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -714,7 +714,7 @@ export function SolicitudesComprasModule() {
                             <Input
                               value={m.nombre}
                               onChange={(e) => updateMaterial(i, 'nombre', e.target.value)}
-                              className="h-9 w-full min-w-0"
+                              className="h-9 w-full"
                               placeholder="Nombre del material"
                             />
                           </td>
@@ -725,7 +725,7 @@ export function SolicitudesComprasModule() {
                               onChange={(e) =>
                                 updateMaterial(i, 'cantidad', parseFloat(e.target.value) || 0)
                               }
-                              className="h-9 w-full min-w-0 text-right"
+                              className="h-9 w-full text-center"
                             />
                           </td>
                           <td className="p-2 min-w-0">
@@ -733,7 +733,7 @@ export function SolicitudesComprasModule() {
                               value={m.unidad}
                               onValueChange={(v) => updateMaterial(i, 'unidad', v)}
                             >
-                              <SelectTrigger className="h-9 w-full min-w-0">
+                              <SelectTrigger className="h-9 w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -752,7 +752,7 @@ export function SolicitudesComprasModule() {
                               onChange={(e) =>
                                 updateMaterial(i, 'precioEstimado', parseFloat(e.target.value) || 0)
                               }
-                              className="h-9 w-full min-w-0 text-right"
+                              className="h-9 w-full text-right"
                             />
                           </td>
                           <td className="p-2 text-right font-mono font-semibold whitespace-nowrap">

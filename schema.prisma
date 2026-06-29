@@ -291,6 +291,19 @@ model Activo {
   costoCompra   Float    @default(0)
   valorActual   Float    @default(0)
   descripcion   String?
+
+  // Manual de usuario (PDF)
+  manualBase64    String?
+  manualNombre    String?
+  manualTipo      String?
+  // Código QR
+  qrCodigo        String?
+  // Mantenimiento
+  fechaUltimoMantencion     String?
+  informeMantencionBase64   String?
+  informeMantencionNombre   String?
+  informeMantencionTipo     String?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
-    
+
     const activos = await db.activo.findMany({
       where: search ? {
         OR: [
@@ -27,8 +27,22 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' }
     })
-    
-    return NextResponse.json(activos)
+
+    // Ocultar manualBase64 e informeMantencionBase64 en la lista (puede ser muy pesado);
+    // solo enviar metadatos y banderas tieneManual / tieneInformeMantencion
+    const result = activos.map(
+      ({
+        manualBase64: _manualBase64,
+        informeMantencionBase64: _informeMantencionBase64,
+        ...rest
+      }) => ({
+        ...rest,
+        tieneManual: Boolean(rest.manualNombre),
+        tieneInformeMantencion: Boolean(rest.informeMantencionNombre),
+      })
+    )
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching activos:', error)
     return NextResponse.json({ error: 'Error fetching activos' }, { status: 500 })
@@ -44,7 +58,7 @@ export async function POST(request: NextRequest) {
   }
   try {
     const data = await request.json()
-    
+
     const activo = await db.activo.create({
       data: {
         nombre: data.nombre,
@@ -57,9 +71,16 @@ export async function POST(request: NextRequest) {
         valorActual: parseFloat(data.valorActual) || 0,
         descripcion: data.descripcion || '',
         asignadoId: data.asignadoId || null,
+        fechaUltimoMantencion: data.fechaUltimoMantencion || null,
+        manualBase64: data.manualBase64 || null,
+        manualNombre: data.manualNombre || null,
+        manualTipo: data.manualTipo || null,
+        informeMantencionBase64: data.informeMantencionBase64 || null,
+        informeMantencionNombre: data.informeMantencionNombre || null,
+        informeMantencionTipo: data.informeMantencionTipo || null,
       }
     })
-    
+
     return NextResponse.json(activo)
   } catch (error) {
     console.error('Error creating activo:', error)

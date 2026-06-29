@@ -4,6 +4,8 @@ import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
 // GET - Get activo by ID
+// Si el header X-Incluir-Manual viene en 'true', se incluyen manualBase64
+// e informeMantencionBase64 (para no inflar el payload por defecto)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,16 +17,34 @@ export async function GET(
   }
   try {
     const { id } = await params
+    const incluirManual = request.headers.get('x-incluir-manual') === 'true'
     const activo = await db.activo.findUnique({
       where: { id },
       include: { asignado: true }
     })
-    
+
     if (!activo) {
       return NextResponse.json({ error: 'Activo not found' }, { status: 404 })
     }
-    
-    return NextResponse.json(activo)
+
+    if (!incluirManual) {
+      const {
+        manualBase64: _manualBase64,
+        informeMantencionBase64: _informeMantencionBase64,
+        ...rest
+      } = activo
+      return NextResponse.json({
+        ...rest,
+        tieneManual: Boolean(rest.manualNombre),
+        tieneInformeMantencion: Boolean(rest.informeMantencionNombre),
+      })
+    }
+
+    return NextResponse.json({
+      ...activo,
+      tieneManual: Boolean(activo.manualNombre),
+      tieneInformeMantencion: Boolean(activo.informeMantencionNombre),
+    })
   } catch (error) {
     console.error('Error fetching activo:', error)
     return NextResponse.json({ error: 'Error fetching activo' }, { status: 500 })
@@ -44,7 +64,31 @@ export async function PUT(
   try {
     const { id } = await params
     const data = await request.json()
-    
+
+    // Si viene la bandera eliminarManual, se limpian los campos del manual
+    const eliminarManual = data.eliminarManual === true
+    const dataManual = eliminarManual
+      ? { manualBase64: null, manualNombre: null, manualTipo: null }
+      : {
+          manualBase64: data.manualBase64 ?? undefined,
+          manualNombre: data.manualNombre ?? undefined,
+          manualTipo: data.manualTipo ?? undefined,
+        }
+
+    // Si viene la bandera eliminarInformeMantencion, se limpian los campos del informe
+    const eliminarInformeMantencion = data.eliminarInformeMantencion === true
+    const dataInformeMantencion = eliminarInformeMantencion
+      ? {
+          informeMantencionBase64: null,
+          informeMantencionNombre: null,
+          informeMantencionTipo: null,
+        }
+      : {
+          informeMantencionBase64: data.informeMantencionBase64 ?? undefined,
+          informeMantencionNombre: data.informeMantencionNombre ?? undefined,
+          informeMantencionTipo: data.informeMantencionTipo ?? undefined,
+        }
+
     const activo = await db.activo.update({
       where: { id },
       data: {
@@ -58,9 +102,12 @@ export async function PUT(
         valorActual: parseFloat(data.valorActual) || 0,
         descripcion: data.descripcion,
         asignadoId: data.asignadoId || null,
+        fechaUltimoMantencion: data.fechaUltimoMantencion || null,
+        ...dataManual,
+        ...dataInformeMantencion,
       }
     })
-    
+
     return NextResponse.json(activo)
   } catch (error) {
     console.error('Error updating activo:', error)
@@ -83,7 +130,7 @@ export async function DELETE(
     await db.activo.delete({
       where: { id }
     })
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting activo:', error)
