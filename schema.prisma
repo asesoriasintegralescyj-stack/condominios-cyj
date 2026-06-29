@@ -66,6 +66,7 @@ model Condominio {
   rondas         Ronda[]
   // Solicitudes de Compra
   solicitudesCompra SolicitudCompra[]
+  listasDesplegables ListaDesplegable[]
 }
 
 // ============================================
@@ -525,6 +526,21 @@ model Proyecto {
   notas         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // Nuevos campos (PMI)
+  sector            String?
+  tipoReparacion    String?
+  prioridad         String?
+  estadoAprobacion  String?
+  responsable       String?
+  tiempoEstimado    String?
+  monto             Float    @default(0)
+  fechaInicioReal   String?
+  fechaFinReal      String?
+  comentarios       String?
+  fotosAntes        String?
+  fotosDespues      String?
+  cotizaciones      String?
 
   // Relación con Condominio
   condominioId  String?
@@ -1672,4 +1688,19 @@ model SolicitudCompra {
   @@index([estado, createdAt])
   @@index([condominioId])
   @@index([origenTipo, origenId])
+}
+
+// Listas desplegables configurables
+model ListaDesplegable {
+  id           String   @id @default(cuid())
+  nombre       String
+  tipo         String
+  valor        String
+  activo       Boolean  @default(true)
+  condominioId String?
+  condominio   Condominio? @relation(fields: [condominioId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tipo, activo])
 }

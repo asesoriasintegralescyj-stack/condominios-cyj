@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
-import { apiError } from '@/lib/api-helpers'
+import { apiError, handlePrismaError } from '@/lib/api-helpers'
+
+// Tipos para los recursos relacionados
+type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number }
+type HerramientaInput = { nombre: string; cantidad: number }
+type TareaInput = { descripcion: string; cantidad: number; estado: string }
+type PersonalInput = { nombre: string; tipo: string; cantidad: number; precioUnit: number; total: number }
+type DocumentoInput = { nombre: string; tipo: string; descripcion: string; archivo: string; fechaDoc: string }
+
+// Serializa arrays/objetos a JSON string si no lo están
+function serializeJSON(value: any): string | null {
+  if (value === undefined || value === null) return null
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return null
+  }
+}
 
 // GET - Get proyecto by ID
 export async function GET(
@@ -23,17 +41,18 @@ export async function GET(
         tareas: true,
         personal: true,
         documentos: true,
-      }
+      },
     })
-    
+
     if (!proyecto) {
-      return NextResponse.json({ error: 'Proyecto not found' }, { status: 404 })
+      return apiError('Proyecto no encontrado', 404)
     }
-    
+
+    // Para la vista detalle, devolvemos TODOS los campos incluyendo fotos y cotizaciones en base64
     return NextResponse.json(proyecto)
   } catch (error) {
     console.error('Error fetching proyecto:', error)
-    return NextResponse.json({ error: 'Error fetching proyecto' }, { status: 500 })
+    return handlePrismaError(error)
   }
 }
 
@@ -50,12 +69,19 @@ export async function PUT(
   try {
     const { id } = await params
     const data = await request.json()
-    
+
     // Extract resources from data
-    const { materiales, herramientas, tareas, personal, documentos, ...proyectoData } = data
-    
-    // Update proyecto basic data
-    const proyecto = await db.proyecto.update({
+    const {
+      materiales,
+      herramientas,
+      tareas,
+      personal,
+      documentos,
+      ...proyectoData
+    } = data
+
+    // Update proyecto basic data + nuevos campos
+    await db.proyecto.update({
       where: { id },
       data: {
         nombre: proyectoData.nombre,
@@ -69,89 +95,105 @@ export async function PUT(
         avance: parseInt(proyectoData.avance) || 0,
         descripcion: proyectoData.descripcion || null,
         notas: proyectoData.notas || null,
-      }
+
+        // Nuevos campos
+        sector: proyectoData.sector === undefined ? undefined : (proyectoData.sector || null),
+        tipoReparacion: proyectoData.tipoReparacion === undefined ? undefined : (proyectoData.tipoReparacion || null),
+        prioridad: proyectoData.prioridad === undefined ? undefined : (proyectoData.prioridad || null),
+        estadoAprobacion: proyectoData.estadoAprobacion === undefined ? undefined : (proyectoData.estadoAprobacion || null),
+        responsable: proyectoData.responsable === undefined ? undefined : (proyectoData.responsable || null),
+        tiempoEstimado: proyectoData.tiempoEstimado === undefined ? undefined : (proyectoData.tiempoEstimado || null),
+        monto: proyectoData.monto !== undefined ? (parseFloat(proyectoData.monto) || 0) : undefined,
+        fechaInicioReal: proyectoData.fechaInicioReal === undefined ? undefined : (proyectoData.fechaInicioReal || null),
+        fechaFinReal: proyectoData.fechaFinReal === undefined ? undefined : (proyectoData.fechaFinReal || null),
+        comentarios: proyectoData.comentarios === undefined ? undefined : (proyectoData.comentarios || null),
+
+        fotosAntes: proyectoData.fotosAntes === undefined ? undefined : serializeJSON(proyectoData.fotosAntes),
+        fotosDespues: proyectoData.fotosDespues === undefined ? undefined : serializeJSON(proyectoData.fotosDespues),
+        cotizaciones: proyectoData.cotizaciones === undefined ? undefined : serializeJSON(proyectoData.cotizaciones),
+      },
     })
-    
+
     // Update materials if provided
     if (materiales !== undefined) {
       await db.proyectoMaterial.deleteMany({ where: { proyectoId: id } })
       if (materiales.length > 0) {
         await db.proyectoMaterial.createMany({
-          data: materiales.map((m: { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number }) => ({
+          data: materiales.map((m: MaterialInput) => ({
             proyectoId: id,
             descripcion: m.descripcion,
             cantidad: parseFloat(String(m.cantidad)) || 1,
             unidad: m.unidad || 'unidad',
             precioUnit: parseFloat(String(m.precioUnit)) || 0,
             total: parseFloat(String(m.total)) || 0,
-          }))
+          })),
         })
       }
     }
-    
+
     // Update herramientas if provided
     if (herramientas !== undefined) {
       await db.proyectoHerramienta.deleteMany({ where: { proyectoId: id } })
       if (herramientas.length > 0) {
         await db.proyectoHerramienta.createMany({
-          data: herramientas.map((h: { nombre: string; cantidad: number }) => ({
+          data: herramientas.map((h: HerramientaInput) => ({
             proyectoId: id,
             nombre: h.nombre,
             cantidad: parseInt(String(h.cantidad)) || 1,
-          }))
+          })),
         })
       }
     }
-    
+
     // Update tareas if provided
     if (tareas !== undefined) {
       await db.proyectoTarea.deleteMany({ where: { proyectoId: id } })
       if (tareas.length > 0) {
         await db.proyectoTarea.createMany({
-          data: tareas.map((t: { descripcion: string; cantidad: number; estado: string }) => ({
+          data: tareas.map((t: TareaInput) => ({
             proyectoId: id,
             descripcion: t.descripcion,
             cantidad: parseInt(String(t.cantidad)) || 1,
             estado: t.estado || 'Pendiente',
-          }))
+          })),
         })
       }
     }
-    
+
     // Update personal if provided
     if (personal !== undefined) {
       await db.proyectoPersonal.deleteMany({ where: { proyectoId: id } })
       if (personal.length > 0) {
         await db.proyectoPersonal.createMany({
-          data: personal.map((p: { nombre: string; tipo: string; cantidad: number; precioUnit: number; total: number }) => ({
+          data: personal.map((p: PersonalInput) => ({
             proyectoId: id,
             nombre: p.nombre,
             tipo: p.tipo || 'Interno',
             cantidad: parseInt(String(p.cantidad)) || 1,
             precioUnit: parseFloat(String(p.precioUnit)) || 0,
             total: parseFloat(String(p.total)) || 0,
-          }))
+          })),
         })
       }
     }
-    
+
     // Update documentos if provided
     if (documentos !== undefined) {
       await db.proyectoDocumento.deleteMany({ where: { proyectoId: id } })
       if (documentos.length > 0) {
         await db.proyectoDocumento.createMany({
-          data: documentos.map((d: { nombre: string; tipo: string; descripcion: string; archivo: string; fechaDoc: string }) => ({
+          data: documentos.map((d: DocumentoInput) => ({
             proyectoId: id,
             nombre: d.nombre,
             tipo: d.tipo || 'cotizacion',
             descripcion: d.descripcion || null,
             archivo: d.archivo,
             fechaDoc: d.fechaDoc || null,
-          }))
+          })),
         })
       }
     }
-    
+
     // Return updated proyecto with all relations
     const updatedProyecto = await db.proyecto.findUnique({
       where: { id },
@@ -161,13 +203,13 @@ export async function PUT(
         tareas: true,
         personal: true,
         documentos: true,
-      }
+      },
     })
-    
+
     return NextResponse.json(updatedProyecto)
   } catch (error) {
     console.error('Error updating proyecto:', error)
-    return NextResponse.json({ error: 'Error updating proyecto' }, { status: 500 })
+    return handlePrismaError(error)
   }
 }
 
@@ -183,20 +225,20 @@ export async function DELETE(
   }
   try {
     const { id } = await params
-    
+
     await db.proyectoMaterial.deleteMany({ where: { proyectoId: id } })
     await db.proyectoHerramienta.deleteMany({ where: { proyectoId: id } })
     await db.proyectoTarea.deleteMany({ where: { proyectoId: id } })
     await db.proyectoPersonal.deleteMany({ where: { proyectoId: id } })
     await db.proyectoDocumento.deleteMany({ where: { proyectoId: id } })
-    
+
     await db.proyecto.delete({
-      where: { id }
+      where: { id },
     })
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting proyecto:', error)
-    return NextResponse.json({ error: 'Error deleting proyecto' }, { status: 500 })
+    return handlePrismaError(error)
   }
 }
