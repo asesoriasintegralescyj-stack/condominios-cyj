@@ -461,7 +461,8 @@ export function SolicitudesComprasModule() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
@@ -703,7 +704,7 @@ export function SolicitudesComprasModule() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Agregar material
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-x-auto">
+              <div className="border rounded-lg overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50">
                     <tr>
@@ -915,7 +916,7 @@ export function SolicitudesComprasModule() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                   {detail.fechaEspera && (
                     <div className="min-w-0">
                       <span className="text-xs text-slate-500">Fecha esperada:</span>

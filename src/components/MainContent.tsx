@@ -109,12 +109,12 @@ export function MainContent() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-      <header className="h-14 bg-white border-b border-slate-200 flex items-center px-5 shrink-0 min-w-0">
-        <h1 className="text-base font-bold text-[#0f2040] truncate">
+      <header className="h-14 bg-white border-b border-slate-200 flex items-center px-3 md:px-5 shrink-0 min-w-0">
+        <h1 className="text-sm md:text-base font-bold text-[#0f2040] truncate">
           {moduleTitles[currentModule] || 'Dashboard'}
         </h1>
       </header>
-      <main className="flex-1 overflow-auto p-5 min-w-0">
+      <main className="flex-1 overflow-auto p-3 md:p-5 min-w-0">
         {renderModule()}
       </main>
     </div>

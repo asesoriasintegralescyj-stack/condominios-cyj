@@ -312,7 +312,7 @@ export function InspeccionesModule() {
               <Label>Título</Label>
               <Input className="w-full" value={formData.titulo} onChange={(e) => setFormData({...formData, titulo: e.target.value})} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Tipo</Label>
                 <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
@@ -336,7 +336,7 @@ export function InspeccionesModule() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Fecha</Label>
                 <Input type="date" value={formData.fecha} onChange={(e) => setFormData({...formData, fecha: e.target.value})} />
@@ -346,7 +346,7 @@ export function InspeccionesModule() {
                 <Input type="time" value={formData.hora} onChange={(e) => setFormData({...formData, hora: e.target.value})} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Ubicación</Label>
                 <Input value={formData.ubicacion} onChange={(e) => setFormData({...formData, ubicacion: e.target.value})} />
@@ -438,7 +438,7 @@ export function InspeccionesModule() {
           </DialogHeader>
           {viewingInsp && (
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="min-w-0">
                   <div className="text-[10px] text-slate-500 font-bold uppercase">Tipo</div>
                   <Badge className={tipoColors[viewingInsp.tipo]}>{viewingInsp.tipo}</Badge>

@@ -1407,7 +1407,8 @@ export function ProyectosModule() {
           <CardTitle className="text-sm">Planificación de Mantención — Tabla de Tareas ({proyectos.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-xs whitespace-nowrap" style={{ minWidth: '1600px' }}>
               <thead>
                 <tr className="border-b bg-[#0f2040] text-white">
@@ -1500,7 +1501,7 @@ export function ProyectosModule() {
           </DialogHeader>
           {selectedProy && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Sector</Label>
                   <p className="text-sm font-medium truncate">{selectedProy.sector || selectedProy.ubicacion || '–'}</p>
@@ -1535,7 +1536,7 @@ export function ProyectosModule() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Fecha Inicio Programada</Label>
                   <p className="text-sm">{formatDate(selectedProy.fechaInicio)}</p>
@@ -1579,7 +1580,7 @@ export function ProyectosModule() {
               <Separator />
 
               {/* Recursos del proyecto */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div className="bg-slate-50 p-3 rounded min-w-0">
                   <Package className="w-5 h-5 mx-auto mb-1 text-slate-500" />
                   <div className="text-lg font-bold">{selectedProy.materiales?.length || 0}</div>

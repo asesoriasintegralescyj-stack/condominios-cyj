@@ -651,7 +651,7 @@ export function CumplimientoModule() {
           <CardTitle className="text-sm">Cumplimiento por Tipo</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {TIPOS_CATEGORIA.map(tipo => {
               const porcentaje = resumen ? resumen[`porcentaje${tipo}` as keyof ResumenCumplimiento] as number : 0
               return (
@@ -848,7 +848,8 @@ export function CumplimientoModule() {
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <div className="overflow-x-auto">
+                      <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+                      <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                         <table className="w-full text-sm">
                           <thead className="bg-slate-50">
                             <tr className="border-b">
@@ -1050,7 +1051,7 @@ export function CumplimientoModule() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Categoría</Label>
                 <Select value={documentoForm.categoriaId} onValueChange={(v) => setDocumentoForm({...documentoForm, categoriaId: v})}>
@@ -1077,7 +1078,7 @@ export function CumplimientoModule() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Fecha del Documento</Label>
                 <Input
@@ -1182,7 +1183,7 @@ export function CumplimientoModule() {
             <DialogDescription>Configure los datos de la categoría de cumplimiento legal.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Nombre *</Label>
                 <Input
@@ -1201,7 +1202,7 @@ export function CumplimientoModule() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Tipo</Label>
                 <Select value={categoriaForm.tipo} onValueChange={(v) => setCategoriaForm({...categoriaForm, tipo: v})}>
@@ -1232,7 +1233,7 @@ export function CumplimientoModule() {
                 rows={2}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Artículo de Ley</Label>
                 <Input

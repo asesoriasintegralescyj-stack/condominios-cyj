@@ -914,7 +914,7 @@ export function OrdenesTrabajoModule() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         {Object.entries(stats).map(([estado, count]) => (
           <Card key={estado} className="p-3">
             <div className="text-xs text-slate-500 font-semibold uppercase">{estado}</div>
@@ -962,7 +962,8 @@ export function OrdenesTrabajoModule() {
           <CardTitle className="text-sm">Órdenes de Trabajo ({ordenes.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
@@ -1111,7 +1112,7 @@ export function OrdenesTrabajoModule() {
                     <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">2</span>
                     Clasificación
                   </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Tipo</Label>
                       <Select value={formData.tipo} onValueChange={(v) => setFormData({...formData, tipo: v})}>
@@ -1215,7 +1216,7 @@ export function OrdenesTrabajoModule() {
                     <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
                     <Calendar className="w-4 h-4" /> Fechas
                   </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Inicio Planificado</Label>
                       <DatePicker
@@ -1285,7 +1286,7 @@ export function OrdenesTrabajoModule() {
                     <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">6</span>
                     <Clock className="w-4 h-4" /> Control de Tiempo
                   </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1.5 min-w-0">
                       <Label className="text-xs">Tiempo Estimado (min)</Label>
                       <Input 
@@ -2055,7 +2056,7 @@ export function OrdenesTrabajoModule() {
                     <h4 className="font-semibold text-sm mb-3 flex items-center gap-2">
                       <Image className="w-4 h-4" /> Fotos del Trabajo
                     </h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Fotos Antes */}
                       {selectedOT.fotosAntes && selectedOT.fotosAntes.length > 0 && (
                         <div>

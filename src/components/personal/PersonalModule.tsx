@@ -365,7 +365,8 @@ export function PersonalModule() {
           <CardTitle className="text-sm">Personal ({personal.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
@@ -513,7 +514,7 @@ export function PersonalModule() {
             <DialogTitle>{editingPer ? 'Editar' : 'Nuevo'} Empleado</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Nombre Completo</Label>
                 <Input className="w-full" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
@@ -523,7 +524,7 @@ export function PersonalModule() {
                 <Input className="w-full" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Cargo</Label>
                 <Input className="w-full" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
@@ -540,7 +541,7 @@ export function PersonalModule() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Fecha Ingreso</Label>
                 <Input className="w-full" type="date" value={formData.fechaIngreso} onChange={(e) => setFormData({...formData, fechaIngreso: e.target.value})} />
@@ -560,7 +561,7 @@ export function PersonalModule() {
 
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">REMUNERACIÓN</div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2 min-w-0">
                   <Label>Sueldo Base ($)</Label>
                   <Input className="w-full text-right" type="number" value={formData.sueldoBase} onChange={(e) => setFormData({...formData, sueldoBase: parseFloat(e.target.value) || 0})} />
@@ -586,7 +587,7 @@ export function PersonalModule() {
 
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">PREVISIÓN</div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2 min-w-0">
                   <Label>AFP</Label>
                   <Select value={formData.afp} onValueChange={(v) => setFormData({...formData, afp: v})}>
@@ -629,7 +630,7 @@ export function PersonalModule() {
 
             <div className="border-t pt-4">
               <div className="text-xs font-semibold text-slate-500 mb-3">CONTACTO</div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2 min-w-0">
                   <Label>Teléfono</Label>
                   <Input className="w-full" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} />

@@ -628,7 +628,8 @@ export function HerramientasModule() {
           <CardTitle className="text-sm">Catálogo de Herramientas ({filteredHerramientas.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+          <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b bg-slate-50">
@@ -740,7 +741,7 @@ export function HerramientasModule() {
             <DialogTitle>{isEditing ? 'Editar Herramienta' : 'Nueva Herramienta'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 min-w-0">
                 <Label>Código</Label>
                 <Input
@@ -760,7 +761,7 @@ export function HerramientasModule() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 min-w-0">
                 <Label>Marca</Label>
                 <Input
@@ -780,7 +781,7 @@ export function HerramientasModule() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 min-w-0">
                 <Label>Cantidad</Label>
                 <Input
@@ -804,7 +805,7 @@ export function HerramientasModule() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5 min-w-0">
                 <Label>Ubicación</Label>
                 <Input

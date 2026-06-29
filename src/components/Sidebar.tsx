@@ -22,12 +22,15 @@ import {
   Eye,
   CheckCircle,
   QrCode,
-  ShoppingCart
+  ShoppingCart,
+  Menu,
+  X
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/hooks/use-session'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -115,6 +118,7 @@ export function Sidebar() {
   const { currentModule, setCurrentModule, currentCondominio } = useAppStore()
   const { user, loading, authenticated, logout, hasPermission, isAdmin } = useSession()
   const router = useRouter()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   // Filtrar menú según permisos
   const filteredMenuItems = menuItems.map(section => ({
@@ -172,8 +176,50 @@ export function Sidebar() {
     return null
   }
 
+  const handleNavigate = (moduleId: Module) => {
+    setCurrentModule(moduleId)
+    setMobileOpen(false)
+  }
+
   return (
-    <aside className="w-56 bg-[#0f2040] flex flex-col h-full shrink-0">
+    <>
+      {/* Mobile top bar with hamburger */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#0f2040] flex items-center px-4 z-50 shrink-0">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="text-white p-1 -ml-1"
+          aria-label="Abrir menú"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <span className="text-white text-sm font-bold ml-3 truncate">LAGUNA NORTE</span>
+      </div>
+
+      {/* Backdrop */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-50"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          'fixed md:relative z-50 md:z-auto',
+          'w-56 bg-[#0f2040] flex flex-col h-full shrink-0',
+          'transform transition-transform duration-300',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        )}
+      >
+      {/* Mobile close button (visible only when open on mobile) */}
+      <button
+        onClick={() => setMobileOpen(false)}
+        className="md:hidden absolute top-3 right-3 text-white/70 hover:text-white z-10"
+        aria-label="Cerrar menú"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
       {/* Logo */}
       <div className="p-4 border-b border-white/10 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
@@ -204,7 +250,7 @@ export function Sidebar() {
             {section.items.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setCurrentModule(item.id)}
+                onClick={() => handleNavigate(item.id)}
                 className={cn(
                   'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all min-w-0',
                   currentModule === item.id
@@ -259,7 +305,7 @@ export function Sidebar() {
                 <>
                   <DropdownMenuItem
                     className="text-white/70 focus:text-white focus:bg-white/10 cursor-pointer"
-                    onClick={() => setCurrentModule('usuarios')}
+                    onClick={() => handleNavigate('usuarios')}
                   >
                     <Users className="mr-2 h-4 w-4" />
                     Gestionar Usuarios
@@ -289,5 +335,6 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   )
 }
