@@ -688,15 +688,23 @@ model CatHerramienta {
   valorReposicion Float    @default(0)
   fechaAdquisicion String?
   descripcion     String?
-  
+
+  // Manual de usuario (PDF adjunto en base64)
+  manualBase64    String?  // PDF en base64
+  manualNombre    String?  // Nombre original del archivo
+  manualTipo      String?  // Tipo MIME (application/pdf, etc.)
+
+  // Código QR (URL para acceder a la info de la herramienta)
+  qrCodigo        String?  // URL: https://condominios-cyj.vercel.app/h/{id}
+
   // Relación con Condominio
   condominioId    String?
   condominio      Condominio? @relation(fields: [condominioId], references: [id])
-  
+
   // Centro de Costo de adquisición
   centroCostoId   String?
   centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
-  
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

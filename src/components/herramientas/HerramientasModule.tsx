@@ -24,7 +24,8 @@ import {
 import { 
   Plus, Pencil, Trash2, Search, Wrench, 
   CheckCircle, AlertCircle, XCircle, Settings,
-  Upload, Download, FileSpreadsheet
+  Upload, Download, FileSpreadsheet, QrCode, ExternalLink,
+  FileText,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -56,8 +57,21 @@ interface Herramienta {
   valorReposicion: number
   fechaAdquisicion: string | null
   descripcion: string | null
+  manualNombre?: string | null
+  manualTipo?: string | null
+  tieneManual?: boolean
   centroCosto: CentroCosto | null
 }
+
+interface ManualState {
+  base64: string | null
+  nombre: string | null
+  tipo: string | null
+  removed: boolean
+  isNew: boolean
+}
+
+const PUBLIC_HERRAMIENTA_BASE = 'https://condominios-cyj.vercel.app'
 
 const formatCLP = (n: number) => 
   '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
@@ -78,6 +92,14 @@ const estadoIcons: Record<string, React.ReactNode> = {
 
 const estadosOptions = ['Bueno', 'Regular', 'Malo', 'En reparación']
 
+const emptyManual: ManualState = {
+  base64: null,
+  nombre: null,
+  tipo: null,
+  removed: false,
+  isNew: false,
+}
+
 export function HerramientasModule() {
   const [herramientas, setHerramientas] = useState<Herramienta[]>([])
   const [loading, setLoading] = useState(true)
@@ -87,6 +109,7 @@ export function HerramientasModule() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedHerramienta, setSelectedHerramienta] = useState<Herramienta | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
     codigo: '',
     nombre: '',
@@ -99,6 +122,12 @@ export function HerramientasModule() {
     fechaAdquisicion: '',
     descripcion: '',
   })
+  const [manual, setManual] = useState<ManualState>(emptyManual)
+  const [manualDownloading, setManualDownloading] = useState(false)
+
+  // QR dialog
+  const [qrDialogOpen, setQrDialogOpen] = useState(false)
+  const [qrHerramienta, setQrHerramienta] = useState<Herramienta | null>(null)
 
   // Bulk upload
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
@@ -165,6 +194,7 @@ export function HerramientasModule() {
       fechaAdquisicion: '',
       descripcion: '',
     })
+    setManual(emptyManual)
     setDialogOpen(true)
   }
 
@@ -183,6 +213,14 @@ export function HerramientasModule() {
       fechaAdquisicion: herramienta.fechaAdquisicion || '',
       descripcion: herramienta.descripcion || '',
     })
+    // Cargar el manual existente (sin el base64 para no inflar el formulario)
+    setManual({
+      base64: null,
+      nombre: herramienta.manualNombre || null,
+      tipo: herramienta.manualTipo || null,
+      removed: false,
+      isNew: false,
+    })
     setDialogOpen(true)
   }
 
@@ -191,25 +229,114 @@ export function HerramientasModule() {
     setDeleteDialogOpen(true)
   }
 
-  const handleSave = async () => {
+  const openQrDialog = (herramienta: Herramienta) => {
+    setQrHerramienta(herramienta)
+    setQrDialogOpen(true)
+  }
+
+  const handleManualUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      alert('Solo se permiten archivos PDF')
+      e.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      // result viene como "data:application/pdf;base64,XXXX"
+      const base64 = result.split(',')[1] || result
+      setManual({
+        base64,
+        nombre: file.name,
+        tipo: file.type || 'application/pdf',
+        removed: false,
+        isNew: true,
+      })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const handleManualRemove = () => {
+    setManual({
+      base64: null,
+      nombre: null,
+      tipo: null,
+      removed: true,
+      isNew: false,
+    })
+  }
+
+  const handleDownloadManual = async () => {
+    if (!selectedHerramienta) return
+    setManualDownloading(true)
     try {
+      // Si el usuario acaba de subir un manual nuevo, descargarlo directamente
+      if (manual.isNew && manual.base64 && manual.nombre) {
+        const blob = base64ToBlob(manual.base64, manual.tipo || 'application/pdf')
+        triggerDownload(blob, manual.nombre)
+        setManualDownloading(false)
+        return
+      }
+      // Si no, obtener el manual existente del backend
+      const res = await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
+        headers: { 'x-incluir-manual': 'true' },
+      })
+      if (!res.ok) {
+        alert('No se pudo descargar el manual')
+        return
+      }
+      const data = await res.json()
+      if (!data.manualBase64) {
+        alert('Esta herramienta no tiene manual adjunto')
+        return
+      }
+      const blob = base64ToBlob(data.manualBase64, data.manualTipo || 'application/pdf')
+      triggerDownload(blob, data.manualNombre || 'manual.pdf')
+    } catch (error) {
+      console.error('Error descargando manual:', error)
+      alert('Error al descargar el manual')
+    } finally {
+      setManualDownloading(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      // Construir el body del manual
+      const manualBody: Record<string, string | boolean | null> = {}
+      if (manual.isNew && manual.base64) {
+        manualBody.manualBase64 = manual.base64
+        manualBody.manualNombre = manual.nombre
+        manualBody.manualTipo = manual.tipo
+      } else if (manual.removed) {
+        manualBody.eliminarManual = true
+      }
+
+      const body = { ...formData, ...manualBody }
+
       if (isEditing && selectedHerramienta) {
         await fetch(`/api/catalogos/herramientas/${selectedHerramienta.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(body),
         })
       } else {
         await fetch('/api/catalogos/herramientas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(body),
         })
       }
       setDialogOpen(false)
       fetchHerramientas()
     } catch (error) {
       console.error('Error saving herramienta:', error)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -265,6 +392,30 @@ export function HerramientasModule() {
     a.download = 'herramientas.csv'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadQr = async (herramienta: Herramienta) => {
+    try {
+      const res = await fetch(`/api/herramientas/${herramienta.id}/qr`)
+      if (!res.ok) {
+        alert('No se pudo generar el QR')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `qr-herramienta-${herramienta.codigo || herramienta.id}.png`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error descargando QR:', error)
+      alert('Error al descargar el QR')
+    }
+  }
+
+  const handleAbrirPaginaHerramienta = (herramienta: Herramienta) => {
+    window.open(`/h/${herramienta.id}`, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -376,14 +527,15 @@ export function HerramientasModule() {
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
                   <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
-                  {canEdit && <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>}
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Manual</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : filteredHerramientas.length === 0 ? (
-                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
                 ) : (
                   filteredHerramientas.map((herr) => (
                     <tr key={herr.id} className="border-b last:border-0 hover:bg-slate-50">
@@ -407,28 +559,50 @@ export function HerramientasModule() {
                         </Badge>
                       </td>
                       <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(herr.valorReposicion)}</td>
-                      {canEdit && (
-                        <td className="p-3">
-                          <div className="flex justify-center gap-1">
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7" 
-                              onClick={() => openEditDialog(herr)}
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button 
-                              size="icon" 
-                              variant="ghost" 
-                              className="h-7 w-7 text-red-500 hover:text-red-700" 
-                              onClick={() => openDeleteDialog(herr)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      )}
+                      <td className="p-3 text-center">
+                        {herr.tieneManual ? (
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-red-50 text-red-600" title="Tiene manual adjunto">
+                            <FileText className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">–</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex justify-center gap-1">
+                          <Button 
+                            size="icon" 
+                            variant="ghost" 
+                            className="h-7 w-7" 
+                            onClick={() => openQrDialog(herr)}
+                            title="Ver QR"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </Button>
+                          {canEdit && (
+                            <>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-7 w-7" 
+                                onClick={() => openEditDialog(herr)}
+                                title="Editar"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-7 w-7 text-red-500 hover:text-red-700" 
+                                onClick={() => openDeleteDialog(herr)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -540,13 +714,140 @@ export function HerramientasModule() {
                 rows={2}
               />
             </div>
+
+            {/* Manual de Usuario */}
+            <div className="space-y-2 border-t pt-4">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <FileText className="w-4 h-4 text-[#0f2040]" />
+                Manual de Usuario (PDF)
+              </Label>
+              {manual.nombre && !manual.removed ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="w-10 h-10 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-800 truncate">
+                        {manual.nombre}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {manual.isNew ? 'Nuevo manual (se subirá al guardar)' : 'Manual adjunto'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="hidden"
+                        onChange={handleManualUpload}
+                      />
+                      <Button size="sm" variant="outline" asChild>
+                        <span><Upload className="w-3.5 h-3.5 mr-1" /> Reemplazar</span>
+                      </Button>
+                    </label>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={handleDownloadManual}
+                      disabled={manualDownloading}
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1" />
+                      {manualDownloading ? 'Descargando...' : 'Descargar'}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={handleManualRemove}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 mr-1" />
+                      Eliminar Manual
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <label className="cursor-pointer block">
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={handleManualUpload}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                    <Upload className="w-6 h-6 text-slate-400" />
+                    <p className="text-sm text-slate-600">
+                      <span className="text-[#0f2040] font-semibold">Haz clic para subir</span> un PDF
+                    </p>
+                    <p className="text-xs text-slate-400">Solo archivos PDF · máx. ~5 MB recomendado</p>
+                  </div>
+                </label>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!formData.nombre}>
-              {isEditing ? 'Guardar Cambios' : 'Crear Herramienta'}
+            <Button onClick={handleSave} disabled={!formData.nombre || saving}>
+              {saving ? 'Guardando...' : (isEditing ? 'Guardar Cambios' : 'Crear Herramienta')}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Dialog */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-[#0f2040]" />
+              Código QR de la Herramienta
+            </DialogTitle>
+          </DialogHeader>
+          {qrHerramienta && (
+            <div className="space-y-4 py-2">
+              <div className="text-center">
+                <div className="inline-block p-4 bg-white border-2 border-slate-200 rounded-xl">
+                  <img
+                    src={`/api/herramientas/${qrHerramienta.id}/qr`}
+                    alt={`QR de ${qrHerramienta.nombre}`}
+                    className="w-56 h-56"
+                  />
+                </div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Herramienta</p>
+                <p className="text-sm font-bold text-slate-900">{qrHerramienta.nombre}</p>
+                {qrHerramienta.codigo && (
+                  <p className="text-xs font-mono text-[#0f2040]">{qrHerramienta.codigo}</p>
+                )}
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">URL del QR</p>
+                <p className="text-xs font-mono text-slate-700 break-all">
+                  {PUBLIC_HERRAMIENTA_BASE}/h/{qrHerramienta.id}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  className="flex-1 bg-[#0f2040] hover:bg-[#1a3060]"
+                  onClick={() => handleDownloadQr(qrHerramienta)}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Descargar QR
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleAbrirPaginaHerramienta(qrHerramienta)}
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Abrir página
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -619,4 +920,27 @@ export function HerramientasModule() {
       </Dialog>
     </div>
   )
+}
+
+// ============= Helpers =============
+
+function base64ToBlob(base64: string, mime: string): Blob {
+  const byteChars = atob(base64)
+  const byteNumbers = new Array(byteChars.length)
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i)
+  }
+  const byteArray = new Uint8Array(byteNumbers)
+  return new Blob([byteArray], { type: mime })
+}
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }

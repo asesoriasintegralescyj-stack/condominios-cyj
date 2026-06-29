@@ -35,6 +35,10 @@ const PUBLIC_ROUTES = [
   '/api/seed-catalogos',
   '/api/setup',
   '/api/descargar',
+  // Página pública de herramientas accedida desde QR
+  '/h',
+  // QR de herramientas (imagen pública accesible sin auth)
+  '/api/herramientas',
 ];
 
 // Rutas de API que requieren autenticación admin

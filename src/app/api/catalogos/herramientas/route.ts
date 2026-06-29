@@ -11,11 +11,20 @@ export async function GET() {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Excluir manualBase64 de la lista para no inflar el payload
     const herramientas = await db.catHerramienta.findMany({
-      orderBy: { nombre: 'asc' }
+      orderBy: { nombre: 'asc' },
+      include: {
+        centroCosto: true,
+      },
     })
+    // Ocultar manualBase64 en la lista (puede ser muy pesado); solo enviar metadatos
+    const result = herramientas.map(({ manualBase64: _manualBase64, ...rest }) => ({
+      ...rest,
+      tieneManual: Boolean(rest.manualNombre),
+    }))
     
-    return NextResponse.json(herramientas)
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching herramientas:', error)
     return NextResponse.json({ error: 'Error fetching herramientas' }, { status: 500 })
@@ -44,6 +53,9 @@ export async function POST(request: NextRequest) {
         valorReposicion: parseFloat(data.valorReposicion) || 0,
         fechaAdquisicion: data.fechaAdquisicion || null,
         descripcion: data.descripcion || null,
+        manualBase64: data.manualBase64 || null,
+        manualNombre: data.manualNombre || null,
+        manualTipo: data.manualTipo || null,
       }
     })
     
