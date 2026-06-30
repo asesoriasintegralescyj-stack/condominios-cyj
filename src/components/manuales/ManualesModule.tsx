@@ -32,8 +32,8 @@ import { toast } from 'sonner'
 // Cada vez que se actualice un manual, actualizar la versión y fecha aquí.
 // El campo "file" debe coincidir exactamente con el nombre del archivo en /public/manuales/
 
-const MANUAL_VERSION = '1.0'
-const MANUAL_FECHA = 'Junio 2026'
+const MANUAL_VERSION = '1.1'
+const MANUAL_FECHA = 'Junio 2026 · Con capturas'
 
 interface Documento {
   tipo: 'manual' | 'capacitacion'
