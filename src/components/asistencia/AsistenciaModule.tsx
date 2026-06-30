@@ -7,654 +7,1032 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  Calendar, 
-  AlertCircle,
-  LogIn,
-  LogOut,
-  UserCheck,
-  UserX,
-  ClockAlert,
-  FileText,
-  Search,
-  Download,
-  Plus,
-  Upload
+import {
+  Clock, CheckCircle, XCircle, Calendar, AlertCircle, LogIn, LogOut,
+  Upload, FileText, Download, RefreshCw, Loader2, Users, AlertTriangle,
+  CheckSquare, FileDown, Search, Filter,
 } from 'lucide-react'
-import { useAppStore } from '@/lib/store'
 import { toast } from 'sonner'
+import { useSession } from '@/hooks/use-session'
 
-interface AsistenciaState {
+// ============================================
+// Tipos
+// ============================================
+interface Inasistencia {
   id: string
-  personalId: string
-  nombre: string
-  cargo?: string | null
+  nombreTrabajador: string
+  rut?: string | null
+  departamento?: string | null
   fecha: string
-  horaEntrada: string | null
-  horaSalida: string | null
+  diaSemana: string
+  tipo: string
+  horaEsperadaInicio?: string | null
+  horaEsperadaFin?: string | null
+  horaRealInicio?: string | null
+  horaRealFin?: string | null
+  minutosAtraso: number
+  tipoTurno?: string | null
   estado: string
-  observaciones?: string | null
-  isNew?: boolean
+  justificacion?: {
+    id: string
+    tipoJustificacion: string
+    observaciones?: string | null
+    supervisorNombre?: string | null
+    fechaJustificacion?: string | null
+    estado: string
+    adminNombre?: string | null
+    adminObservaciones?: string | null
+    fechaRevision?: string | null
+  } | null
 }
 
-const ESTADOS = [
-  { value: 'Presente', label: 'Presente', icon: UserCheck, color: 'bg-green-600 hover:bg-green-700' },
-  { value: 'Ausente', label: 'Ausente', icon: UserX, color: 'bg-red-600 hover:bg-red-700' },
-  { value: 'Tarde', label: 'Tarde', icon: ClockAlert, color: 'bg-amber-500 hover:bg-amber-600' },
-  { value: 'Permiso', label: 'Permiso', icon: FileText, color: 'bg-blue-600 hover:bg-blue-700' },
-]
-
-const exportToCSV = (data: AsistenciaState[], fechaExport: string) => {
-  const headers = ['Nombre', 'Cargo', 'Fecha', 'Hora Entrada', 'Hora Salida', 'Estado', 'Observaciones']
-  const rows = data.map(r => [
-    r.nombre,
-    r.cargo || '',
-    r.fecha,
-    r.horaEntrada || '',
-    r.horaSalida || '',
-    r.estado,
-    r.observaciones || ''
-  ])
-  
-  const csvContent = '\uFEFF' + [headers, ...rows].map(row => 
-    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-  ).join('\n')
-  
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `asistencia_${fechaExport}.csv`
-  link.click()
+interface Stats {
+  total: number
+  atrasos: number
+  ausencias: number
+  salidasTempranas: number
+  pendientes: number
+  justificados: number
+  aprobados: number
+  rechazados: number
 }
 
+interface ResumenTrabajador {
+  nombre: string
+  departamento?: string | null
+  atrasos: number
+  ausencias: number
+  salidasTempranas: number
+  totalMinutosAtraso: number
+  pendientes: number
+  justificados: number
+  aprobados: number
+  rechazados: number
+}
+
+const tipoColors: Record<string, string> = {
+  atraso: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  ausencia: 'bg-red-100 text-red-800 border-red-200',
+  salida_temprana: 'bg-orange-100 text-orange-800 border-orange-200',
+}
+
+const estadoColors: Record<string, string> = {
+  pendiente: 'bg-yellow-100 text-yellow-800',
+  justificado: 'bg-blue-100 text-blue-800',
+  aprobado: 'bg-green-100 text-green-800',
+  rechazado: 'bg-red-100 text-red-800',
+}
+
+const tipoLabels: Record<string, string> = {
+  atraso: 'Atraso',
+  ausencia: 'Ausencia',
+  salida_temprana: 'Salida temprana',
+}
+
+// ============================================
+// Componente principal
+// ============================================
 export function AsistenciaModule() {
-  const [registros, setRegistros] = useState<AsistenciaState[]>([])
-  const [personal, setPersonal] = useState<{id: string; nombre: string; cargo?: string | null}[]>([])
-  const [loading, setLoading] = useState(true)
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
-  const [search, setSearch] = useState('')
-  const [nuevoDialogOpen, setNuevoDialogOpen] = useState(false)
-  const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
-  const [nuevoPersonalId, setNuevoPersonalId] = useState('')
-  const [nuevoEstado, setNuevoEstado] = useState('Presente')
-  const [nuevoObservaciones, setNuevoObservaciones] = useState('')
-  const { currentCondominio } = useAppStore()
+  const { user, isAdmin, isSupervisor } = useSession()
+  const canJustificar = isSupervisor() || isAdmin()
+  const canAprobar = isAdmin()
 
-  const fetchAsistencia = useCallback(async () => {
+  const [activeTab, setActiveTab] = useState('analisis')
+  const [loading, setLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  // Datos
+  const [inasistencias, setInasistencias] = useState<Inasistencia[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [resumenTrabajadores, setResumenTrabajadores] = useState<ResumenTrabajador[]>([])
+
+  // Filtros
+  const [filtroEstado, setFiltroEstado] = useState('all')
+  const [filtroTipo, setFiltroTipo] = useState('all')
+  const [filtroTrabajador, setFiltroTrabajador] = useState('')
+  const [filtroFechaDesde, setFiltroFechaDesde] = useState('')
+  const [filtroFechaHasta, setFiltroFechaHasta] = useState('')
+
+  // Diálogo de justificación
+  const [justDialogOpen, setJustDialogOpen] = useState(false)
+  const [justTarget, setJustTarget] = useState<Inasistencia | null>(null)
+  const [justTipo, setJustTipo] = useState('')
+  const [justObservaciones, setJustObservaciones] = useState('')
+  const [justLoading, setJustLoading] = useState(false)
+
+  // Diálogo de aprobación
+  const [aprobDialogOpen, setAprobDialogOpen] = useState(false)
+  const [aprobTarget, setAprobTarget] = useState<Inasistencia | null>(null)
+  const [aprobAccion, setAprobAccion] = useState<'aprobar' | 'rechazar' | ''>('')
+  const [aprobObservaciones, setAprobObservaciones] = useState('')
+  const [aprobLoading, setAprobLoading] = useState(false)
+
+  // Cargar datos
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({ fecha })
-      if (currentCondominio?.id) {
-        params.append('condominioId', currentCondominio.id)
-      }
-      const res = await fetch(`/api/asistencia?${params.toString()}`)
+      const params = new URLSearchParams()
+      if (filtroFechaDesde) params.set('fechaDesde', filtroFechaDesde)
+      if (filtroFechaHasta) params.set('fechaHasta', filtroFechaHasta)
+      if (filtroEstado !== 'all') params.set('estado', filtroEstado)
+      const url = `/api/asistencia/importar${params.toString() ? `?${params.toString()}` : ''}`
+      const res = await fetch(url)
       const data = await res.json()
-      setRegistros(data)
-    } catch (error) {
-      console.error('Error fetching asistencia:', error)
+      if (res.ok) {
+        setInasistencias(data.inasistencias || [])
+        setStats(data.stats || null)
+        setResumenTrabajadores(data.resumenPorTrabajador || [])
+      } else {
+        toast.error(data.error || 'Error al cargar datos')
+      }
+    } catch (e) {
+      console.error('Error:', e)
     } finally {
       setLoading(false)
     }
-  }, [fecha, currentCondominio])
-
-  const fetchPersonal = useCallback(async () => {
-    try {
-      const params = new URLSearchParams()
-      if (currentCondominio?.id) {
-        params.append('condominioId', currentCondominio.id)
-      }
-      const res = await fetch(`/api/personal?${params.toString()}`)
-      const data = await res.json()
-      setPersonal(data)
-    } catch (error) {
-      console.error('Error fetching personal:', error)
-    }
-  }, [currentCondominio])
+  }, [filtroFechaDesde, filtroFechaHasta, filtroEstado])
 
   useEffect(() => {
-    void fetchAsistencia()
-    void fetchPersonal()
-  }, [fecha, currentCondominio?.id, fetchAsistencia, fetchPersonal])
+    fetchData()
+  }, [fetchData])
 
-  const registrarEntrada = async (personalId: string) => {
+  // Importar archivos
+  const handleImport = async (horariosFile: File, registrosFile: File) => {
+    setImporting(true)
     try {
-      const ahora = new Date()
-      const horaActual = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      
-      const res = await fetch('/api/asistencia', {
+      const formData = new FormData()
+      formData.append('horarios', horariosFile)
+      formData.append('registros', registrosFile)
+
+      const res = await fetch('/api/asistencia/importar', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+
+      if (res.ok) {
+        toast.success(data.message || 'Importación completada')
+        // Mostrar resumen detallado
+        if (data.resumen) {
+          toast.info(
+            `Atrasos: ${data.resumen.totalAtrasos} | Ausencias: ${data.resumen.totalAusencias} | Salidas tempranas: ${data.resumen.totalSalidasTempranas}`,
+            { duration: 6000 },
+          )
+        }
+        fetchData()
+      } else {
+        toast.error(data.error || 'Error al importar')
+      }
+    } catch (e) {
+      console.error('Error:', e)
+      toast.error('Error de conexión')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  // Justificar
+  const handleJustificar = async () => {
+    if (!justTarget || !justTipo) return
+    setJustLoading(true)
+    try {
+      const res = await fetch('/api/asistencia/justificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personalId,
-          fecha,
-          horaEntrada: horaActual,
-          estado: 'Presente'
-        })
+          inasistenciaId: justTarget.id,
+          tipoJustificacion: justTipo,
+          observaciones: justObservaciones,
+        }),
       })
+      const data = await res.json()
       if (res.ok) {
-        toast.success('Entrada registrada', {
-          description: `Hora: ${horaActual}`
-        })
-        void fetchAsistencia()
+        toast.success(data.message || 'Justificación enviada')
+        setJustDialogOpen(false)
+        setJustTarget(null)
+        setJustTipo('')
+        setJustObservaciones('')
+        fetchData()
+      } else {
+        toast.error(data.error || 'Error al justificar')
       }
-    } catch (error) {
-      console.error('Error registrando entrada:', error)
-      toast.error('Error al registrar entrada')
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setJustLoading(false)
     }
   }
 
-  const registrarSalida = async (personalId: string) => {
-    try {
-      const ahora = new Date()
-      const horaActual = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-      
-      const res = await fetch('/api/asistencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personalId,
-          fecha,
-          horaSalida: horaActual,
-          estado: 'Completado'
-        })
-      })
-      if (res.ok) {
-        toast.success('Salida registrada', {
-          description: `Hora: ${horaActual}`
-        })
-        void fetchAsistencia()
-      }
-    } catch (error) {
-      console.error('Error registrando salida:', error)
-      toast.error('Error al registrar salida')
-    }
-  }
-
-  const cambiarEstado = async (personalId: string, nuevoEstado: string) => {
-    try {
-      const res = await fetch('/api/asistencia', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          personalId,
-          fecha,
-          estado: nuevoEstado
-        })
-      })
-      if (res.ok) {
-        toast.success(`Estado cambiado a "${nuevoEstado}"`)
-        void fetchAsistencia()
-      }
-    } catch (error) {
-      console.error('Error changing estado:', error)
-      toast.error('Error al cambiar estado')
-    }
-  }
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'Presente':
-      case 'Completado':
-        return 'bg-green-100 text-green-700 border-green-200'
-      case 'Ausente':
-        return 'bg-red-100 text-red-700 border-red-200'
-      case 'Tarde':
-        return 'bg-amber-100 text-amber-700 border-amber-200'
-      case 'Permiso':
-        return 'bg-blue-100 text-blue-700 border-blue-200'
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200'
-    }
-  }
-
-  const getEstadoIcon = (estado: string) => {
-    switch (estado) {
-      case 'Presente':
-      case 'Completado':
-        return <CheckCircle className="w-4 h-4 text-green-600" />
-      case 'Ausente':
-        return <XCircle className="w-4 h-4 text-red-600" />
-      case 'Tarde':
-        return <ClockAlert className="w-4 h-4 text-amber-600" />
-      case 'Permiso':
-        return <FileText className="w-4 h-4 text-blue-600" />
-      default:
-        return <Clock className="w-4 h-4 text-gray-600" />
-    }
-  }
-
-  // Filtrar registros por búsqueda
-  const filteredRegistros = registros.filter(r => {
-    if (!search) return true
-    const searchLower = search.toLowerCase()
-    return (
-      r.nombre.toLowerCase().includes(searchLower) ||
-      (r.cargo && r.cargo.toLowerCase().includes(searchLower)) ||
-      r.estado.toLowerCase().includes(searchLower)
-    )
-  })
-
-  // Calcular estadísticas
-  const stats = {
-    presentes: registros.filter(r => r.estado === 'Presente' || r.estado === 'Completado').length,
-    tarde: registros.filter(r => r.estado === 'Tarde').length,
-    ausentes: registros.filter(r => r.estado === 'Ausente').length,
-    permisos: registros.filter(r => r.estado === 'Permiso').length,
-    pendientes: registros.filter(r => r.estado === 'Pendiente').length,
-    total: registros.length
-  }
-
-  // Crear nuevo registro
-  const handleNuevoRegistro = async () => {
-    if (!nuevoPersonalId) {
-      toast.error('Seleccione un personal')
+  // Aprobar/Rechazar
+  const handleAprobacion = async () => {
+    if (!aprobTarget || !aprobAccion) return
+    if (aprobAccion === 'rechazar' && !aprobObservaciones.trim()) {
+      toast.error('Debe ingresar el motivo del rechazo')
       return
     }
+    setAprobLoading(true)
     try {
-      const res = await fetch('/api/asistencia', {
+      if (!aprobTarget.justificacion) {
+        toast.error('No hay justificación para aprobar')
+        return
+      }
+      const res = await fetch(`/api/asistencia/justificar/${aprobTarget.justificacion.id}/aprobar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personalId: nuevoPersonalId,
-          fecha,
-          estado: nuevoEstado,
-          observaciones: nuevoObservaciones || null
-        })
+          accion: aprobAccion,
+          adminObservaciones: aprobObservaciones.trim() || null,
+        }),
       })
+      const data = await res.json()
       if (res.ok) {
-        toast.success('Registro creado')
-        setNuevoDialogOpen(false)
-        setNuevoPersonalId('')
-        setNuevoEstado('Presente')
-        setNuevoObservaciones('')
-        void fetchAsistencia()
+        toast.success(data.message || 'Acción procesada')
+        setAprobDialogOpen(false)
+        setAprobTarget(null)
+        setAprobAccion('')
+        setAprobObservaciones('')
+        fetchData()
+      } else {
+        toast.error(data.error || 'Error')
       }
-    } catch (error) {
-      console.error('Error creating registro:', error)
-      toast.error('Error al crear registro')
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setAprobLoading(false)
     }
   }
 
-  // Bulk upload (simulated - manual entry for now)
-  const handleBulkUpload = async (personalIds: string[], estadoDefault: string) => {
-    try {
-      const promises = personalIds.map(personalId => 
-        fetch('/api/asistencia', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            personalId,
-            fecha,
-            estado: estadoDefault
-          })
-        })
-      )
-      await Promise.all(promises)
-      toast.success(`${personalIds.length} registros creados`)
-      setBulkDialogOpen(false)
-      void fetchAsistencia()
-    } catch (error) {
-      console.error('Error bulk upload:', error)
-      toast.error('Error en carga masiva')
-    }
+  // Exportar reporte
+  const handleExport = (formato: 'pdf' | 'csv') => {
+    const params = new URLSearchParams()
+    params.set('formato', formato)
+    if (filtroFechaDesde) params.set('fechaDesde', filtroFechaDesde)
+    if (filtroFechaHasta) params.set('fechaHasta', filtroFechaHasta)
+    if (filtroTrabajador) params.set('trabajador', filtroTrabajador)
+    if (filtroEstado !== 'all') params.set('estado', filtroEstado)
+    window.open(`/api/asistencia/reporte?${params.toString()}`, '_blank')
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full"></div>
-      </div>
-    )
-  }
+  // Filtrar inasistencias para mostrar
+  const inasistenciasFiltradas = inasistencias.filter((i) => {
+    if (filtroTipo !== 'all' && i.tipo !== filtroTipo) return false
+    if (filtroTrabajador && !i.nombreTrabajador.toLowerCase().includes(filtroTrabajador.toLowerCase())) return false
+    return true
+  })
 
+  // ============================================
+  // Render
+  // ============================================
   return (
-    <div className="space-y-5">
-      {/* Header con selector de fecha */}
-      <Card className="bg-gradient-to-r from-slate-50 to-slate-100 border-slate-200">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Calendar className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-700">Control de asistencia del personal</p>
-                {currentCondominio && (
-                  <p className="text-xs text-amber-600 font-medium">
-                    {currentCondominio.nombre}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-500 font-medium">Fecha:</label>
-              <Input
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className="w-44 border-slate-300"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-[#0f2040] flex items-center gap-2">
+          <Clock className="w-5 h-5" />
+          Control de Asistencia
+        </h2>
+        {canJustificar && (
+          <Badge variant="outline" className="text-xs">
+            {isAdmin() ? 'Puede aprobar/rechazar justificaciones' : 'Puede justificar atrasos/ausencias'}
+          </Badge>
+        )}
+      </div>
 
-      {/* Actions Bar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input
-            placeholder="Buscar por nombre, cargo..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-[#0f2040]">{stats.total}</div>
+            <div className="text-xs text-gray-500">Total</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-yellow-600">{stats.atrasos}</div>
+            <div className="text-xs text-gray-500">Atrasos</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-red-600">{stats.ausencias}</div>
+            <div className="text-xs text-gray-500">Ausencias</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-orange-600">{stats.salidasTempranas}</div>
+            <div className="text-xs text-gray-500">Sal. Tempranas</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-yellow-700">{stats.pendientes}</div>
+            <div className="text-xs text-gray-500">Pendientes</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-blue-600">{stats.justificados}</div>
+            <div className="text-xs text-gray-500">Justificados</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-green-600">{stats.aprobados}</div>
+            <div className="text-xs text-gray-500">Aprobados</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-red-700">{stats.rechazados}</div>
+            <div className="text-xs text-gray-500">Rechazados</div>
+          </Card>
         </div>
-        <Button variant="outline" onClick={() => exportToCSV(filteredRegistros, fecha)}>
-          <Download className="w-4 h-4 mr-1" /> Exportar
-        </Button>
-        <Button variant="outline" onClick={() => setBulkDialogOpen(true)}>
-          <Upload className="w-4 h-4 mr-1" /> Carga Masiva
-        </Button>
-        <Button onClick={() => setNuevoDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-1" /> Nuevo Registro
-        </Button>
-      </div>
-      
-      {/* Estadísticas */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Card className="p-3 text-center border-green-200 bg-green-50">
-          <div className="text-2xl font-bold text-green-600">{stats.presentes}</div>
-          <div className="text-[10px] text-green-700 font-medium">Presentes</div>
-        </Card>
-        <Card className="p-3 text-center border-amber-200 bg-amber-50">
-          <div className="text-2xl font-bold text-amber-600">{stats.tarde}</div>
-          <div className="text-[10px] text-amber-700 font-medium">Tarde</div>
-        </Card>
-        <Card className="p-3 text-center border-red-200 bg-red-50">
-          <div className="text-2xl font-bold text-red-600">{stats.ausentes}</div>
-          <div className="text-[10px] text-red-700 font-medium">Ausentes</div>
-        </Card>
-        <Card className="p-3 text-center border-blue-200 bg-blue-50">
-          <div className="text-2xl font-bold text-blue-600">{stats.permisos}</div>
-          <div className="text-[10px] text-blue-700 font-medium">Permiso</div>
-        </Card>
-        <Card className="p-3 text-center border-slate-200 bg-slate-50">
-          <div className="text-2xl font-bold text-slate-600">{stats.pendientes}</div>
-          <div className="text-[10px] text-slate-700 font-medium">Pendientes</div>
-        </Card>
-      </div>
+      )}
 
-      {/* Tabla de asistencia */}
-      <Card className="border-slate-200">
-        <CardHeader className="pb-3 bg-slate-50 border-b">
-          <CardTitle className="text-sm font-bold flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-600" />
-            Asistencia del {new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            {currentCondominio && (
-              <Badge variant="outline" className="ml-2 border-amber-300 text-amber-700">
-                {currentCondominio.nombre}
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {registros.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              <AlertCircle className="w-10 h-10 mx-auto mb-3 text-slate-400" />
-              <p className="font-medium">No hay personal registrado</p>
-              {!currentCondominio && (
-                <p className="text-xs text-amber-600 mt-2">Seleccione un condominio para gestionar asistencia</p>
-              )}
-            </div>
-          ) : filteredRegistros.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              <Search className="w-10 h-10 mx-auto mb-3 text-slate-400" />
-              <p className="font-medium">No se encontraron resultados</p>
-              <p className="text-xs text-slate-400 mt-1">Intente con otro término de búsqueda</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Nombre</th>
-                    <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Cargo</th>
-                    <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Entrada</th>
-                    <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Salida</th>
-                    <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
-                    <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRegistros.map((reg) => (
-                    <tr key={reg.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="p-3">
-                        <div className="font-medium text-slate-800">{reg.nombre}</div>
-                      </td>
-                      <td className="p-3 text-slate-600">{reg.cargo || '–'}</td>
-                      <td className="p-3 text-center">
-                        {reg.horaEntrada ? (
-                          <div className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-md font-mono text-xs">
-                            <LogIn className="w-3 h-3" />
-                            {reg.horaEntrada}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs">–</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-center">
-                        {reg.horaSalida ? (
-                          <div className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 px-2 py-1 rounded-md font-mono text-xs">
-                            <LogOut className="w-3 h-3" />
-                            {reg.horaSalida}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs">–</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          {getEstadoIcon(reg.estado)}
-                          <Badge className={`${getEstadoColor(reg.estado)} text-xs`}>
-                            {reg.estado}
-                          </Badge>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-wrap justify-center gap-1.5">
-                          {/* Botón Registrar Entrada */}
-                          {!reg.horaEntrada && (
-                            <Button 
-                              size="sm" 
-                              className="h-8 text-xs bg-green-600 hover:bg-green-700 text-white shadow-sm"
-                              onClick={() => registrarEntrada(reg.personalId)}
-                            >
-                              <LogIn className="w-3.5 h-3.5 mr-1" /> 
-                              Entrada
-                            </Button>
-                          )}
-                          
-                          {/* Botón Registrar Salida */}
-                          {reg.horaEntrada && !reg.horaSalida && (
-                            <Button 
-                              size="sm" 
-                              className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                              onClick={() => registrarSalida(reg.personalId)}
-                            >
-                              <LogOut className="w-3.5 h-3.5 mr-1" /> 
-                              Salida
-                            </Button>
-                          )}
-                          
-                          {/* Indicador de jornada completa */}
-                          {reg.horaEntrada && reg.horaSalida && (
-                            <Badge className="bg-green-600 text-white text-xs">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Completado
-                            </Badge>
-                          )}
-                          
-                          {/* Separador */}
-                          {(reg.horaEntrada || reg.horaSalida) && (
-                            <div className="w-px h-6 bg-slate-200 mx-1 hidden sm:block"></div>
-                          )}
-                          
-                          {/* Botones de Estado */}
-                          {ESTADOS.map((estado) => {
-                            const Icon = estado.icon
-                            const isActive = reg.estado === estado.value
-                            return (
-                              <Button
-                                key={estado.value}
-                                size="sm"
-                                variant={isActive ? "default" : "outline"}
-                                className={`h-8 text-xs ${isActive 
-                                  ? `${estado.color} text-white` 
-                                  : 'border-slate-300 text-slate-600 hover:bg-slate-100'
-                                }`}
-                                onClick={() => cambiarEstado(reg.personalId, estado.value)}
-                                title={`Marcar como ${estado.label}`}
-                              >
-                                <Icon className="w-3.5 h-3.5 mr-1" />
-                                {estado.label}
-                              </Button>
-                            )
-                          })}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
+          <TabsTrigger value="analisis" className="text-xs">
+            <AlertTriangle className="w-3.5 h-3.5 mr-1" />
+            Análisis
+          </TabsTrigger>
+          <TabsTrigger value="resumen" className="text-xs">
+            <Users className="w-3.5 h-3.5 mr-1" />
+            Por Trabajador
+          </TabsTrigger>
+          {canJustificar && (
+            <TabsTrigger value="justificaciones" className="text-xs">
+              <CheckSquare className="w-3.5 h-3.5 mr-1" />
+              {canAprobar ? 'Aprobaciones' : 'Justificar'}
+            </TabsTrigger>
           )}
-        </CardContent>
-      </Card>
+          {canJustificar && (
+            <TabsTrigger value="importar" className="text-xs">
+              <Upload className="w-3.5 h-3.5 mr-1" />
+              Importar
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-      {/* Leyenda de estados */}
-      <Card className="border-slate-200 bg-slate-50">
-        <CardContent className="p-3">
-          <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-600">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <span>Presente/Completado</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-              <span>Tarde</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <span>Ausente</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span>Permiso</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded-full bg-slate-400"></div>
-              <span>Pendiente</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* ============================================ */}
+        {/* TAB: ANÁLISIS (listado de atrasos/ausencias) */}
+        {/* ============================================ */}
+        <TabsContent value="analisis" className="space-y-3 mt-3">
+          {/* Filtros */}
+          <Card>
+            <CardContent className="p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex-1 min-w-[150px]">
+                  <Label className="text-xs">Buscar trabajador</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                    <Input
+                      placeholder="Nombre..."
+                      value={filtroTrabajador}
+                      onChange={(e) => setFiltroTrabajador(e.target.value)}
+                      className="pl-8 h-9 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs">Tipo</Label>
+                  <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+                    <SelectTrigger className="w-[140px] h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="atraso">Atrasos</SelectItem>
+                      <SelectItem value="ausencia">Ausencias</SelectItem>
+                      <SelectItem value="salida_temprana">Salidas tempranas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Estado</Label>
+                  <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                    <SelectTrigger className="w-[140px] h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="pendiente">Pendientes</SelectItem>
+                      <SelectItem value="justificado">Justificados</SelectItem>
+                      <SelectItem value="aprobado">Aprobados</SelectItem>
+                      <SelectItem value="rechazado">Rechazados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Desde</Label>
+                  <Input
+                    type="date"
+                    value={filtroFechaDesde}
+                    onChange={(e) => setFiltroFechaDesde(e.target.value)}
+                    className="w-[140px] h-9 text-sm"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Hasta</Label>
+                  <Input
+                    type="date"
+                    value={filtroFechaHasta}
+                    onChange={(e) => setFiltroFechaHasta(e.target.value)}
+                    className="w-[140px] h-9 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExport('csv')}
+                  className="h-9"
+                  disabled={inasistenciasFiltradas.length === 0}
+                >
+                  <FileDown className="w-3.5 h-3.5 mr-1" /> CSV
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleExport('pdf')}
+                  className="h-9 bg-[#0f2040] hover:bg-[#1a3155]"
+                  disabled={inasistenciasFiltradas.length === 0}
+                >
+                  <FileDown className="w-3.5 h-3.5 mr-1" /> PDF
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Dialog: Nuevo Registro */}
-      <Dialog open={nuevoDialogOpen} onOpenChange={setNuevoDialogOpen}>
+          {/* Tabla */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Trabajador</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Depto</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Fecha</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Día</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Tipo</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Esperada</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Real</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Min</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Estado</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={10} className="p-8 text-center text-gray-400">
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                        </td>
+                      </tr>
+                    ) : inasistenciasFiltradas.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="p-8 text-center text-gray-400">
+                          No hay registros de atrasos o ausencias con los filtros seleccionados.
+                          {canJustificar && ' Importa un archivo para generar el análisis.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      inasistenciasFiltradas.slice(0, 200).map((i) => (
+                        <tr key={i.id} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="p-2 font-medium">{i.nombreTrabajador}</td>
+                          <td className="p-2 text-gray-600">{i.departamento || '—'}</td>
+                          <td className="p-2 text-gray-600 whitespace-nowrap">{i.fecha}</td>
+                          <td className="p-2 text-gray-600">{i.diaSemana}</td>
+                          <td className="p-2">
+                            <Badge className={tipoColors[i.tipo] || 'bg-slate-100'} variant="outline">
+                              {tipoLabels[i.tipo] || i.tipo}
+                            </Badge>
+                          </td>
+                          <td className="p-2 text-center text-gray-600">{i.horaEsperadaInicio || '—'}</td>
+                          <td className="p-2 text-center text-gray-600">{i.horaRealInicio || '—'}</td>
+                          <td className="p-2 text-center font-mono">{i.minutosAtraso || 0}</td>
+                          <td className="p-2">
+                            <Badge className={estadoColors[i.estado] || 'bg-slate-100'}>
+                              {i.estado}
+                            </Badge>
+                          </td>
+                          <td className="p-2 text-center">
+                            <div className="flex justify-center gap-1">
+                              {/* Supervisor: justificar */}
+                              {canJustificar && i.estado === 'pendiente' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => {
+                                    setJustTarget(i)
+                                    setJustTipo('')
+                                    setJustObservaciones('')
+                                    setJustDialogOpen(true)
+                                  }}
+                                >
+                                  Justificar
+                                </Button>
+                              )}
+                              {/* Admin: aprobar/rechazar justificaciones pendientes */}
+                              {canAprobar && i.justificacion && i.justificacion.estado === 'pendiente_revision' && (
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-xs bg-[#0f2040] hover:bg-[#1a3155]"
+                                  onClick={() => {
+                                    setAprobTarget(i)
+                                    setAprobAccion('')
+                                    setAprobObservaciones('')
+                                    setAprobDialogOpen(true)
+                                  }}
+                                >
+                                  Revisar
+                                </Button>
+                              )}
+                              {/* Ver detalle */}
+                              {i.justificacion && (
+                                <span className="text-[10px] text-blue-600 italic">
+                                  {i.justificacion.tipoJustificacion}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {inasistenciasFiltradas.length > 200 && (
+                <div className="p-2 text-center text-xs text-gray-500 bg-slate-50">
+                  Mostrando 200 de {inasistenciasFiltradas.length} registros. Usa los filtros para acotar.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================ */}
+        {/* TAB: RESUMEN POR TRABAJADOR */}
+        {/* ============================================ */}
+        <TabsContent value="resumen" className="space-y-3 mt-3">
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm">Resumen por Trabajador</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Trabajador</th>
+                      <th className="text-left p-2 font-bold text-slate-600 uppercase">Departamento</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Atrasos</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Ausencias</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Sal. Temp.</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Min total</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Pend.</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Aprob.</th>
+                      <th className="text-center p-2 font-bold text-slate-600 uppercase">Rech.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resumenTrabajadores.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="p-8 text-center text-gray-400">
+                          No hay datos. Importa un archivo para generar el análisis.
+                        </td>
+                      </tr>
+                    ) : (
+                      resumenTrabajadores.map((t, idx) => (
+                        <tr key={idx} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="p-2 font-medium">{t.nombre}</td>
+                          <td className="p-2 text-gray-600">{t.departamento || '—'}</td>
+                          <td className="p-2 text-center font-mono">{t.atrasos}</td>
+                          <td className="p-2 text-center font-mono">{t.ausencias}</td>
+                          <td className="p-2 text-center font-mono">{t.salidasTempranas}</td>
+                          <td className="p-2 text-center font-mono">{t.totalMinutosAtraso}</td>
+                          <td className="p-2 text-center font-mono text-yellow-700">{t.pendientes}</td>
+                          <td className="p-2 text-center font-mono text-green-700">{t.aprobados}</td>
+                          <td className="p-2 text-center font-mono text-red-700">{t.rechazados}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ============================================ */}
+        {/* TAB: JUSTIFICACIONES / APROBACIONES */}
+        {/* ============================================ */}
+        {canJustificar && (
+          <TabsContent value="justificaciones" className="space-y-3 mt-3">
+            {canAprobar ? (
+              /* Admin: revisar justificaciones pendientes */
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <CheckSquare className="w-4 h-4" />
+                    Justificaciones pendientes de aprobación
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b bg-slate-50">
+                          <th className="text-left p-2 font-bold uppercase">Trabajador</th>
+                          <th className="text-left p-2 font-bold uppercase">Fecha</th>
+                          <th className="text-left p-2 font-bold uppercase">Tipo</th>
+                          <th className="text-left p-2 font-bold uppercase">Justificación</th>
+                          <th className="text-left p-2 font-bold uppercase">Supervisor</th>
+                          <th className="text-center p-2 font-bold uppercase">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inasistencias
+                          .filter((i) => i.justificacion?.estado === 'pendiente_revision')
+                          .length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-gray-400">
+                              No hay justificaciones pendientes de aprobación.
+                            </td>
+                          </tr>
+                        ) : (
+                          inasistencias
+                            .filter((i) => i.justificacion?.estado === 'pendiente_revision')
+                            .map((i) => (
+                              <tr key={i.id} className="border-b last:border-0 hover:bg-slate-50">
+                                <td className="p-2 font-medium">{i.nombreTrabajador}</td>
+                                <td className="p-2 text-gray-600">{i.fecha}</td>
+                                <td className="p-2">
+                                  <Badge className={tipoColors[i.tipo]} variant="outline">
+                                    {tipoLabels[i.tipo]}
+                                  </Badge>
+                                </td>
+                                <td className="p-2">
+                                  <div className="font-medium">{i.justificacion!.tipoJustificacion}</div>
+                                  {i.justificacion!.observaciones && (
+                                    <div className="text-gray-500 text-[10px]">{i.justificacion!.observaciones}</div>
+                                  )}
+                                </td>
+                                <td className="p-2 text-gray-600">{i.justificacion!.supervisorNombre}</td>
+                                <td className="p-2 text-center">
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-xs bg-[#0f2040] hover:bg-[#1a3155]"
+                                    onClick={() => {
+                                      setAprobTarget(i)
+                                      setAprobAccion('')
+                                      setAprobObservaciones('')
+                                      setAprobDialogOpen(true)
+                                    }}
+                                  >
+                                    Revisar
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              /* Supervisor: ver justificaciones que ya envió */
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="text-sm">Justificaciones enviadas</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b bg-slate-50">
+                          <th className="text-left p-2 font-bold uppercase">Trabajador</th>
+                          <th className="text-left p-2 font-bold uppercase">Fecha</th>
+                          <th className="text-left p-2 font-bold uppercase">Tipo</th>
+                          <th className="text-left p-2 font-bold uppercase">Justificación</th>
+                          <th className="text-left p-2 font-bold uppercase">Estado</th>
+                          <th className="text-left p-2 font-bold uppercase">Admin</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inasistencias.filter((i) => i.justificacion).length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="p-8 text-center text-gray-400">
+                              No has enviado justificaciones todavía. Ve a la pestaña "Análisis" para justificar atrasos o ausencias.
+                            </td>
+                          </tr>
+                        ) : (
+                          inasistencias
+                            .filter((i) => i.justificacion)
+                            .map((i) => (
+                              <tr key={i.id} className="border-b last:border-0 hover:bg-slate-50">
+                                <td className="p-2 font-medium">{i.nombreTrabajador}</td>
+                                <td className="p-2 text-gray-600">{i.fecha}</td>
+                                <td className="p-2">
+                                  <Badge className={tipoColors[i.tipo]} variant="outline">
+                                    {tipoLabels[i.tipo]}
+                                  </Badge>
+                                </td>
+                                <td className="p-2">
+                                  <div className="font-medium">{i.justificacion!.tipoJustificacion}</div>
+                                  {i.justificacion!.observaciones && (
+                                    <div className="text-gray-500 text-[10px]">{i.justificacion!.observaciones}</div>
+                                  )}
+                                </td>
+                                <td className="p-2">
+                                  <Badge className={estadoColors[i.estado] || 'bg-slate-100'}>
+                                    {i.estado}
+                                  </Badge>
+                                </td>
+                                <td className="p-2 text-gray-600">
+                                  {i.justificacion!.adminNombre || '—'}
+                                  {i.justificacion!.adminObservaciones && (
+                                    <div className="text-[10px] text-gray-500">{i.justificacion!.adminObservaciones}</div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ============================================ */}
+        {/* TAB: IMPORTAR */}
+        {/* ============================================ */}
+        {canJustificar && (
+          <TabsContent value="importar" className="space-y-3 mt-3">
+            <ImportTab onImport={handleImport} importing={importing} />
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {/* ============================================ */}
+      {/* DIÁLOGO: JUSTIFICAR (supervisor) */}
+      {/* ============================================ */}
+      <Dialog open={justDialogOpen} onOpenChange={(open) => {
+        if (!justLoading) {
+          setJustDialogOpen(open)
+          if (!open) {
+            setJustTarget(null)
+            setJustTipo('')
+            setJustObservaciones('')
+          }
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Nuevo Registro de Asistencia</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+              Justificar {justTarget ? tipoLabels[justTarget.tipo] : ''}
+            </DialogTitle>
+            <DialogDescription>
+              {justTarget && (
+                <>
+                  Trabajador: <strong>{justTarget.nombreTrabajador}</strong><br />
+                  Fecha: <strong>{justTarget.fecha}</strong> ({justTarget.diaSemana})<br />
+                  {justTarget.horaEsperadaInicio && (
+                    <>Esperada: {justTarget.horaEsperadaInicio} · Real: {justTarget.horaRealInicio || '—'} · Atraso: {justTarget.minutosAtraso} min</>
+                  )}
+                </>
+              )}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <Label>Personal</Label>
-              <Select value={nuevoPersonalId} onValueChange={setNuevoPersonalId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar personal..." />
+              <Label className="text-xs">Tipo de justificación *</Label>
+              <Select value={justTipo} onValueChange={setJustTipo}>
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Selecciona..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {personal.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombre} {p.cargo ? `- ${p.cargo}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={nuevoEstado} onValueChange={setNuevoEstado}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Presente">Presente</SelectItem>
-                  <SelectItem value="Ausente">Ausente</SelectItem>
-                  <SelectItem value="Tarde">Tarde</SelectItem>
                   <SelectItem value="Permiso">Permiso</SelectItem>
+                  <SelectItem value="Enfermedad">Enfermedad</SelectItem>
+                  <SelectItem value="Personal">Personal</SelectItem>
+                  <SelectItem value="Fuerza Mayor">Fuerza Mayor</SelectItem>
+                  <SelectItem value="Otro">Otro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>Observaciones</Label>
+              <Label className="text-xs">Observaciones</Label>
               <Textarea
-                value={nuevoObservaciones}
-                onChange={(e) => setNuevoObservaciones(e.target.value)}
-                placeholder="Observaciones opcionales..."
-                rows={2}
+                value={justObservaciones}
+                onChange={(e) => setJustObservaciones(e.target.value)}
+                placeholder="Explica el motivo de la justificación..."
+                rows={3}
+                disabled={justLoading}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNuevoDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleNuevoRegistro}>Crear Registro</Button>
+            <Button variant="outline" onClick={() => setJustDialogOpen(false)} disabled={justLoading}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleJustificar}
+              disabled={justLoading || !justTipo}
+              className="bg-[#0f2040] hover:bg-[#1a3155]"
+            >
+              {justLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+              Enviar a revisión
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog: Carga Masiva */}
-      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+      {/* ============================================ */}
+      {/* DIÁLOGO: APROBAR/RECHAZAR (admin) */}
+      {/* ============================================ */}
+      <Dialog open={aprobDialogOpen} onOpenChange={(open) => {
+        if (!aprobLoading) {
+          setAprobDialogOpen(open)
+          if (!open) {
+            setAprobTarget(null)
+            setAprobAccion('')
+            setAprobObservaciones('')
+          }
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Carga Masiva de Asistencia</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-[#0f2040]" />
+              Revisar Justificación
+            </DialogTitle>
+            <DialogDescription>
+              {aprobTarget && aprobTarget.justificacion && (
+                <>
+                  Trabajador: <strong>{aprobTarget.nombreTrabajador}</strong><br />
+                  Fecha: <strong>{aprobTarget.fecha}</strong><br />
+                  Tipo: {tipoLabels[aprobTarget.tipo]} · Atraso: {aprobTarget.minutosAtraso} min<br />
+                  <hr className="my-2" />
+                  Justificación: <strong>{aprobTarget.justificacion.tipoJustificacion}</strong><br />
+                  Supervisor: {aprobTarget.justificacion.supervisorNombre}<br />
+                  {aprobTarget.justificacion.observaciones && (
+                    <em>"{aprobTarget.justificacion.observaciones}"</em>
+                  )}
+                </>
+              )}
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Marcará todos los personal como "Presente" para la fecha seleccionada.
-            </p>
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-700">
-              <strong>Fecha:</strong> {new Date(fecha + 'T12:00:00').toLocaleDateString('es-CL')}
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Acción</Label>
+              <div className="flex gap-2">
+                <Button
+                  variant={aprobAccion === 'aprobar' ? 'default' : 'outline'}
+                  className={`flex-1 ${aprobAccion === 'aprobar' ? 'bg-green-700 hover:bg-green-800' : ''}`}
+                  onClick={() => setAprobAccion('aprobar')}
+                  disabled={aprobLoading}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" /> Aprobar
+                </Button>
+                <Button
+                  variant={aprobAccion === 'rechazar' ? 'default' : 'outline'}
+                  className={`flex-1 ${aprobAccion === 'rechazar' ? 'bg-red-600 hover:bg-red-700' : ''}`}
+                  onClick={() => setAprobAccion('rechazar')}
+                  disabled={aprobLoading}
+                >
+                  <XCircle className="w-4 h-4 mr-1" /> Rechazar
+                </Button>
+              </div>
             </div>
-            <p className="text-xs text-slate-500">
-              Total personal: {personal.length} personas
-            </p>
+            {aprobAccion === 'rechazar' && (
+              <div>
+                <Label className="text-xs">Motivo del rechazo *</Label>
+                <Textarea
+                  value={aprobObservaciones}
+                  onChange={(e) => setAprobObservaciones(e.target.value)}
+                  placeholder="Explica por qué se rechaza..."
+                  rows={3}
+                  disabled={aprobLoading}
+                />
+              </div>
+            )}
+            {aprobAccion === 'aprobar' && (
+              <div>
+                <Label className="text-xs">Observaciones (opcional)</Label>
+                <Textarea
+                  value={aprobObservaciones}
+                  onChange={(e) => setAprobObservaciones(e.target.value)}
+                  placeholder="Observaciones adicionales..."
+                  rows={2}
+                  disabled={aprobLoading}
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={() => handleBulkUpload(personal.map(p => p.id), 'Presente')}>
-              Marcar Todos Presentes
+            <Button variant="outline" onClick={() => setAprobDialogOpen(false)} disabled={aprobLoading}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAprobacion}
+              disabled={aprobLoading || !aprobAccion || (aprobAccion === 'rechazar' && !aprobObservaciones.trim())}
+              className={aprobAccion === 'rechazar' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-700 hover:bg-green-800'}
+            >
+              {aprobLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ============================================
+// Componente: ImportTab
+// ============================================
+function ImportTab({ onImport, importing }: { onImport: (h: File, r: File) => void; importing: boolean }) {
+  const [horariosFile, setHorariosFile] = useState<File | null>(null)
+  const [registrosFile, setRegistrosFile] = useState<File | null>(null)
+
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Upload className="w-4 h-4" />
+          Importar Archivos de Asistencia
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+          <p className="font-bold mb-1">Instrucciones:</p>
+          <ol className="list-decimal ml-4 space-y-1">
+            <li>Sube el archivo <strong>HORARIOS TRABAJADORES.xlsx</strong> (con los turnos por día)</li>
+            <li>Sube el archivo <strong>Registro asistencia .xls/.xlsx</strong> (exportado del reloj control)</li>
+            <li>El sistema analizará automáticamente: atrasos, ausencias y salidas tempranas</li>
+            <li>Los turnos 4x4 se calculan automáticamente (4 días trabajo + 4 libres)</li>
+          </ol>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Horarios */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold">1. Archivo de Horarios (.xlsx)</Label>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setHorariosFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="horarios-input"
+              />
+              <label htmlFor="horarios-input" className="cursor-pointer">
+                <FileText className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                <p className="text-xs text-gray-600">
+                  {horariosFile ? horariosFile.name : 'Click para seleccionar'}
+                </p>
+              </label>
+            </div>
+          </div>
+
+          {/* Registros */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold">2. Registro de Asistencia (.xls/.xlsx)</Label>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={(e) => setRegistrosFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="registros-input"
+              />
+              <label htmlFor="registros-input" className="cursor-pointer">
+                <FileText className="w-8 h-8 mx-auto text-gray-400 mb-1" />
+                <p className="text-xs text-gray-600">
+                  {registrosFile ? registrosFile.name : 'Click para seleccionar'}
+                </p>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            onClick={() => horariosFile && registrosFile && onImport(horariosFile, registrosFile)}
+            disabled={!horariosFile || !registrosFile || importing}
+            className="bg-[#0f2040] hover:bg-[#1a3155]"
+          >
+            {importing ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando y analizando...</>
+            ) : (
+              <><Upload className="w-4 h-4 mr-2" /> Importar y Analizar</>
+            )}
+          </Button>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+          <p><strong>Nota:</strong> La importación reemplaza los datos del rango de fechas del archivo. El análisis usa 5 minutos de tolerancia para atrasos.</p>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

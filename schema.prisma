@@ -282,6 +282,9 @@ model Personal {
   activos       Activo[] @relation("ActivoAsignado")
   otPersonal    OrdenTrabajo[] @relation("OTPersonal")
   asistencias   Asistencia[]
+  horariosTrabajador HorarioTrabajador[]
+  registrosReloj RegistroAsistenciaReloj[]
+  inasistenciasAtrasos InasistenciaAtraso[]
   @@index([condominioId, estado])
   @@index([rut])
   @@index([createdAt])
@@ -927,6 +930,146 @@ model Asistencia {
 
   @@unique([personalId, fecha]) // Una asistencia por personal por día
   @@index([personalId, fecha])
+}
+
+// ============================================
+// HORARIOS DE TRABAJADORES (turnos fijos y 4x4)
+// ============================================
+model HorarioTrabajador {
+  id              String   @id @default(cuid())
+  personalId      String?  // vinculado a Personal (opcional, puede no estar en BD)
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
+  nombreTrabajador String  // nombre del trabajador (del archivo de horarios)
+  rut             String?  @unique
+  turno           String   // TURNO A, TURNO B
+  tipoTurno       String   @default("fijo") // fijo, 4x4
+  // Horarios por día (formato "HH:MM" o null si es Libre)
+  lunesInicio     String?
+  lunesFin        String?
+  martesInicio    String?
+  martesFin       String?
+  miercolesInicio String?
+  miercolesFin    String?
+  juevesInicio    String?
+  juevesFin       String?
+  viernesInicio   String?
+  viernesFin      String?
+  sabadoInicio    String?
+  sabadoFin       String?
+  // Para 4x4: fecha de inicio del primer ciclo (4 días trabajo + 4 libres)
+  ciclo4x4Inicio  String?  // YYYY-MM-DD del primer día de trabajo del ciclo
+  ciclo4x4Turno   String?  // "dia" (07:00-19:00) o "noche" (19:00-07:00)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  registrosReloj  RegistroAsistenciaReloj[]
+  inasistenciasAtrasos InasistenciaAtraso[]
+
+  @@index([nombreTrabajador])
+  @@index([rut])
+  @@unique([nombreTrabajador, turno])
+}
+
+// ============================================
+// REGISTROS DE ASISTENCIA (importados del reloj control)
+// ============================================
+model RegistroAsistenciaReloj {
+  id              String   @id @default(cuid())
+  codigo          String?  // código del reloj
+  rut             String?  // RUT del trabajador
+  nombre          String   // nombre del trabajador (del reloj)
+  departamento    String?  // Guardia Full Time, Conserje, Mantenimiento, etc.
+  fechaHora       DateTime // fecha y hora del registro
+  fecha           String   // YYYY-MM-DD (extraído de fechaHora)
+  hora            String   // HH:MM (extraído de fechaHora)
+  tipoRegistro    String?  // Entrada, Salida
+  direccion       String?  // dirección del reloj
+  estado          String?  // Activo, etc.
+  // Vinculación con Personal (opcional)
+  personalId      String?
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
+  // Vinculación con HorarioTrabajador (opcional)
+  horarioId       String?
+  horario         HorarioTrabajador? @relation(fields: [horarioId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+
+  @@index([nombre, fecha])
+  @@index([rut, fecha])
+  @@index([fecha])
+}
+
+// ============================================
+// INASISTENCIAS Y ATRASOS (detectados automáticamente)
+// ============================================
+model InasistenciaAtraso {
+  id              String   @id @default(cuid())
+  personalId      String?  // vinculado a Personal (opcional)
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
+  horarioId       String?  // vinculado a HorarioTrabajador (opcional)
+  horario         HorarioTrabajador? @relation(fields: [horarioId], references: [id], onDelete: SetNull)
+  nombreTrabajador String  // nombre del trabajador
+  rut             String?
+  departamento    String?
+  fecha           String   // YYYY-MM-DD de la inasistencia/atraso
+  diaSemana       String   // Lunes, Martes, etc.
+  // Tipo: atraso (entró tarde), ausencia (no entró), salida_temprana (salió antes)
+  tipo            String   // atraso, ausencia, salida_temprana
+  // Horario esperado
+  horaEsperadaInicio String?  // HH:MM
+  horaEsperadaFin    String?  // HH:MM
+  // Horario real
+  horaRealInicio     String?  // HH:MM (null si ausencia)
+  horaRealFin        String?  // HH:MM
+  // Minutos de atraso (0 si ausencia)
+  minutosAtraso      Int      @default(0)
+  // Estado del flujo de justificación
+  estado             String   @default("pendiente") // pendiente, justificado, en_revision, aprobado, rechazado
+  // Tipo de turno
+  tipoTurno          String?  // fijo, 4x4
+  observaciones      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  justificacion      JustificacionAsistencia?
+
+  @@index([nombreTrabajador, fecha])
+  @@index([estado])
+  @@index([fecha])
+  @@index([tipo])
+}
+
+// ============================================
+// JUSTIFICACIONES DE ASISTENCIA (flujo supervisor → admin)
+// ============================================
+model JustificacionAsistencia {
+  id              String   @id @default(cuid())
+  inasistenciaId  String   @unique
+  inasistencia    InasistenciaAtraso @relation(fields: [inasistenciaId], references: [id], onDelete: Cascade)
+
+  // Supervisor que justifica
+  supervisorId    String?
+  supervisorNombre String?
+  fechaJustificacion DateTime?
+
+  // Datos de la justificación
+  tipoJustificacion String  // Permiso, Enfermedad, Personal, Fuerza Mayor, Otro
+  observaciones   String?  // explicación del supervisor
+  documento       String?  // base64 del documento adjunto (certificado, etc.)
+
+  // Estado del flujo
+  estado          String   @default("pendiente_revision") // pendiente_revision, aprobado, rechazado
+
+  // Admin que revisa
+  adminId         String?
+  adminNombre     String?
+  fechaRevision   DateTime?
+  adminObservaciones String?  // observaciones del admin al aprobar/rechazar
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([estado])
+  @@index([supervisorId])
 }
 
 // ============================================
