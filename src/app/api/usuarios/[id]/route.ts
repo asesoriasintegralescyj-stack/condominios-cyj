@@ -12,7 +12,9 @@ import {
   getUserById,
   hasPermission,
   verifyPassword,
-  hashPassword
+  hashPassword,
+  encrypt,
+  decrypt,
 } from '@/lib/auth';
 
 // GET - Obtener usuario por ID
@@ -46,6 +48,27 @@ export async function GET(
         { error: 'Usuario no encontrado' },
         { status: 404 }
       );
+    }
+    
+    // Si es admin, devolver también info de contraseña
+    if (hasPermission(session.user.rol, 'usuarios.ver')) {
+      const userExtra = await db.user.findUnique({
+        where: { id },
+        select: {
+          cambiarPasswordProximoLogin: true,
+          lastPasswordChange: true,
+          lastPasswordChangeMotivo: true,
+          passwordTemp: true,
+        },
+      });
+      return NextResponse.json({
+        ...user,
+        cambiarPasswordProximoLogin: userExtra?.cambiarPasswordProximoLogin || false,
+        lastPasswordChange: userExtra?.lastPasswordChange || null,
+        lastPasswordChangeMotivo: userExtra?.lastPasswordChangeMotivo || null,
+        // Solo admin puede ver el password temporal
+        passwordTemp: userExtra?.passwordTemp ? decrypt(userExtra.passwordTemp) : null,
+      });
     }
     
     return NextResponse.json(user);
@@ -87,7 +110,7 @@ export async function PUT(
     }
     
     const body = await request.json();
-    const { nombre, apellido, rut, telefono, direccion, rol, activo, password, currentPassword, permisos } = body;
+    const { nombre, apellido, rut, telefono, direccion, rol, activo, password, currentPassword, permisos, forcePasswordReset } = body;
     
     // Si es el propio perfil y quiere cambiar contraseña, debe proporcionar la actual
     if (isOwnProfile && password) {
@@ -114,15 +137,60 @@ export async function PUT(
     if (rut !== undefined) updateData.rut = rut;
     if (telefono !== undefined) updateData.telefono = telefono;
     if (direccion !== undefined) updateData.direccion = direccion;
-    if (password) updateData.password = password;
+    if (password) {
+      updateData.password = password;
+      // Si el admin está reseteando la contraseña de otro usuario, forzar cambio en el próximo login
+      if (!isOwnProfile && isAdmin) {
+        updateData.passwordChangeMotivo = 'cambio_forzado';
+        updateData.cambiarPasswordProximoLogin = true;
+        // Volver a encriptar el password temporal para mostrarlo al admin
+        if (password) {
+          const { encrypt } = await import('@/lib/auth');
+          updateData.passwordTemp = encrypt(password);
+        }
+      } else {
+        updateData.passwordChangeMotivo = 'cambio_voluntario';
+      }
+    }
     
     if (isAdmin) {
       if (rol) updateData.rol = rol;
       if (activo !== undefined) updateData.activo = activo;
       if (permisos !== undefined) updateData.permisos = permisos;
     }
+
+    // Forzar reseteo de contraseña en próximo login (sin cambiar la contraseña actual)
+    if (forcePasswordReset && isAdmin && !isOwnProfile) {
+      updateData.cambiarPasswordProximoLogin = true;
+    }
     
     const user = await updateUser(id, updateData, session.userId);
+
+    // Crear notificación a administradores si se reseteó la contraseña de otro usuario
+    if (!isOwnProfile && isAdmin && password) {
+      try {
+        const targetUser = await db.user.findUnique({ where: { id }, select: { nombre: true, apellido: true, email: true } });
+        const admins = await db.user.findMany({
+          where: { rol: 'admin', activo: true },
+          select: { id: true },
+        });
+        if (admins.length > 0 && targetUser) {
+          await db.notificacion.createMany({
+            data: admins.map((a) => ({
+              titulo: 'Contraseña restablecida por administrador',
+              mensaje: `El administrador ${session.user.nombre} ${session.user.apellido || ''} restableció la contraseña de ${targetUser.nombre} ${targetUser.apellido || ''} (${targetUser.email}). El usuario deberá cambiarla en su próximo inicio de sesión.`,
+              tipo: 'Alerta',
+              categoria: 'Seguridad',
+              destino: 'Usuario específico',
+              destinoId: a.id,
+              leido: false,
+            })),
+          });
+        }
+      } catch (e) {
+        console.error('Error creando notificaciones a admins (reset password):', e);
+      }
+    }
     
     return NextResponse.json({
       id: user.id,

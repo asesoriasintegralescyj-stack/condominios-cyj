@@ -57,6 +57,7 @@ import {
   Search,
   Loader2,
   Lock,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -274,6 +275,11 @@ interface Usuario {
   permisos?: string | null;
   ultimoAcceso?: string | null;
   createdAt: string;
+  // Campos nuevos de gestión de contraseña
+  cambiarPasswordProximoLogin?: boolean;
+  passwordTemp?: string | null;
+  lastPasswordChange?: string | null;
+  lastPasswordChangeMotivo?: string | null;
 }
 
 export function UsuariosModule() {
@@ -285,6 +291,12 @@ export function UsuariosModule() {
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | 'password'>('create');
   const [selectedUser, setSelectedUser] = useState<Usuario | null>(null);
   const [saving, setSaving] = useState(false);
+  // Diálogo para mostrar credenciales después de crear usuario
+  const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{ nombre: string; email: string; password: string } | null>(null);
+  // Diálogo para mostrar el password temporal de un usuario existente
+  const [viewPasswordDialogOpen, setViewPasswordDialogOpen] = useState(false);
+  const [viewPasswordUser, setViewPasswordUser] = useState<Usuario | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -514,9 +526,17 @@ export function UsuariosModule() {
         });
 
         if (response.ok) {
+          const data = await response.json();
           toast.success('Usuario creado correctamente');
           fetchUsuarios();
           setDialogOpen(false);
+          // Mostrar diálogo con las credenciales para que el admin las comparta con el usuario
+          setCreatedCredentials({
+            nombre: `${formData.nombre} ${formData.apellido || ''}`.trim(),
+            email: formData.email,
+            password: data.passwordTemp || formData.password,
+          });
+          setCredentialsDialogOpen(true);
         } else {
           const data = await response.json();
           toast.error(data.error || 'Error al crear usuario');
@@ -558,8 +578,18 @@ export function UsuariosModule() {
         });
 
         if (response.ok) {
-          toast.success('Contraseña actualizada correctamente');
+          toast.success('Contraseña restablecida correctamente');
           setDialogOpen(false);
+          // Si es admin restableciendo la contraseña de otro usuario, mostrar el diálogo con las nuevas credenciales
+          if (currentUser?.id !== selectedUser.id) {
+            setCreatedCredentials({
+              nombre: `${selectedUser.nombre} ${selectedUser.apellido || ''}`.trim(),
+              email: selectedUser.email,
+              password: formData.password,
+            });
+            setCredentialsDialogOpen(true);
+          }
+          fetchUsuarios();
         } else {
           const data = await response.json();
           toast.error(data.error || 'Error al actualizar contraseña');
@@ -759,8 +789,19 @@ export function UsuariosModule() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleOpenPassword(usuario)}>
                             <Key className="w-4 h-4 mr-2" />
-                            Cambiar Contraseña
+                            Restablecer Contraseña
                           </DropdownMenuItem>
+                          {usuario.passwordTemp && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setViewPasswordUser(usuario);
+                                setViewPasswordDialogOpen(true);
+                              }}
+                            >
+                              <Eye className="w-4 h-4 mr-2" />
+                              Ver contraseña temporal
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem 
                             onClick={() => handleToggleActive(usuario)}
                             disabled={usuario.id === currentUser?.id}
@@ -1014,7 +1055,140 @@ export function UsuariosModule() {
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {dialogMode === 'create' && 'Crear Usuario'}
               {dialogMode === 'edit' && 'Guardar Cambios'}
-              {dialogMode === 'password' && 'Cambiar Contraseña'}
+              {dialogMode === 'password' && 'Restablecer Contraseña'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Credenciales creadas / restablecidas */}
+      <Dialog open={credentialsDialogOpen} onOpenChange={setCredentialsDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-[#0A1172]" />
+              Credenciales del usuario
+            </DialogTitle>
+            <DialogDescription>
+              Comparte estas credenciales con el usuario. Al primer inicio de sesión se le pedirá que cambie su contraseña.
+            </DialogDescription>
+          </DialogHeader>
+          {createdCredentials && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                ⚠️ <strong>Importante:</strong> Esta contraseña es temporal. El usuario deberá cambiarla al iniciar sesión por primera vez. No se volverá a mostrar.
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-gray-500">Nombre</Label>
+                  <div className="font-semibold">{createdCredentials.nombre}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Email</Label>
+                  <div className="font-mono text-sm">{createdCredentials.email}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Contraseña temporal</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-gray-100 px-3 py-2 rounded font-mono text-sm border">
+                      {createdCredentials.password}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(createdCredentials.password);
+                        toast.success('Contraseña copiada al portapapeles');
+                      }}
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                💡 Recomendación: Envía estas credenciales por un canal seguro (no por email público). El usuario deberá cambiarla en su primer inicio de sesión.
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCredentialsDialogOpen(false)}>
+              Cerrar
+            </Button>
+            <Button
+              onClick={() => {
+                if (createdCredentials) {
+                  const text = `Credenciales de acceso - Asesorías Integrales CyJ\n\nNombre: ${createdCredentials.nombre}\nEmail: ${createdCredentials.email}\nContraseña temporal: ${createdCredentials.password}\nURL: https://condominios-cyj.vercel.app/login\n\nImportante: Debes cambiar tu contraseña al iniciar sesión por primera vez.`;
+                  navigator.clipboard.writeText(text);
+                  toast.success('Todas las credenciales copiadas al portapapeles');
+                }
+              }}
+            >
+              Copiar todo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Ver contraseña temporal de un usuario existente */}
+      <Dialog open={viewPasswordDialogOpen} onOpenChange={setViewPasswordDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5 text-[#0A1172]" />
+              Contraseña temporal
+            </DialogTitle>
+            <DialogDescription>
+              Esta contraseña aún no ha sido cambiada por el usuario.
+            </DialogDescription>
+          </DialogHeader>
+          {viewPasswordUser && (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-gray-500">Usuario</Label>
+                  <div className="font-semibold">
+                    {viewPasswordUser.nombre} {viewPasswordUser.apellido || ''}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Email</Label>
+                  <div className="font-mono text-sm">{viewPasswordUser.email}</div>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">Contraseña temporal</Label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 bg-gray-100 px-3 py-2 rounded font-mono text-sm border">
+                      {viewPasswordUser.passwordTemp || 'No disponible'}
+                    </code>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (viewPasswordUser.passwordTemp) {
+                          navigator.clipboard.writeText(viewPasswordUser.passwordTemp);
+                          toast.success('Contraseña copiada');
+                        }
+                      }}
+                      disabled={!viewPasswordUser.passwordTemp}
+                    >
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+                {viewPasswordUser.cambiarPasswordProximoLogin && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                    ⚠️ Este usuario debe cambiar su contraseña en el próximo inicio de sesión.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewPasswordDialogOpen(false)}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

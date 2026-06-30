@@ -498,6 +498,8 @@ export async function getUserById(id: string) {
 
 /**
  * Crea un nuevo usuario
+ * Marca cambiarPasswordProximoLogin=true y guarda la contraseña temporal encriptada
+ * para que el admin pueda mostrársela al usuario.
  */
 export async function createUser(data: {
   email: string;
@@ -525,6 +527,8 @@ export async function createUser(data: {
   // Encriptar datos sensibles
   const encryptedTelefono = data.telefono ? encrypt(data.telefono) : null;
   const encryptedDireccion = data.direccion ? encrypt(data.direccion) : null;
+  // Encriptar la contraseña temporal para que el admin pueda recuperarla y mostrarla
+  const encryptedPasswordTemp = encrypt(data.password);
   
   const user = await db.user.create({
     data: {
@@ -537,6 +541,11 @@ export async function createUser(data: {
       direccion: encryptedDireccion,
       rol: data.rol || 'usuario',
       creadoPor: data.creadoPor,
+      // Forzar cambio de contraseña en el primer login
+      cambiarPasswordProximoLogin: true,
+      passwordTemp: encryptedPasswordTemp,
+      lastPasswordChange: new Date(),
+      lastPasswordChangeMotivo: 'creacion',
     },
   });
   
@@ -544,7 +553,8 @@ export async function createUser(data: {
   await logAction(data.creadoPor || null, 'create', 'User', user.id, null, { 
     email: user.email, 
     nombre: user.nombre, 
-    rol: user.rol 
+    rol: user.rol,
+    cambiarPasswordProximoLogin: true,
   });
   
   return user;
@@ -552,6 +562,9 @@ export async function createUser(data: {
 
 /**
  * Actualiza un usuario
+ * Si se incluye `password`, lo hashea y actualiza lastPasswordChange.
+ * Opcional `passwordChangeMotivo` para registrar el motivo del cambio.
+ * Opcional `clearPasswordTemp` para limpiar la contraseña temporal.
  */
 export async function updateUser(
   id: string, 
@@ -564,6 +577,8 @@ export async function updateUser(
     rol: string;
     activo: boolean;
     password: string;
+    passwordChangeMotivo?: string;
+    clearPasswordTemp?: boolean;
   }>,
   updatedBy?: string
 ) {
@@ -582,7 +597,20 @@ export async function updateUser(
   // Hashear contraseña si viene
   if (data.password) {
     updateData.password = await hashPassword(data.password);
+    updateData.lastPasswordChange = new Date();
+    updateData.lastPasswordChangeMotivo = data.passwordChangeMotivo || 'cambio_voluntario';
+    updateData.cambiarPasswordProximoLogin = false;
+    updateData.passwordTemp = null; // limpiar la temp
   }
+  
+  // Limpiar explícitamente la contraseña temporal si se solicita
+  if (data.clearPasswordTemp) {
+    updateData.passwordTemp = null;
+  }
+  
+  // Remover campos que no son columnas
+  delete updateData.passwordChangeMotivo;
+  delete updateData.clearPasswordTemp;
   
   const user = await db.user.update({
     where: { id },

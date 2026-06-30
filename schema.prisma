@@ -103,6 +103,15 @@ model User {
   resetToken    String?
   resetTokenExp DateTime?
   
+  // Forzar cambio de contraseña en el próximo inicio de sesión
+  cambiarPasswordProximoLogin Boolean @default(false)
+  // Contraseña temporal encriptada (para mostrar al admin que la creó)
+  passwordTemp String?
+  // Fecha del último cambio de contraseña
+  lastPasswordChange DateTime?
+  // Motivo del último cambio/creación de contraseña (creacion, recuperacion, cambio_forzado, cambio_voluntario)
+  lastPasswordChangeMotivo String?
+  
   // Auditoría
   creadoPor     String?  // ID del usuario que creó este usuario
   createdAt     DateTime @default(now())

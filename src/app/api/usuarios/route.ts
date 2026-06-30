@@ -12,7 +12,9 @@ import {
   getUserById,
   hasPermission,
   hashPassword,
-  encrypt
+  encrypt,
+  decrypt,
+  createUser,
 } from '@/lib/auth';
 
 // GET - Listar usuarios
@@ -48,11 +50,22 @@ export async function GET(request: NextRequest) {
         emailVerificado: true,
         ultimoAcceso: true,
         createdAt: true,
+        // Campos nuevos para gestión de contraseña
+        cambiarPasswordProximoLogin: true,
+        lastPasswordChange: true,
+        lastPasswordChangeMotivo: true,
+        passwordTemp: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Desencriptar passwordTemp para que el admin pueda verla
+    const usersWithDecrypted = users.map((u) => ({
+      ...u,
+      passwordTemp: u.passwordTemp ? decrypt(u.passwordTemp) : null,
+    }));
     
-    return NextResponse.json(users);
+    return NextResponse.json(usersWithDecrypted);
     
   } catch (error) {
     console.error('Error obteniendo usuarios:', error);
@@ -113,31 +126,52 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Hashear contraseña
-    const hashedPassword = await hashPassword(password);
-    
-    // Crear usuario con permisos
-    const user = await db.user.create({
-      data: {
-        email: email.toLowerCase(),
-        nombre,
-        apellido,
-        password: hashedPassword,
-        rut,
-        telefono: telefono ? encrypt(telefono) : null,
-        direccion: direccion ? encrypt(direccion) : null,
-        rol: rol || 'usuario',
-        permisos: permisos || null,
-        creadoPor: session.userId,
-      },
+    // Hashear contraseña y crear usuario con flag de cambio de contraseña
+    const newUser = await createUser({
+      email: email.toLowerCase(),
+      nombre,
+      apellido,
+      password,
+      rut,
+      telefono,
+      direccion,
+      rol: rol || 'usuario',
+      creadoPor: session.userId,
     });
-    
+
+    // Crear notificación a administradores sobre la creación del usuario
+    try {
+      const admins = await db.user.findMany({
+        where: { rol: 'admin', activo: true },
+        select: { id: true },
+      });
+      if (admins.length > 0) {
+        await db.notificacion.createMany({
+          data: admins.map((a) => ({
+            titulo: 'Nuevo usuario creado',
+            mensaje: `Se creó el usuario ${nombre} ${apellido || ''} (${email}) con rol "${rol || 'usuario'}". Deberá cambiar su contraseña en el primer inicio de sesión.`,
+            tipo: 'Info',
+            categoria: 'Seguridad',
+            destino: 'Usuario específico',
+            destinoId: a.id,
+            leido: false,
+          })),
+        });
+      }
+    } catch (e) {
+      console.error('Error creando notificaciones a admins (crear usuario):', e);
+    }
+
     return NextResponse.json({
-      id: user.id,
-      email: user.email,
-      nombre: user.nombre,
-      apellido: user.apellido,
-      rol: user.rol,
+      id: newUser.id,
+      email: newUser.email,
+      nombre: newUser.nombre,
+      apellido: newUser.apellido,
+      rol: newUser.rol,
+      // Devolver la contraseña temporal (en texto plano) para que el admin
+      // pueda compartirla con el usuario. Se limpiará después del primer login.
+      passwordTemp: password,
+      cambiarPasswordProximoLogin: true,
     }, { status: 201 });
     
   } catch (error: any) {

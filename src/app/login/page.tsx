@@ -12,7 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Lock, User, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { Lock, User, Eye, EyeOff, AlertCircle, Loader2, KeyRound } from 'lucide-react';
+import { ForcePasswordChangeDialog } from '@/components/auth/ForcePasswordChangeDialog';
+import Link from 'next/link';
 
 function LoginForm() {
   const router = useRouter();
@@ -24,6 +26,8 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [forcePasswordOpen, setForcePasswordOpen] = useState(false);
+  const [forcePasswordEmail, setForcePasswordEmail] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +50,13 @@ function LoginForm() {
         return;
       }
 
+      // Si el usuario debe cambiar su contraseña en el primer login
+      if (data.cambiarPasswordProximoLogin) {
+        setForcePasswordEmail(email);
+        setForcePasswordOpen(true);
+        return;
+      }
+
       // Redirigir a la página solicitada o al dashboard
       router.push(redirect);
       router.refresh();
@@ -57,76 +68,101 @@ function LoginForm() {
     }
   };
 
+  const handleForcePasswordSuccess = () => {
+    setForcePasswordOpen(false);
+    // Redirigir al sistema
+    router.push(redirect);
+    router.refresh();
+  };
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Email Field */}
-      <div className="space-y-2">
-        <Label htmlFor="email">Correo Electrónico</Label>
-        <div className="relative">
-          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="email"
-            type="email"
-            placeholder="correo@ejemplo.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="pl-10"
-            required
-            disabled={loading}
-          />
-        </div>
-      </div>
-
-      {/* Password Field */}
-      <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="pl-10 pr-10"
-            required
-            disabled={loading}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
-            tabIndex={-1}
-          >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Submit Button */}
-      <Button type="submit" className="w-full bg-[#0A1172] hover:bg-[#080d54]" disabled={loading}>
-        {loading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Iniciando sesión...
-          </>
-        ) : (
-          'Iniciar Sesión'
+    <>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Error Alert */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
-      </Button>
-    </form>
+
+        {/* Email Field */}
+        <div className="space-y-2">
+          <Label htmlFor="email">Correo Electrónico</Label>
+          <div className="relative">
+            <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="email"
+              type="email"
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="pl-10"
+              required
+              disabled={loading}
+            />
+          </div>
+        </div>
+
+        {/* Password Field */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Contraseña</Label>
+            <Link
+              href="/recuperar-password"
+              className="text-xs text-[#0A1172] hover:underline flex items-center gap-1"
+            >
+              <KeyRound className="w-3 h-3" />
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="pl-10 pr-10"
+              required
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+              tabIndex={-1}
+            >
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Submit Button */}
+        <Button type="submit" className="w-full bg-[#0A1172] hover:bg-[#080d54]" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Iniciando sesión...
+            </>
+          ) : (
+            'Iniciar Sesión'
+          )}
+        </Button>
+      </form>
+
+      {/* Modal de cambio de contraseña obligatorio (primer login) */}
+      <ForcePasswordChangeDialog
+        open={forcePasswordOpen}
+        email={forcePasswordEmail}
+        onSuccess={handleForcePasswordSuccess}
+      />
+    </>
   );
 }
 

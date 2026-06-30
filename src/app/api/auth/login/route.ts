@@ -11,6 +11,7 @@ import {
   getPermissions,
   verifySession
 } from '@/lib/auth';
+import { db as prisma } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +60,12 @@ export async function POST(request: NextRequest) {
     
     const permisos = getPermissions(session.user.rol);
     
+    // Verificar si el usuario debe cambiar su contraseña en el primer login
+    const userFull = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { cambiarPasswordProximoLogin: true },
+    });
+    
     return NextResponse.json({
       success: true,
       user: {
@@ -69,6 +76,8 @@ export async function POST(request: NextRequest) {
         rol: session.user.rol,
         permisos,
       },
+      // Si true, el frontend debe mostrar el modal de cambio de contraseña obligatorio
+      cambiarPasswordProximoLogin: userFull?.cambiarPasswordProximoLogin || false,
     });
     
   } catch (error) {
