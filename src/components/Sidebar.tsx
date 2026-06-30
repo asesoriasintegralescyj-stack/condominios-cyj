@@ -24,7 +24,8 @@ import {
   QrCode,
   ShoppingCart,
   Menu,
-  X
+  X,
+  BookOpen,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -112,6 +113,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },
       { id: 'permisos', label: 'Permisos del Sistema', icon: <Shield className="w-4 h-4" /> },
+      { id: 'manuales', label: 'Manuales y Capacitaciones', icon: <BookOpen className="w-4 h-4" /> },
     ]
   },
 ]
@@ -123,16 +125,19 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Filtrar menú según permisos
-  // El rol 'guardia' SOLO ve el módulo de Rondas (ni siquiera dashboard)
+  // El rol 'guardia' SOLO ve: Rondas (su página dedicada) + Manuales
   const isGuardia = user?.rol === 'guardia'
   const isPersonal = user?.rol === 'personal'
   const filteredMenuItems = menuItems.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      // Guardia: solo Rondas
+      // Guardia: solo Rondas + Manuales
       if (isGuardia) {
-        return item.id === 'rondas'
+        return item.id === 'rondas' || item.id === 'manuales'
       }
+
+      // 'manuales' es visible para TODOS los roles (sin excepción)
+      if (item.id === 'manuales') return true
 
       // Módulos exclusivos del admin: 'usuarios' y 'permisos'
       if ((item.id === 'usuarios' || item.id === 'permisos') && !isAdmin()) {

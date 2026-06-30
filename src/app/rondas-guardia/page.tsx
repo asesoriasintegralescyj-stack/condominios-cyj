@@ -16,7 +16,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Camera, RefreshCw, Keyboard, AlertCircle, ScanLine, CheckCircle2, X, LogOut } from 'lucide-react'
+import { Camera, RefreshCw, Keyboard, AlertCircle, ScanLine, CheckCircle2, X, LogOut, BookOpen } from 'lucide-react'
 
 interface ScanRecord {
   id: string
@@ -269,6 +269,16 @@ export default function RondasGuardiaPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/manuales-guardia')}
+            className="text-white/70 hover:text-white hover:bg-white/10"
+            title="Ver manuales y capacitaciones"
+          >
+            <BookOpen className="w-4 h-4 mr-1.5" />
+            Manuales
+          </Button>
           <div className="text-right hidden sm:block">
             <div className="text-xs font-medium">
               {user?.nombre} {user?.apellido || ''}

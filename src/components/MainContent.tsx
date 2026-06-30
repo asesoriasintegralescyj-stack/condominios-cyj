@@ -25,6 +25,7 @@ import { CumplimientoModule } from './cumplimiento/CumplimientoModule'
 import { RondasModule } from './rondas/RondasModule'
 import { SolicitudesComprasModule } from './solicitudes-compra/SolicitudesComprasModule'
 import { PermisosModule } from './permisos/PermisosModule'
+import { ManualesModule } from './manuales/ManualesModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -51,6 +52,7 @@ const moduleTitles: Record<string, string> = {
   rondas: 'Control de Rondas',
   solicitudescompra: 'Solicitud de Compras',
   permisos: 'Permisos del Sistema',
+  manuales: 'Manuales y Capacitaciones',
 }
 
 export function MainContent() {
@@ -106,6 +108,8 @@ export function MainContent() {
         return <SolicitudesComprasModule />
       case 'permisos':
         return <PermisosModule />
+      case 'manuales':
+        return <ManualesModule />
       default:
         return <Dashboard />
     }
