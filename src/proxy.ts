@@ -41,6 +41,8 @@ const PUBLIC_ROUTES = [
   '/api/herramientas',
   // Página pública de activos accedida desde QR
   '/a',
+  // Página pública de registro de rondas accedida desde QR
+  '/ronda',
   // Listas desplegables: GET es público para que el frontend pueda cargar opciones de dropdowns
   // POST/PUT/DELETE validan autenticación internamente
   '/api/listas-desplegables',
