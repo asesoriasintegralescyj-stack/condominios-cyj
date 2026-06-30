@@ -49,11 +49,25 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { nombre, ubicacion, descripcion, condominioId } = body
+    const { nombre, ubicacion, descripcion, condominioId, qrCodigo, activo } = body
+
+    // Validación mínima
+    if (!nombre || !ubicacion) {
+      return NextResponse.json(
+        { error: 'Nombre y ubicación son obligatorios' },
+        { status: 400 }
+      )
+    }
 
     // Generar código único para QR
     const crypto = await import('crypto')
     const codigo = `RONDA-${crypto.randomBytes(8).toString('hex').toUpperCase()}`
+
+    // qrCodigo: si viene en el body se usa; si no, se codifica el código generado
+    // (la API /api/rondas/registrar acepta el campo `codigo` para registrar la ronda).
+    const finalQrCodigo = qrCodigo && String(qrCodigo).trim()
+      ? String(qrCodigo).trim()
+      : codigo
 
     const ronda = await db.ronda.create({
       data: {
@@ -61,6 +75,8 @@ export async function POST(request: NextRequest) {
         codigo,
         ubicacion,
         descripcion,
+        qrCodigo: finalQrCodigo,
+        activo: typeof activo === 'boolean' ? activo : true,
         condominioId,
         creadoPor: user.id,
         creadoPorNombre: `${user.nombre} ${user.apellido || ''}`.trim()

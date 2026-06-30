@@ -1612,6 +1612,7 @@ model Ronda {
   ubicacion       String   // Ubicación de la ronda
   descripcion     String?
   activo          Boolean  @default(true)
+  qrCodigo        String?  // URL del QR: https://condominios-cyj.vercel.app/ronda/{ETAPA}/{POST}
   
   // Condominio
   condominioId    String?
