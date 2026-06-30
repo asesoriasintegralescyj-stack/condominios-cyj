@@ -614,7 +614,7 @@ export async function deleteUser(id: string, deletedBy?: string) {
 // VERIFICACIÓN DE PERMISOS
 // ============================================
 
-export type Rol = 'admin' | 'supervisor' | 'usuario' | 'personal' | 'auditor';
+export type Rol = 'admin' | 'supervisor' | 'usuario' | 'personal' | 'auditor' | 'guardia';
 
 export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
   admin: [
@@ -635,6 +635,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'configuracion.ver', 'configuracion.editar',
     'logs.ver',
     'inventario.ver', 'inventario.editar',
+    // Rondas (Control de Rondas)
+    'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -652,6 +654,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'centros-costo.ver',
     'reportes.ver', 'reportes.exportar',
     'inventario.ver', 'inventario.editar',
+    // Rondas (Control de Rondas)
+    'rondas.ver', 'rondas.registrar',
   ],
   usuario: [
     // Acceso básico
@@ -685,6 +689,13 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'reportes.ver',
     'logs.ver',
     'inventario.ver',
+    // Rondas: solo lectura
+    'rondas.ver',
+  ],
+  guardia: [
+    // GUARDIA — Solo puede ver el módulo de Rondas y registrar ronda escaneando QR
+    'rondas.ver',
+    'rondas.registrar',
   ],
 };
 

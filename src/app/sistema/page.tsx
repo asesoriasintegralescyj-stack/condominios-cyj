@@ -7,17 +7,26 @@ import { useAutoCondominio } from '@/hooks/use-auto-condominio'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
+import { useAppStore } from '@/lib/store'
 
 export default function SistemaPage() {
-  const { authenticated, loading } = useSession()
+  const { user, authenticated, loading } = useSession()
   const { status: condominioStatus } = useAutoCondominio()
   const router = useRouter()
+  const { currentModule, setCurrentModule } = useAppStore()
 
   useEffect(() => {
     if (!loading && !authenticated) {
       router.push('/login?sistema=true')
     }
   }, [loading, authenticated, router])
+
+  // Si el usuario es guardia, forzar el módulo Rondas al ingresar
+  useEffect(() => {
+    if (authenticated && user?.rol === 'guardia' && currentModule !== 'rondas') {
+      setCurrentModule('rondas')
+    }
+  }, [authenticated, user, currentModule, setCurrentModule])
 
   // Mostrar loading mientras se verifica la sesión
   if (loading) {

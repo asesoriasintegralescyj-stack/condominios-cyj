@@ -60,7 +60,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   auditoria: 'logs.ver',
   backups: 'configuracion.editar',
   cumplimiento: 'configuracion.ver',
-  rondas: 'ots.ver',
+  rondas: 'rondas.ver',
   solicitudescompra: 'configuracion.ver',
 }
 
@@ -121,11 +121,18 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   // Filtrar menú según permisos
+  // El rol 'guardia' SOLO ve el módulo de Rondas (ni siquiera dashboard)
+  const isGuardia = user?.rol === 'guardia'
   const filteredMenuItems = menuItems.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      const permission = modulePermissions[item.id]
+      // Guardia: solo Rondas
+      if (isGuardia) {
+        return item.id === 'rondas'
+      }
+      // Dashboard siempre visible para los demás roles
       if (item.id === 'dashboard') return true
+      const permission = modulePermissions[item.id]
       if (!permission) return true
       return hasPermission(permission)
     })
@@ -152,6 +159,8 @@ export function Sidebar() {
         return 'Personal'
       case 'auditor':
         return 'Auditor'
+      case 'guardia':
+        return 'Guardia'
       default:
         return 'Usuario'
     }
@@ -167,6 +176,8 @@ export function Sidebar() {
         return <Wrench className="w-3 h-3" />
       case 'auditor':
         return <Eye className="w-3 h-3" />
+      case 'guardia':
+        return <QrCode className="w-3 h-3" />
       default:
         return <User className="w-3 h-3" />
     }

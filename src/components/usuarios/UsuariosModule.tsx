@@ -199,6 +199,16 @@ const CATEGORIAS_PERMISOS = {
       { id: 'inventario.editar', label: 'Editar' },
     ],
   },
+  rondas: {
+    label: 'Rondas',
+    permisos: [
+      { id: 'rondas.ver', label: 'Ver' },
+      { id: 'rondas.registrar', label: 'Registrar' },
+      { id: 'rondas.crear', label: 'Crear' },
+      { id: 'rondas.editar', label: 'Editar' },
+      { id: 'rondas.eliminar', label: 'Eliminar' },
+    ],
+  },
 };
 
 // Tipo para los permisos
@@ -246,6 +256,10 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
   ],
   personal: [
     'ots.ver', 'ots.progreso',
+  ],
+  guardia: [
+    // Guardia — Solo módulo de Rondas
+    'rondas.ver', 'rondas.registrar',
   ],
 };
 
@@ -873,6 +887,12 @@ export function UsuariosModule() {
                         <div className="flex items-center gap-2">
                           <Lock className="w-4 h-4" />
                           Personal
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="guardia">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
+                          Guardia
                         </div>
                       </SelectItem>
                       <SelectItem value="supervisor">
