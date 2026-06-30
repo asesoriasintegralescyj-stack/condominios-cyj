@@ -124,7 +124,10 @@ const emptyForm = {
 
 export function SolicitudesComprasModule() {
   const { user, hasPermission, isAdmin } = useSession()
-  const canAprobarSupervisor = isAdmin() || hasPermission('solicitudescompra.aprobar_supervisor')
+  // El admin SOLO interviene en la 2da etapa (aprobar_admin / gestionar compra).
+  // El supervisor (rol explícito, NO admin) aprueba en la 1ra etapa.
+  // Esto evita que el admin vea "Aprobar (Supervisor)" — solo ve "Gestionar" cuando le toca.
+  const canAprobarSupervisor = !isAdmin() && hasPermission('solicitudescompra.aprobar_supervisor')
   const canAprobarAdmin = isAdmin() || hasPermission('solicitudescompra.aprobar_admin')
   const [solicitudes, setSolicitudes] = useState<SolicitudCompra[]>([])
   const [loading, setLoading] = useState(true)

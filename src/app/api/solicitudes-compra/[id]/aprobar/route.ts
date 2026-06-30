@@ -53,10 +53,24 @@ export async function POST(
     return apiError('Acción inválida. Debe ser: aprobar_supervisor, rechazar_supervisor, aprobar_admin o rechazar_admin', 400)
   }
 
-  // Admin tiene acceso total a todas las acciones
+  // El admin SOLO interviene en la 2da etapa (aprobar_admin / rechazar_admin).
+  // El supervisor (rol explícito, NO admin) aprueba/rechaza en la 1ra etapa.
+  // Esto evita que el admin "salte" la etapa del supervisor.
   const isAdmin = session.user.rol === 'admin'
+  const isSupervisor = session.user.rol === 'supervisor'
   const permisoRequerido = PERMISOS_POR_ACCION[accion]
-  if (!isAdmin && !hasPermission(session.user.rol, permisoRequerido)) {
+
+  // Validación por rol:
+  // - acciones *_supervisor → solo rol supervisor (explícito)
+  // - acciones *_admin → solo rol admin
+  if (accion.endsWith('_supervisor') && !isSupervisor) {
+    return apiError('Solo el Supervisor puede realizar esta acción. El Administrador interviene en la segunda etapa del flujo.', 403)
+  }
+  if (accion.endsWith('_admin') && !isAdmin) {
+    return apiError('Solo el Administrador puede realizar esta acción.', 403)
+  }
+  // Doble validación por permiso (por si el rol tiene permisos personalizados)
+  if (!hasPermission(session.user.rol, permisoRequerido)) {
     return apiError(`No tiene permisos para realizar esta acción (${accion})`, 403)
   }
 
