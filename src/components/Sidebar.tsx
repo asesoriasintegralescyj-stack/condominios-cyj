@@ -61,7 +61,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   backups: 'configuracion.editar',
   cumplimiento: 'configuracion.ver',
   rondas: 'rondas.ver',
-  solicitudescompra: 'configuracion.ver',
+  solicitudescompra: 'solicitudescompra.ver',
 }
 
 const menuItems: { section: string; items: { id: Module; label: string; icon: React.ReactNode }[] }[] = [

@@ -665,6 +665,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver', 'inventario.editar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
+    // Solicitudes de Compra — admin aprueba en etapa final
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -684,6 +686,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver', 'inventario.editar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar',
+    // Solicitudes de Compra — supervisor aprueba en primera etapa
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     // Acceso básico
@@ -695,10 +699,14 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'catalogos.ver',
     'reportes.ver',
     'inventario.ver',
+    // Solicitudes de Compra — todos pueden crear
+    'solicitudescompra.ver', 'solicitudescompra.crear',
   ],
   personal: [
     // Solo puede ver OT y modificar progreso
     'ots.ver', 'ots.progreso',
+    // Solicitudes de Compra — todos pueden crear
+    'solicitudescompra.ver', 'solicitudescompra.crear',
   ],
   auditor: [
     // Solo lectura para auditoría
@@ -719,6 +727,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver',
     // Rondas: solo lectura
     'rondas.ver',
+    // Solicitudes de Compra: solo lectura
+    'solicitudescompra.ver',
   ],
   guardia: [
     // GUARDIA — Solo puede ver el módulo de Rondas y registrar ronda escaneando QR

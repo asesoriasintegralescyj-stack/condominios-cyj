@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { formatCLP } from '@/lib/utils'
+import { useSession } from '@/hooks/use-session'
 import {
   Plus,
   Pencil,
@@ -37,6 +38,9 @@ import {
   Eye,
   Link2,
   ExternalLink,
+  CheckCircle,
+  XCircle,
+  Clock,
 } from 'lucide-react'
 
 interface MaterialSolicitud {
@@ -69,6 +73,14 @@ interface SolicitudCompra {
   emailEnviado: boolean
   emailEnviadoA: string | null
   emailFechaEnvio: string | null
+  // Campos del flujo de aprobación
+  etapaAprobacion?: string | null
+  supervisorAprobadorNombre?: string | null
+  supervisorFechaAprobacion?: string | null
+  supervisorObservaciones?: string | null
+  adminAprobadorNombre?: string | null
+  adminFechaAprobacion?: string | null
+  adminObservaciones?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -83,6 +95,14 @@ const estadoColors: Record<string, string> = {
   Comprado: 'bg-green-100 text-green-700',
   Rechazado: 'bg-red-100 text-red-700',
   Anulada: 'bg-slate-200 text-slate-700',
+}
+
+const etapaColors: Record<string, string> = {
+  'Pendiente Supervisor': 'bg-amber-100 text-amber-800 border-amber-200',
+  'Aprobada Supervisor': 'bg-blue-100 text-blue-800 border-blue-200',
+  'Aprobada Admin': 'bg-green-100 text-green-800 border-green-200',
+  'Rechazada Supervisor': 'bg-red-100 text-red-800 border-red-200',
+  'Rechazada Admin': 'bg-red-200 text-red-900 border-red-300',
 }
 
 const prioridadColors: Record<string, string> = {
@@ -103,6 +123,9 @@ const emptyForm = {
 }
 
 export function SolicitudesComprasModule() {
+  const { user, hasPermission, isAdmin } = useSession()
+  const canAprobarSupervisor = isAdmin() || hasPermission('solicitudescompra.aprobar_supervisor')
+  const canAprobarAdmin = isAdmin() || hasPermission('solicitudescompra.aprobar_admin')
   const [solicitudes, setSolicitudes] = useState<SolicitudCompra[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -119,6 +142,56 @@ export function SolicitudesComprasModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<SolicitudCompra | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+
+  // Diálogo de aprobación/rechazo
+  const [aprobDialogOpen, setAprobDialogOpen] = useState(false)
+  const [aprobTarget, setAprobTarget] = useState<SolicitudCompra | null>(null)
+  const [aprobAccion, setAprobAccion] = useState<'aprobar_supervisor' | 'rechazar_supervisor' | 'aprobar_admin' | 'rechazar_admin' | null>(null)
+  const [aprobObservaciones, setAprobObservaciones] = useState('')
+  const [aprobLoading, setAprobLoading] = useState(false)
+
+  const openAprobDialog = (s: SolicitudCompra, accion: 'aprobar_supervisor' | 'rechazar_supervisor' | 'aprobar_admin' | 'rechazar_admin') => {
+    setAprobTarget(s)
+    setAprobAccion(accion)
+    setAprobObservaciones('')
+    setAprobDialogOpen(true)
+  }
+
+  const handleAprobSubmit = async () => {
+    if (!aprobTarget || !aprobAccion) return
+    // Para rechazos, las observaciones son obligatorias
+    if (aprobAccion.includes('rechazar') && !aprobObservaciones.trim()) {
+      toast.error('Debe ingresar el motivo del rechazo')
+      return
+    }
+    setAprobLoading(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${aprobTarget.id}/aprobar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accion: aprobAccion,
+          observaciones: aprobObservaciones.trim() || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Error al procesar la aprobación')
+        return
+      }
+      toast.success(data.message || 'Acción procesada correctamente')
+      setAprobDialogOpen(false)
+      setAprobTarget(null)
+      setAprobAccion(null)
+      setAprobObservaciones('')
+      fetchSolicitudes()
+    } catch (e) {
+      console.error('Error aprobación:', e)
+      toast.error('Error de conexión')
+    } finally {
+      setAprobLoading(false)
+    }
+  }
 
   const fetchSolicitudes = async () => {
     setLoading(true)
@@ -469,6 +542,7 @@ export function SolicitudesComprasModule() {
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Título</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Etapa Aprob.</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Total</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fecha</th>
@@ -479,13 +553,13 @@ export function SolicitudesComprasModule() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
                       Cargando...
                     </td>
                   </tr>
                 ) : solicitudes.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
                       No hay solicitudes de compra. Crea la primera con &quot;Nueva Solicitud&quot;.
                     </td>
                   </tr>
@@ -504,6 +578,11 @@ export function SolicitudesComprasModule() {
                       <td className="p-3">
                         <Badge className={estadoColors[s.estado] || 'bg-slate-100'}>
                           {s.estado}
+                        </Badge>
+                      </td>
+                      <td className="p-3">
+                        <Badge className={etapaColors[s.etapaAprobacion || 'Pendiente Supervisor'] || 'bg-slate-100'} variant="outline">
+                          {s.etapaAprobacion || 'Pendiente Supervisor'}
                         </Badge>
                       </td>
                       <td className="p-3">
@@ -538,7 +617,58 @@ export function SolicitudesComprasModule() {
                         )}
                       </td>
                       <td className="p-3">
-                        <div className="flex justify-center gap-1">
+                        <div className="flex justify-center gap-1 flex-wrap">
+                          {/* Botones de aprobación según etapa y rol */}
+                          {s.etapaAprobacion === 'Pendiente Supervisor' && canAprobarSupervisor && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs border-green-300 text-green-700 hover:bg-green-50"
+                                title="Aprobar (Supervisor)"
+                                onClick={() => openAprobDialog(s, 'aprobar_supervisor')}
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" /> Aprobar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                title="Rechazar (Supervisor)"
+                                onClick={() => openAprobDialog(s, 'rechazar_supervisor')}
+                              >
+                                <XCircle className="w-3 h-3 mr-1" /> Rechazar
+                              </Button>
+                            </>
+                          )}
+                          {s.etapaAprobacion === 'Aprobada Supervisor' && canAprobarAdmin && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs bg-green-700 hover:bg-green-800 text-white"
+                                title="Aprobar y gestionar compra (Admin)"
+                                onClick={() => openAprobDialog(s, 'aprobar_admin')}
+                              >
+                                <CheckCircle className="w-3 h-3 mr-1" /> Gestionar
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                                title="Rechazar (Admin)"
+                                onClick={() => openAprobDialog(s, 'rechazar_admin')}
+                              >
+                                <XCircle className="w-3 h-3 mr-1" /> Rechazar
+                              </Button>
+                            </>
+                          )}
+                          {s.etapaAprobacion && s.etapaAprobacion.startsWith('Rechazada') && (
+                            <span className="text-[10px] text-red-600 italic">Rechazada</span>
+                          )}
+                          {s.etapaAprobacion === 'Aprobada Admin' && (
+                            <span className="text-[10px] text-green-700 italic">Aprobada</span>
+                          )}
+                          {/* Acciones estándar */}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -1037,6 +1167,100 @@ export function SolicitudesComprasModule() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Aprobar / Rechazar Solicitud */}
+      <Dialog open={aprobDialogOpen} onOpenChange={(open) => {
+        if (!aprobLoading) {
+          setAprobDialogOpen(open)
+          if (!open) {
+            setAprobTarget(null)
+            setAprobAccion(null)
+            setAprobObservaciones('')
+          }
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {aprobAccion && aprobAccion.includes('aprobar') ? (
+                <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600" />
+              )}
+              {aprobAccion === 'aprobar_supervisor' && 'Aprobar Solicitud (Supervisor)'}
+              {aprobAccion === 'rechazar_supervisor' && 'Rechazar Solicitud (Supervisor)'}
+              {aprobAccion === 'aprobar_admin' && 'Aprobar y Gestionar Compra (Admin)'}
+              {aprobAccion === 'rechazar_admin' && 'Rechazar Solicitud (Admin)'}
+            </DialogTitle>
+            <DialogDescription>
+              {aprobTarget && (
+                <>
+                  Solicitud <strong>{aprobTarget.codigo}</strong> — {aprobTarget.titulo}
+                  <br />
+                  Solicitado por: <strong>{aprobTarget.solicitadoPor || '—'}</strong>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {aprobAccion && aprobAccion.includes('aprobar') && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                {aprobAccion === 'aprobar_supervisor' ? (
+                  <>Al aprobar, la solicitud pasará al <strong>administrador</strong> para que gestione la compra.</>
+                ) : (
+                  <>Al aprobar, la solicitud quedará <strong>lista para gestionar la compra</strong> y su estado pasará a "En Proceso".</>
+                )}
+              </div>
+            )}
+            {aprobAccion && aprobAccion.includes('rechazar') && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
+                Al rechazar, la solicitud pasará a estado <strong>"Rechazada"</strong> y no se podrá continuar con el flujo.
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label className="text-xs">
+                {aprobAccion && aprobAccion.includes('rechazar')
+                  ? 'Motivo del rechazo *'
+                  : 'Observaciones (opcional)'}
+              </Label>
+              <Textarea
+                value={aprobObservaciones}
+                onChange={(e) => setAprobObservaciones(e.target.value)}
+                placeholder={aprobAccion && aprobAccion.includes('rechazar')
+                  ? 'Indica el motivo del rechazo...'
+                  : 'Comentarios adicionales para el solicitante...'
+                }
+                rows={3}
+                disabled={aprobLoading}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAprobDialogOpen(false)} disabled={aprobLoading}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleAprobSubmit}
+              disabled={aprobLoading || (aprobAccion?.includes('rechazar') && !aprobObservaciones.trim())}
+              className={aprobAccion && aprobAccion.includes('aprobar')
+                ? 'bg-green-700 hover:bg-green-800 text-white'
+                : 'bg-red-600 hover:bg-red-700 text-white'
+              }
+            >
+              {aprobLoading ? (
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
+              ) : aprobAccion && aprobAccion.includes('aprobar') ? (
+                <><CheckCircle className="w-4 h-4 mr-2" /> Confirmar Aprobación</>
+              ) : (
+                <><XCircle className="w-4 h-4 mr-2" /> Confirmar Rechazo</>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

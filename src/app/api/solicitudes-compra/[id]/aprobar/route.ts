@@ -1,0 +1,248 @@
+/**
+ * API para aprobar/rechazar Solicitudes de Compra.
+ *
+ * Flujo:
+ *   1. Cualquier rol (excepto guardia y auditor) puede CREAR una solicitud.
+ *      → etapaAprobacion = "Pendiente Supervisor"
+ *   2. Supervisor (con permiso 'solicitudescompra.aprobar_supervisor') aprueba/rechaza.
+ *      → etapaAprobacion = "Aprobada Supervisor" | "Rechazada Supervisor"
+ *   3. Admin (con permiso 'solicitudescompra.aprobar_admin') aprueba/rechaza.
+ *      → etapaAprobacion = "Aprobada Admin" | "Rechazada Admin"
+ *      Al aprobar admin, estado pasa a "En Proceso" para gestión de compra.
+ *
+ * Body:
+ *   { accion: 'aprobar_supervisor' | 'rechazar_supervisor' | 'aprobar_admin' | 'rechazar_admin',
+ *     observaciones?: string }
+ *
+ * Crea notificación al solicitante y a los roles siguientes del flujo.
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { getCurrentSession, hasPermission, logAction } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
+
+const ETAPAS = {
+  aprobar_supervisor: 'Aprobada Supervisor',
+  rechazar_supervisor: 'Rechazada Supervisor',
+  aprobar_admin: 'Aprobada Admin',
+  rechazar_admin: 'Rechazada Admin',
+} as const
+
+const PERMISOS_POR_ACCION = {
+  aprobar_supervisor: 'solicitudescompra.aprobar_supervisor',
+  rechazar_supervisor: 'solicitudescompra.aprobar_supervisor',
+  aprobar_admin: 'solicitudescompra.aprobar_admin',
+  rechazar_admin: 'solicitudescompra.aprobar_admin',
+} as const
+
+type Accion = keyof typeof ETAPAS
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getCurrentSession()
+  if (!session) return apiError('No autenticado', 401)
+
+  const { id } = await params
+  const body = await request.json()
+  const { accion, observaciones } = body as { accion: Accion; observaciones?: string }
+
+  if (!accion || !ETAPAS[accion]) {
+    return apiError('Acción inválida. Debe ser: aprobar_supervisor, rechazar_supervisor, aprobar_admin o rechazar_admin', 400)
+  }
+
+  // Admin tiene acceso total a todas las acciones
+  const isAdmin = session.user.rol === 'admin'
+  const permisoRequerido = PERMISOS_POR_ACCION[accion]
+  if (!isAdmin && !hasPermission(session.user.rol, permisoRequerido)) {
+    return apiError(`No tiene permisos para realizar esta acción (${accion})`, 403)
+  }
+
+  try {
+    const solicitud = await db.solicitudCompra.findUnique({ where: { id } })
+    if (!solicitud) {
+      return apiError('Solicitud no encontrada', 404)
+    }
+
+    // Validar secuencia del flujo
+    const etapaActual = solicitud.etapaAprobacion
+    if ((accion === 'aprobar_supervisor' || accion === 'rechazar_supervisor') && etapaActual !== 'Pendiente Supervisor') {
+      return apiError(`La solicitud no está pendiente de aprobación del supervisor (etapa actual: ${etapaActual})`, 400)
+    }
+    if ((accion === 'aprobar_admin' || accion === 'rechazar_admin') && etapaActual !== 'Aprobada Supervisor') {
+      return apiError(`La solicitud no está pendiente de aprobación del admin (etapa actual: ${etapaActual})`, 400)
+    }
+
+    const etapaNueva = ETAPAS[accion]
+    const now = new Date()
+    const aprobadorNombre = `${session.user.nombre} ${session.user.apellido || ''}`.trim()
+
+    // Datos a actualizar
+    const updateData: any = {
+      etapaAprobacion: etapaNueva,
+      updatedAt: now,
+    }
+
+    if (accion === 'aprobar_supervisor') {
+      updateData.supervisorAprobadorId = session.userId
+      updateData.supervisorAprobadorNombre = aprobadorNombre
+      updateData.supervisorFechaAprobacion = now
+      updateData.supervisorObservaciones = observaciones || null
+    } else if (accion === 'rechazar_supervisor') {
+      updateData.supervisorAprobadorId = session.userId
+      updateData.supervisorAprobadorNombre = aprobadorNombre
+      updateData.supervisorFechaAprobacion = now
+      updateData.supervisorObservaciones = observaciones || null
+      updateData.estado = 'Rechazada'
+    } else if (accion === 'aprobar_admin') {
+      updateData.adminAprobadorId = session.userId
+      updateData.adminAprobadorNombre = aprobadorNombre
+      updateData.adminFechaAprobacion = now
+      updateData.adminObservaciones = observaciones || null
+      updateData.estado = 'En Proceso' // Lista para gestionar compra
+    } else if (accion === 'rechazar_admin') {
+      updateData.adminAprobadorId = session.userId
+      updateData.adminAprobadorNombre = aprobadorNombre
+      updateData.adminFechaAprobacion = now
+      updateData.adminObservaciones = observaciones || null
+      updateData.estado = 'Rechazada'
+    }
+
+    // Transacción: actualizar SC + crear historial + crear notificaciones
+    const updated = await db.$transaction(async (tx) => {
+      const s = await tx.solicitudCompra.update({
+        where: { id },
+        data: updateData,
+      })
+
+      // Historial
+      await tx.historialAprobacionSC.create({
+        data: {
+          solicitudId: id,
+          etapaAnterior: etapaActual,
+          etapaNueva,
+          accion,
+          observaciones: observaciones || null,
+          aprobadorId: session.userId,
+          aprobadorNombre,
+        },
+      })
+
+      // Notificación al solicitante
+      if (solicitud.solicitadoPorId) {
+        const mensajes: Record<Accion, { titulo: string; mensaje: string; tipo: string }> = {
+          aprobar_supervisor: {
+            titulo: 'Solicitud aprobada por Supervisor',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue aprobada por el supervisor ${aprobadorNombre} y pasa a gestión del administrador.`,
+            tipo: 'Info',
+          },
+          rechazar_supervisor: {
+            titulo: 'Solicitud rechazada por Supervisor',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue rechazada por el supervisor ${aprobadorNombre}.${observaciones ? ` Motivo: ${observaciones}` : ''}`,
+            tipo: 'Alerta',
+          },
+          aprobar_admin: {
+            titulo: 'Solicitud aprobada por Administrador',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue aprobada por el administrador ${aprobadorNombre} y está en proceso de compra.`,
+            tipo: 'Info',
+          },
+          rechazar_admin: {
+            titulo: 'Solicitud rechazada por Administrador',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue rechazada por el administrador ${aprobadorNombre}.${observaciones ? ` Motivo: ${observaciones}` : ''}`,
+            tipo: 'Alerta',
+          },
+        }
+        const notif = mensajes[accion]
+        try {
+          await tx.notificacion.create({
+            data: {
+              titulo: notif.titulo,
+              mensaje: notif.mensaje,
+              tipo: notif.tipo,
+              categoria: 'Compras',
+              destino: 'Usuario específico',
+              destinoId: solicitud.solicitadoPorId,
+              leido: false,
+            },
+          })
+        } catch (e) {
+          console.error('Error creando notificación al solicitante:', e)
+        }
+      }
+
+      // Si aprueba supervisor → notificar a admins para que gestionen
+      if (accion === 'aprobar_supervisor') {
+        try {
+          const admins = await tx.user.findMany({
+            where: { rol: 'admin', activo: true },
+            select: { id: true },
+          })
+          if (admins.length > 0) {
+            await tx.notificacion.createMany({
+              data: admins.map((a) => ({
+                titulo: 'Nueva solicitud de compra aprobada por supervisor',
+                mensaje: `La solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue aprobada por ${aprobadorNombre}. Requiere tu gestión para proceder con la compra.`,
+                tipo: 'Alerta',
+                categoria: 'Compras',
+                destino: 'Usuario específico',
+                destinoId: a.id,
+                leido: false,
+              })),
+            })
+          }
+        } catch (e) {
+          console.error('Error creando notificaciones a admins:', e)
+        }
+      }
+
+      // Si aprueba admin → notificar a supervisor y al solicitante
+      if (accion === 'aprobar_admin') {
+        try {
+          const supervisores = await tx.user.findMany({
+            where: { rol: 'supervisor', activo: true },
+            select: { id: true },
+          })
+          if (supervisores.length > 0) {
+            await tx.notificacion.createMany({
+              data: supervisores.map((s) => ({
+                titulo: 'Solicitud de compra aprobada por administrador',
+                mensaje: `La solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue aprobada por ${aprobadorNombre} y está en proceso de compra.`,
+                tipo: 'Info',
+                categoria: 'Compras',
+                destino: 'Usuario específico',
+                destinoId: s.id,
+                leido: false,
+              })),
+            })
+          }
+        } catch (e) {
+          console.error('Error creando notificaciones a supervisores:', e)
+        }
+      }
+
+      return s
+    })
+
+    // Log de auditoría
+    await logAction(
+      session.userId,
+      `sc_${accion}`,
+      'SolicitudCompra',
+      id,
+      { etapaAnterior: etapaActual, estado: solicitud.estado },
+      { etapaNueva, estado: updateData.estado, observaciones },
+    )
+
+    return NextResponse.json({
+      success: true,
+      solicitud: updated,
+      etapaNueva,
+      message: `Solicitud ${accion.includes('aprobar') ? 'aprobada' : 'rechazada'} correctamente`,
+    })
+  } catch (error) {
+    console.error('Error procesando aprobación SC:', error)
+    return NextResponse.json({ error: 'Error procesando aprobación' }, { status: 500 })
+  }
+}

@@ -1695,12 +1695,50 @@ model SolicitudCompra {
   // Condominio
   condominioId    String?
   condominio      Condominio? @relation(fields: [condominioId], references: [id])
+
+  // ===== Campos del flujo de aprobación =====
+  // Etapa del flujo: 'Pendiente Supervisor' → 'Aprobada Supervisor' → 'Aprobada Admin' (lista para gestionar)
+  //                                              ↘ 'Rechazada Supervisor'
+  //                                                  ↘ 'Rechazada Admin'
+  etapaAprobacion String   @default("Pendiente Supervisor") // Pendiente Supervisor, Aprobada Supervisor, Aprobada Admin, Rechazada Supervisor, Rechazada Admin
+  // Supervisor
+  supervisorAprobadorId   String?
+  supervisorAprobadorNombre String?
+  supervisorFechaAprobacion DateTime?
+  supervisorObservaciones String?
+  // Admin (gestión final)
+  adminAprobadorId        String?
+  adminAprobadorNombre    String?
+  adminFechaAprobacion    DateTime?
+  adminObservaciones      String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  
+
+  historialAprobaciones HistorialAprobacionSC[]
+
   @@index([estado, createdAt])
   @@index([condominioId])
   @@index([origenTipo, origenId])
+  @@index([etapaAprobacion])
+}
+
+// ============================================
+// HISTORIAL DE APROBACIONES DE SOLICITUDES DE COMPRA
+// ============================================
+model HistorialAprobacionSC {
+  id              String   @id @default(cuid())
+  solicitudId     String
+  solicitud       SolicitudCompra @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+  etapaAnterior   String?
+  etapaNueva      String
+  accion          String   // aprobar_supervisor, rechazar_supervisor, aprobar_admin, rechazar_admin
+  observaciones   String?
+  aprobadorId     String?
+  aprobadorNombre String?
+  fechaAccion     DateTime @default(now())
+
+  @@index([solicitudId, fechaAccion])
 }
 
 // Listas desplegables configurables
