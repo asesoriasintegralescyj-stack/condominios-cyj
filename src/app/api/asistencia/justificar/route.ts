@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { inasistenciaId, tipoJustificacion, observaciones, documento } = body
+    const { inasistenciaId, tipoJustificacion, observaciones, documento, documentoNombre } = body
 
     if (!inasistenciaId || !tipoJustificacion) {
       return NextResponse.json(
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         tipoJustificacion,
         observaciones: observaciones || null,
         documento: documento || null,
+        documentoNombre: documentoNombre || null,
         estado: 'pendiente_revision',
       },
       create: {
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
         tipoJustificacion,
         observaciones: observaciones || null,
         documento: documento || null,
+        documentoNombre: documentoNombre || null,
         estado: 'pendiente_revision',
       },
     })

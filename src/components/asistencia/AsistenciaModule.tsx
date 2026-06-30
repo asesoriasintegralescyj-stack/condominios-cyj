@@ -50,6 +50,8 @@ interface Inasistencia {
     adminNombre?: string | null
     adminObservaciones?: string | null
     fechaRevision?: string | null
+    documento?: string | null
+    documentoNombre?: string | null
   } | null
 }
 
@@ -125,6 +127,8 @@ export function AsistenciaModule() {
   const [justTarget, setJustTarget] = useState<Inasistencia | null>(null)
   const [justTipo, setJustTipo] = useState('')
   const [justObservaciones, setJustObservaciones] = useState('')
+  const [justDocumento, setJustDocumento] = useState<string | null>(null)
+  const [justDocumentoName, setJustDocumentoName] = useState('')
   const [justLoading, setJustLoading] = useState(false)
 
   // Diálogo de aprobación
@@ -210,6 +214,8 @@ export function AsistenciaModule() {
           inasistenciaId: justTarget.id,
           tipoJustificacion: justTipo,
           observaciones: justObservaciones,
+          documento: justDocumento,
+          documentoNombre: justDocumentoName,
         }),
       })
       const data = await res.json()
@@ -219,6 +225,8 @@ export function AsistenciaModule() {
         setJustTarget(null)
         setJustTipo('')
         setJustObservaciones('')
+        setJustDocumento(null)
+        setJustDocumentoName('')
         fetchData()
       } else {
         toast.error(data.error || 'Error al justificar')
@@ -271,13 +279,21 @@ export function AsistenciaModule() {
 
   // Exportar reporte
   const handleExport = (formato: 'pdf' | 'csv') => {
+    // El reporte requiere fechas obligatorias
+    const desde = filtroFechaDesde || ''
+    const hasta = filtroFechaHasta || ''
+    if (!desde || !hasta) {
+      toast.error('Debe seleccionar fecha desde y hasta para generar el reporte')
+      return
+    }
     const params = new URLSearchParams()
     params.set('formato', formato)
-    if (filtroFechaDesde) params.set('fechaDesde', filtroFechaDesde)
-    if (filtroFechaHasta) params.set('fechaHasta', filtroFechaHasta)
+    params.set('fechaDesde', desde)
+    params.set('fechaHasta', hasta)
     if (filtroTrabajador) params.set('trabajador', filtroTrabajador)
     if (filtroEstado !== 'all') params.set('estado', filtroEstado)
     window.open(`/api/asistencia/reporte?${params.toString()}`, '_blank')
+    toast.success('Generando reporte por trabajador...')
   }
 
   // Filtrar inasistencias para mostrar
@@ -782,6 +798,8 @@ export function AsistenciaModule() {
             setJustTarget(null)
             setJustTipo('')
             setJustObservaciones('')
+            setJustDocumento(null)
+            setJustDocumentoName('')
           }
         }
       }}>
@@ -828,6 +846,57 @@ export function AsistenciaModule() {
                 rows={3}
                 disabled={justLoading}
               />
+            </div>
+            {/* Subir documento adjunto (permiso, respaldo médico, licencia) */}
+            <div>
+              <Label className="text-xs">Documento adjunto (permiso, licencia médica, respaldo)</Label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center">
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error('El archivo no puede superar 5 MB')
+                      e.target.value = ''
+                      return
+                    }
+                    // Convertir a base64
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      setJustDocumento(reader.result as string)
+                      setJustDocumentoName(file.name)
+                      toast.success(`Archivo cargado: ${file.name}`)
+                    }
+                    reader.onerror = () => toast.error('Error al leer el archivo')
+                    reader.readAsDataURL(file)
+                  }}
+                  className="hidden"
+                  id="just-documento-input"
+                  disabled={justLoading}
+                />
+                <label htmlFor="just-documento-input" className="cursor-pointer">
+                  <Upload className="w-6 h-6 mx-auto text-gray-400 mb-1" />
+                  <p className="text-xs text-gray-600">
+                    {justDocumentoName || 'Click para subir documento (PDF, imagen, Word — máx 5 MB)'}
+                  </p>
+                </label>
+                {justDocumentoName && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="mt-1 h-7 text-xs text-red-600"
+                    onClick={() => {
+                      setJustDocumento(null)
+                      setJustDocumentoName('')
+                    }}
+                  >
+                    Quitar archivo
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -876,6 +945,18 @@ export function AsistenciaModule() {
                   Supervisor: {aprobTarget.justificacion.supervisorNombre}<br />
                   {aprobTarget.justificacion.observaciones && (
                     <em>"{aprobTarget.justificacion.observaciones}"</em>
+                  )}
+                  {aprobTarget.justificacion.documento && (
+                    <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+                      <span className="text-blue-700">📎 Documento adjunto: </span>
+                      <a
+                        href={aprobTarget.justificacion.documento}
+                        download={aprobTarget.justificacion.documentoNombre || 'documento'}
+                        className="text-blue-600 underline font-medium"
+                      >
+                        {aprobTarget.justificacion.documentoNombre || 'Descargar'}
+                      </a>
+                    </div>
                   )}
                 </>
               )}

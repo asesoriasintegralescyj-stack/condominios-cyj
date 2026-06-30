@@ -1055,6 +1055,7 @@ model JustificacionAsistencia {
   tipoJustificacion String  // Permiso, Enfermedad, Personal, Fuerza Mayor, Otro
   observaciones   String?  // explicación del supervisor
   documento       String?  // base64 del documento adjunto (certificado, etc.)
+  documentoNombre String?  // nombre original del archivo adjunto
 
   // Estado del flujo
   estado          String   @default("pendiente_revision") // pendiente_revision, aprobado, rechazado
