@@ -21,6 +21,14 @@ export default function SistemaPage() {
     }
   }, [loading, authenticated, router])
 
+  // Si el usuario es guardia, redirigir a la página dedicada /rondas-guardia
+  // (no debe ver el sistema completo con sidebar)
+  useEffect(() => {
+    if (authenticated && user?.rol === 'guardia') {
+      router.replace('/rondas-guardia')
+    }
+  }, [authenticated, user, router])
+
   // Si el usuario es guardia, forzar el módulo Rondas al ingresar
   useEffect(() => {
     if (authenticated && user?.rol === 'guardia' && currentModule !== 'rondas') {

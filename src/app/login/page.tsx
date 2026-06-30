@@ -57,8 +57,14 @@ function LoginForm() {
         return;
       }
 
-      // Redirigir a la página solicitada o al dashboard
-      router.push(redirect);
+      // Redirigir según el rol:
+      // - Guardia → página dedicada /rondas-guardia (sin sidebar ni dashboard)
+      // - Otros roles → sistema completo
+      if (data.user?.rol === 'guardia') {
+        router.push('/rondas-guardia');
+      } else {
+        router.push(redirect);
+      }
       router.refresh();
       
     } catch {
@@ -70,9 +76,27 @@ function LoginForm() {
 
   const handleForcePasswordSuccess = () => {
     setForcePasswordOpen(false);
-    // Redirigir al sistema
-    router.push(redirect);
-    router.refresh();
+    // Redirigir según el rol (guardia → página dedicada)
+    if (forcePasswordEmail) {
+      // Necesitamos saber el rol del usuario; lo consultamos vía session
+      fetch('/api/auth/session')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.authenticated && data.user?.rol === 'guardia') {
+            router.push('/rondas-guardia');
+          } else {
+            router.push(redirect);
+          }
+          router.refresh();
+        })
+        .catch(() => {
+          router.push(redirect);
+          router.refresh();
+        });
+    } else {
+      router.push(redirect);
+      router.refresh();
+    }
   };
 
   return (
