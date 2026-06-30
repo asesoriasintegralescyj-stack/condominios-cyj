@@ -287,6 +287,21 @@ export function ProyectosModule() {
   const [editingProy, setEditingProy] = useState<Proyecto | null>(null)
   const [selectedProy, setSelectedProy] = useState<Proyecto | null>(null)
 
+  // Filtro por estado (dropdown) y vista por pestañas (Activos / Histórico / Todos)
+  const [filtroEstado, setFiltroEstado] = useState<string>('all')
+  const [vistaActiva, setVistaActiva] = useState<'activos' | 'completados' | 'todos'>('activos')
+
+  // Diálogo de Informe de Costos
+  const [informeDialogOpen, setInformeDialogOpen] = useState(false)
+  const [informeFilters, setInformeFilters] = useState({
+    fechaDesde: '',
+    fechaHasta: '',
+    sector: 'all',
+    tipoReparacion: 'all',
+    centroCosto: 'all',
+    responsable: 'all',
+  })
+
   // Ordenamiento
   const [sortField, setSortField] = useState<string>('prioridad')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
@@ -381,6 +396,341 @@ export function ProyectosModule() {
     })
     return sorted
   }, [proyectos, sortField, sortDirection])
+
+  // Proyectos filtrados según la vista activa (activos vs completados vs todos)
+  // y el filtro por estado del dropdown
+  const proyectosFiltrados = useMemo(() => {
+    let lista = proyectosOrdenados
+
+    // 1. Filtro por vista activa
+    if (vistaActiva === 'activos') {
+      // Activos: todo excepto Completado y Cancelado
+      lista = lista.filter((p) => p.estado !== 'Completado' && p.estado !== 'Cancelado')
+    } else if (vistaActiva === 'completados') {
+      // Histórico: solo Completado
+      lista = lista.filter((p) => p.estado === 'Completado')
+    }
+    // 'todos' = sin filtro de vista
+
+    // 2. Filtro por estado del dropdown
+    if (filtroEstado !== 'all') {
+      lista = lista.filter((p) => p.estado === filtroEstado)
+    }
+
+    return lista
+  }, [proyectosOrdenados, vistaActiva, filtroEstado])
+
+  // Contadores por estado para mostrar en las pestañas
+  const proyectosStats = useMemo(() => {
+    const activos = proyectos.filter((p) => p.estado !== 'Completado' && p.estado !== 'Cancelado').length
+    const completados = proyectos.filter((p) => p.estado === 'Completado').length
+    const todos = proyectos.length
+    return { activos, completados, todos }
+  }, [proyectos])
+
+  // Lista de proyectos completados para el informe de costos (con filtros aplicados)
+  const proyectosInforme = useMemo(() => {
+    let lista = proyectos.filter((p) => p.estado === 'Completado')
+
+    // Filtro por fecha (fechaFinReal o fechaFin)
+    if (informeFilters.fechaDesde) {
+      lista = lista.filter((p) => {
+        const fecha = p.fechaFinReal || p.fechaFin || ''
+        return fecha >= informeFilters.fechaDesde
+      })
+    }
+    if (informeFilters.fechaHasta) {
+      lista = lista.filter((p) => {
+        const fecha = p.fechaFinReal || p.fechaFin || ''
+        return fecha <= informeFilters.fechaHasta
+      })
+    }
+
+    // Filtro por sector
+    if (informeFilters.sector !== 'all') {
+      lista = lista.filter((p) => (p.sector || p.ubicacion || '') === informeFilters.sector)
+    }
+
+    // Filtro por tipo de reparación
+    if (informeFilters.tipoReparacion !== 'all') {
+      lista = lista.filter((p) => (p.tipoReparacion || p.categoria || '') === informeFilters.tipoReparacion)
+    }
+
+    // Filtro por responsable
+    if (informeFilters.responsable !== 'all') {
+      lista = lista.filter((p) => (p.responsable || '') === informeFilters.responsable)
+    }
+
+    return lista
+  }, [proyectos, informeFilters])
+
+  // Totales del informe
+  const informeTotales = useMemo(() => {
+    const totalProyectos = proyectosInforme.length
+    const totalMonto = proyectosInforme.reduce((acc, p) => acc + (p.monto || p.presProg || 0), 0)
+    const totalPresUsado = proyectosInforme.reduce((acc, p) => acc + (p.presUsado || 0), 0)
+    const totalMateriales = proyectosInforme.reduce(
+      (acc, p) => acc + (p.materiales?.reduce((s, m) => s + (m.total || 0), 0) || 0),
+      0,
+    )
+    const totalPersonal = proyectosInforme.reduce(
+      (acc, p) => acc + (p.personal?.reduce((s, x) => s + (x.total || 0), 0) || 0),
+      0,
+    )
+
+    // Agrupación por sector
+    const porSector: Record<string, { count: number; monto: number }> = {}
+    proyectosInforme.forEach((p) => {
+      const key = p.sector || p.ubicacion || 'Sin sector'
+      if (!porSector[key]) porSector[key] = { count: 0, monto: 0 }
+      porSector[key].count++
+      porSector[key].monto += p.monto || p.presProg || 0
+    })
+
+    // Agrupación por tipo
+    const porTipo: Record<string, { count: number; monto: number }> = {}
+    proyectosInforme.forEach((p) => {
+      const key = p.tipoReparacion || p.categoria || 'Sin tipo'
+      if (!porTipo[key]) porTipo[key] = { count: 0, monto: 0 }
+      porTipo[key].count++
+      porTipo[key].monto += p.monto || p.presProg || 0
+    })
+
+    // Agrupación por mes (basado en fechaFinReal o fechaFin)
+    const porMes: Record<string, { count: number; monto: number }> = {}
+    proyectosInforme.forEach((p) => {
+      const fecha = p.fechaFinReal || p.fechaFin || ''
+      const mes = fecha ? fecha.substring(0, 7) : 'Sin fecha' // YYYY-MM
+      if (!porMes[mes]) porMes[mes] = { count: 0, monto: 0 }
+      porMes[mes].count++
+      porMes[mes].monto += p.monto || p.presProg || 0
+    })
+
+    // Agrupación por responsable
+    const porResponsable: Record<string, { count: number; monto: number }> = {}
+    proyectosInforme.forEach((p) => {
+      const key = p.responsable || 'Sin responsable'
+      if (!porResponsable[key]) porResponsable[key] = { count: 0, monto: 0 }
+      porResponsable[key].count++
+      porResponsable[key].monto += p.monto || p.presProg || 0
+    })
+
+    return {
+      totalProyectos,
+      totalMonto,
+      totalPresUsado,
+      totalMateriales,
+      totalPersonal,
+      porSector,
+      porTipo,
+      porMes,
+      porResponsable,
+    }
+  }, [proyectosInforme])
+
+  // Lista única de responsables para el filtro del informe
+  const responsablesUnicos = useMemo(() => {
+    const set = new Set<string>()
+    proyectos.forEach((p) => {
+      if (p.responsable) set.add(p.responsable)
+    })
+    return Array.from(set).sort()
+  }, [proyectos])
+
+  // Exportar informe a CSV
+  const exportarInformeCSV = () => {
+    const headers = [
+      'Código',
+      'Descripción',
+      'Sector',
+      'Tipo Reparación',
+      'Responsable',
+      'Fecha Inicio',
+      'Fecha Fin Real',
+      'Monto Presupuestado',
+      'Presupuesto Usado',
+      'Materiales',
+      'Personal',
+      'Avance %',
+    ]
+
+    const rows = proyectosInforme.map((p) => [
+      extraerCodigoProyecto(p.nombre),
+      extraerDescripcion(p.nombre),
+      p.sector || p.ubicacion || '',
+      p.tipoReparacion || p.categoria || '',
+      p.responsable || '',
+      p.fechaInicio || '',
+      p.fechaFinReal || p.fechaFin || '',
+      p.monto || p.presProg || 0,
+      p.presUsado || 0,
+      p.materiales?.reduce((s, m) => s + (m.total || 0), 0) || 0,
+      p.personal?.reduce((s, x) => s + (x.total || 0), 0) || 0,
+      p.avance || 0,
+    ])
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `informe_costos_proyectos_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Informe exportado: ${proyectosInforme.length} proyectos(es)`)
+  }
+
+  // Exportar informe a PDF (tabla resumida)
+  const exportarInformePDF = async () => {
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const margin = 10
+
+      // Header corporativo
+      doc.setFillColor(15, 32, 64)
+      doc.rect(0, 0, pageWidth, 20, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Informe de Costos — Proyectos Completados', margin, 12)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text(
+        `Generado: ${new Date().toLocaleString('es-CL')}  ·  ${proyectosInforme.length} proyecto(s)`,
+        margin,
+        17,
+      )
+
+      // Filtros aplicados
+      let yPos = 26
+      doc.setTextColor(80, 80, 80)
+      doc.setFontSize(8)
+      const filtrosText = [
+        `Fecha desde: ${informeFilters.fechaDesde || '—'}`,
+        `Fecha hasta: ${informeFilters.fechaHasta || '—'}`,
+        `Sector: ${informeFilters.sector === 'all' ? 'Todos' : informeFilters.sector}`,
+        `Tipo: ${informeFilters.tipoReparacion === 'all' ? 'Todos' : informeFilters.tipoReparacion}`,
+        `Responsable: ${informeFilters.responsable === 'all' ? 'Todos' : informeFilters.responsable}`,
+      ].join('   ·   ')
+      doc.text(filtrosText, margin, yPos)
+      yPos += 6
+
+      // Resumen de totales
+      doc.setFillColor(245, 245, 245)
+      doc.rect(margin, yPos, pageWidth - margin * 2, 14, 'F')
+      doc.setTextColor(15, 32, 64)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text(
+        `TOTAL: ${formatCLP(informeTotales.totalMonto)}  |  Materiales: ${formatCLP(informeTotales.totalMateriales)}  |  Personal: ${formatCLP(informeTotales.totalPersonal)}  |  Presupuesto Usado: ${formatCLP(informeTotales.totalPresUsado)}`,
+        margin + 2,
+        yPos + 9,
+      )
+      yPos += 20
+
+      // Tabla de proyectos
+      const headers = ['#', 'Descripción', 'Sector', 'Tipo', 'Resp.', 'Fecha Fin', 'Monto']
+      const colWidths = [12, 80, 35, 35, 35, 30, 35]
+      const tableWidth = colWidths.reduce((a, b) => a + b, 0)
+
+      // Cabecera de tabla
+      doc.setFillColor(15, 32, 64)
+      doc.rect(margin, yPos, tableWidth, 7, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      let xPos = margin + 2
+      headers.forEach((h, i) => {
+        doc.text(h, xPos, yPos + 5)
+        xPos += colWidths[i]
+      })
+      yPos += 7
+
+      // Filas
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(40, 40, 40)
+      doc.setFontSize(7)
+
+      proyectosInforme.forEach((p, idx) => {
+        if (yPos > 190) {
+          doc.addPage()
+          yPos = 20
+        }
+        if (idx % 2 === 0) {
+          doc.setFillColor(245, 247, 250)
+          doc.rect(margin, yPos, tableWidth, 6, 'F')
+        }
+        const rowData = [
+          extraerNumProyecto(p.nombre),
+          extraerDescripcion(p.nombre).substring(0, 50),
+          (p.sector || p.ubicacion || '').substring(0, 20),
+          (p.tipoReparacion || p.categoria || '').substring(0, 20),
+          (p.responsable || '').substring(0, 20),
+          formatDate(p.fechaFinReal || p.fechaFin),
+          formatCLP(p.monto || p.presProg || 0),
+        ]
+        xPos = margin + 2
+        rowData.forEach((cell, i) => {
+          doc.text(String(cell), xPos, yPos + 4)
+          xPos += colWidths[i]
+        })
+        yPos += 6
+      })
+
+      // Resumen por sector (en nueva página)
+      doc.addPage()
+      yPos = 26
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.setTextColor(15, 32, 64)
+      doc.text('Resumen por Sector', margin, yPos)
+      yPos += 8
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      Object.entries(informeTotales.porSector).forEach(([sector, data]) => {
+        doc.text(`${sector}: ${data.count} proyecto(s) — ${formatCLP(data.monto)}`, margin, yPos)
+        yPos += 5
+      })
+
+      yPos += 5
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('Resumen por Tipo de Reparación', margin, yPos)
+      yPos += 8
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      Object.entries(informeTotales.porTipo).forEach(([tipo, data]) => {
+        doc.text(`${tipo}: ${data.count} proyecto(s) — ${formatCLP(data.monto)}`, margin, yPos)
+        yPos += 5
+      })
+
+      yPos += 5
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(11)
+      doc.text('Resumen por Mes', margin, yPos)
+      yPos += 8
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      Object.entries(informeTotales.porMes)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([mes, data]) => {
+          doc.text(`${mes}: ${data.count} proyecto(s) — ${formatCLP(data.monto)}`, margin, yPos)
+          yPos += 5
+        })
+
+      doc.save(`informe_costos_proyectos_${new Date().toISOString().split('T')[0]}.pdf`)
+      toast.success('Informe PDF generado')
+    } catch (error) {
+      console.error('Error generando PDF:', error)
+      toast.error('Error al generar PDF')
+    }
+  }
 
   // Toggle de ordenamiento: click en header
   const toggleSort = (field: string) => {
@@ -1379,6 +1729,52 @@ export function ProyectosModule() {
 
   return (
     <div className="space-y-5">
+      {/* Pestañas de vista: Activos / Completados / Todos */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <button
+            onClick={() => setVistaActiva('activos')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              vistaActiva === 'activos' ? 'bg-[#0f2040] text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            En Proceso ({proyectosStats.activos})
+          </button>
+          <button
+            onClick={() => setVistaActiva('completados')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              vistaActiva === 'completados' ? 'bg-green-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Histórico Completados ({proyectosStats.completados})
+          </button>
+          <button
+            onClick={() => setVistaActiva('todos')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              vistaActiva === 'todos' ? 'bg-slate-700 text-white' : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Todos ({proyectosStats.todos})
+          </button>
+        </div>
+
+        {/* Filtro por estado */}
+        <div className="flex items-center gap-2 ml-auto">
+          <label className="text-xs text-slate-500">Filtrar estado:</label>
+          <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="Todos los estados" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos los estados</SelectItem>
+              {ESTADOS_PROYECTO.map((est) => (
+                <SelectItem key={est} value={est}>{est}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs min-w-[180px]">
@@ -1390,6 +1786,9 @@ export function ProyectosModule() {
             className="pl-9"
           />
         </div>
+        <Button variant="outline" onClick={() => setInformeDialogOpen(true)} title="Informe de Costos de Proyectos Completados" className="border-green-300 text-green-700 hover:bg-green-50">
+          <FileSpreadsheet className="w-4 h-4 mr-1" /> Informe de Costos
+        </Button>
         <Button variant="outline" onClick={exportToPDF} title="Exportar a PDF">
           <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
         </Button>
@@ -1401,10 +1800,28 @@ export function ProyectosModule() {
         </Button>
       </div>
 
+      {/* Info banner según vista activa */}
+      {vistaActiva === 'completados' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+          📊 <strong>Histórico de Proyectos Completados.</strong> Los proyectos en esta vista ya finalizaron.
+          Usa el botón <strong>"Informe de Costos"</strong> para generar un reporte detallado con filtros por fecha, sector, tipo y responsable.
+        </div>
+      )}
+      {vistaActiva === 'activos' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+          🚧 <strong>Proyectos en proceso.</strong> Muestra proyectos Planificados, En Ejecución y Pausados (excluye Completados y Cancelados).
+        </div>
+      )}
+
       {/* Table - Formato PDF: # | Descripción | Sector | Tipo | Prior. | Etapa | Estado | Aprobación | Responsable | T.E. | Monto | Inicio | Término | Adj. | Acc. */}
       <Card>
         <CardHeader className="py-3">
-          <CardTitle className="text-sm">Planificación de Mantención — Tabla de Tareas ({proyectos.length})</CardTitle>
+          <CardTitle className="text-sm">
+            {vistaActiva === 'activos' && 'Proyectos en Proceso'}
+            {vistaActiva === 'completados' && 'Histórico de Proyectos Completados'}
+            {vistaActiva === 'todos' && 'Todos los Proyectos'}
+            {' '}({proyectosFiltrados.length} de {proyectos.length})
+          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>
@@ -1431,10 +1848,16 @@ export function ProyectosModule() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={14} className="p-8 text-center text-slate-400">Cargando...</td></tr>
-                ) : !proyectos || proyectos.length === 0 ? (
-                  <tr><td colSpan={14} className="p-8 text-center text-slate-400">Sin proyectos</td></tr>
+                ) : !proyectosFiltrados || proyectosFiltrados.length === 0 ? (
+                  <tr><td colSpan={14} className="p-8 text-center text-slate-400">
+                    {vistaActiva === 'completados'
+                      ? 'No hay proyectos completados en el histórico'
+                      : vistaActiva === 'activos'
+                        ? 'No hay proyectos en proceso'
+                        : 'Sin proyectos'}
+                  </td></tr>
                 ) : (
-                  proyectosOrdenados.map((proy, idx) => {
+                  proyectosFiltrados.map((proy, idx) => {
                     const sector = proy.sector || proy.ubicacion || '–'
                     const tipo = proy.tipoReparacion || proy.categoria || '–'
                     const prioridad = proy.prioridad || '–'
@@ -2359,6 +2782,237 @@ export function ProyectosModule() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave}>Guardar Proyecto</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: Informe de Costos de Proyectos Completados */}
+      <Dialog open={informeDialogOpen} onOpenChange={setInformeDialogOpen}>
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="w-5 h-5 text-green-700" />
+              Informe de Costos — Proyectos Completados
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Filtros */}
+            <div className="bg-slate-50 rounded-lg p-4 border">
+              <h4 className="text-xs font-semibold text-slate-700 uppercase mb-3">Filtros del Informe</h4>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div>
+                  <Label className="text-[10px] text-slate-500">Fecha desde</Label>
+                  <Input
+                    type="date"
+                    value={informeFilters.fechaDesde}
+                    onChange={(e) => setInformeFilters({ ...informeFilters, fechaDesde: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-slate-500">Fecha hasta</Label>
+                  <Input
+                    type="date"
+                    value={informeFilters.fechaHasta}
+                    onChange={(e) => setInformeFilters({ ...informeFilters, fechaHasta: e.target.value })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-slate-500">Sector</Label>
+                  <Select
+                    value={informeFilters.sector}
+                    onValueChange={(v) => setInformeFilters({ ...informeFilters, sector: v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {SECTORES.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] text-slate-500">Tipo reparación</Label>
+                  <Select
+                    value={informeFilters.tipoReparacion}
+                    onValueChange={(v) => setInformeFilters({ ...informeFilters, tipoReparacion: v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {TIPOS_REPARACION.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-[10px] text-slate-500">Responsable</Label>
+                  <Select
+                    value={informeFilters.responsable}
+                    onValueChange={(v) => setInformeFilters({ ...informeFilters, responsable: v })}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {responsablesUnicos.map((r) => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3 justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setInformeFilters({
+                    fechaDesde: '',
+                    fechaHasta: '',
+                    sector: 'all',
+                    tipoReparacion: 'all',
+                    centroCosto: 'all',
+                    responsable: 'all',
+                  })}
+                >
+                  Limpiar filtros
+                </Button>
+                <Button size="sm" variant="outline" onClick={exportarInformeCSV} disabled={proyectosInforme.length === 0}>
+                  <FileSpreadsheet className="w-3.5 h-3.5 mr-1" /> CSV
+                </Button>
+                <Button size="sm" onClick={exportarInformePDF} disabled={proyectosInforme.length === 0} className="bg-green-700 hover:bg-green-800">
+                  <FileDown className="w-3.5 h-3.5 mr-1" /> PDF
+                </Button>
+              </div>
+            </div>
+
+            {/* Resumen de totales */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-white border rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">Proyectos</div>
+                <div className="text-xl font-bold text-slate-900">{informeTotales.totalProyectos}</div>
+              </div>
+              <div className="bg-white border rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">Monto Total</div>
+                <div className="text-xl font-bold text-[#0f2040]">{formatCLP(informeTotales.totalMonto)}</div>
+              </div>
+              <div className="bg-white border rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">Materiales</div>
+                <div className="text-xl font-bold text-blue-700">{formatCLP(informeTotales.totalMateriales)}</div>
+              </div>
+              <div className="bg-white border rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">Personal</div>
+                <div className="text-xl font-bold text-purple-700">{formatCLP(informeTotales.totalPersonal)}</div>
+              </div>
+              <div className="bg-white border rounded-lg p-3">
+                <div className="text-[10px] text-slate-500 uppercase">Presupuesto Usado</div>
+                <div className="text-xl font-bold text-orange-700">{formatCLP(informeTotales.totalPresUsado)}</div>
+              </div>
+            </div>
+
+            {/* Tabla de proyectos del informe */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-slate-100 px-3 py-2 text-xs font-semibold">
+                Proyectos en el informe ({proyectosInforme.length})
+              </div>
+              <div className="overflow-x-auto max-h-80">
+                <table className="w-full text-xs">
+                  <thead className="bg-slate-50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2">#</th>
+                      <th className="text-left p-2">Descripción</th>
+                      <th className="text-left p-2">Sector</th>
+                      <th className="text-left p-2">Tipo</th>
+                      <th className="text-left p-2">Fecha Fin</th>
+                      <th className="text-right p-2">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {proyectosInforme.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center p-6 text-slate-400">
+                          No hay proyectos completados con los filtros seleccionados
+                        </td>
+                      </tr>
+                    ) : (
+                      proyectosInforme.map((p) => (
+                        <tr key={p.id} className="border-t hover:bg-slate-50">
+                          <td className="p-2 font-bold text-[#0f2040]">{extraerNumProyecto(p.nombre)}</td>
+                          <td className="p-2 max-w-[250px] truncate" title={extraerDescripcion(p.nombre)}>{extraerDescripcion(p.nombre)}</td>
+                          <td className="p-2 text-slate-600">{p.sector || p.ubicacion || '–'}</td>
+                          <td className="p-2 text-slate-600">{p.tipoReparacion || p.categoria || '–'}</td>
+                          <td className="p-2 text-slate-500">{formatDate(p.fechaFinReal || p.fechaFin)}</td>
+                          <td className="p-2 text-right font-mono font-medium">{formatCLP(p.monto || p.presProg || 0)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Resumen agrupado */}
+            {proyectosInforme.length > 0 && (
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="border rounded-lg p-3">
+                  <h5 className="text-xs font-semibold text-slate-700 mb-2">Por Sector</h5>
+                  <div className="space-y-1 text-xs">
+                    {Object.entries(informeTotales.porSector).sort((a, b) => b[1].monto - a[1].monto).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-600">{k}:</span>
+                        <span className="font-mono">{formatCLP(v.monto)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <h5 className="text-xs font-semibold text-slate-700 mb-2">Por Tipo</h5>
+                  <div className="space-y-1 text-xs">
+                    {Object.entries(informeTotales.porTipo).sort((a, b) => b[1].monto - a[1].monto).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-600">{k}:</span>
+                        <span className="font-mono">{formatCLP(v.monto)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <h5 className="text-xs font-semibold text-slate-700 mb-2">Por Mes</h5>
+                  <div className="space-y-1 text-xs">
+                    {Object.entries(informeTotales.porMes).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-600">{k}:</span>
+                        <span className="font-mono">{formatCLP(v.monto)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <h5 className="text-xs font-semibold text-slate-700 mb-2">Por Responsable</h5>
+                  <div className="space-y-1 text-xs">
+                    {Object.entries(informeTotales.porResponsable).sort((a, b) => b[1].monto - a[1].monto).map(([k, v]) => (
+                      <div key={k} className="flex justify-between">
+                        <span className="text-slate-600">{k}:</span>
+                        <span className="font-mono">{formatCLP(v.monto)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInformeDialogOpen(false)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
