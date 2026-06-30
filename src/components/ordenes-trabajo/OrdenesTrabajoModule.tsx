@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ import { DatePicker, dateToISO, isoToDate } from '@/components/ui/date-picker'
 import { Separator } from '@/components/ui/separator'
 import { useSession } from '@/hooks/use-session'
 import { formatCLP, HORAS_OPTIONS } from '@/lib/utils'
+import { filtrarPersonalAsignableOT } from '@/lib/personal-cargos'
 import { toast } from 'sonner'
 import { 
   Plus, Pencil, Trash2, Search, Printer, Clock, Users, 
@@ -216,6 +217,11 @@ export function OrdenesTrabajoModule() {
   const { isPersonal, canEditProgress } = useSession()
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([])
   const [personal, setPersonal] = useState<Personal[]>([])
+  // Personal filtrado para asignación de OT: excluye conserjes, guardias y encargados de cámaras
+  const personalAsignable = useMemo(
+    () => filtrarPersonalAsignableOT(personal),
+    [personal]
+  )
   const [propiedades, setPropiedades] = useState<{ id: string; nombre: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -1267,13 +1273,23 @@ export function OrdenesTrabajoModule() {
                         <SelectTrigger className="h-9 w-full"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Sin asignar</SelectItem>
-                          {personal.map(p => (
+                          {personalAsignable.map(p => (
                             <SelectItem key={p.id} value={p.id}>
-                              {p.nombre} {p.sueldoBase > 0 ? `(${formatCLP(calcularValorHora(p.sueldoBase))}/hr)` : ''}
+                              {p.nombre}{p.cargo ? ` · ${p.cargo}` : ''}{p.sueldoBase > 0 ? ` (${formatCLP(calcularValorHora(p.sueldoBase))}/hr)` : ''}
                             </SelectItem>
                           ))}
+                          {personalAsignable.length === 0 && (
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                              No hay personal asignable. Conserjes, guardias y encargados de cámaras están excluidos.
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
+                      {personal.length > personalAsignable.length && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {personal.length - personalAsignable.length} persona(s) excluida(s) por cargo (conserjes, guardias, encargados de cámaras)
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1620,18 +1636,18 @@ export function OrdenesTrabajoModule() {
                 <div className="flex justify-between items-center flex-wrap gap-2">
                   <h3 className="font-semibold text-sm">Personal ({personalOT.length})</h3>
                   <div className="flex gap-2">
-                    {personal.length > 0 && (
+                    {personalAsignable.length > 0 && (
                       <Select onValueChange={(v) => {
-                        const emp = personal.find(p => p.id === v)
+                        const emp = personalAsignable.find(p => p.id === v)
                         if (emp) addPersonalFromEmployee(emp)
                       }}>
                         <SelectTrigger className="w-[200px] h-8">
                           <SelectValue placeholder="Agregar empleado..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {personal.map(p => (
+                          {personalAsignable.map(p => (
                             <SelectItem key={p.id} value={p.id}>
-                              {p.nombre} - {formatCLP(calcularValorHora(p.sueldoBase))}/hr
+                              {p.nombre}{p.cargo ? ` · ${p.cargo}` : ''} - {formatCLP(calcularValorHora(p.sueldoBase))}/hr
                             </SelectItem>
                           ))}
                         </SelectContent>
