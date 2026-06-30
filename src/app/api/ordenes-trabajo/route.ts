@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { getCurrentSession, hasPermission, decrypt } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
 // GET - List all ordenes de trabajo
+// Para rol 'personal': solo devuelve las OT asignadas al trabajador (vía email → Personal.id)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
@@ -13,15 +14,54 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
-    
+
+    // Para rol personal, buscar el registro de Personal por email y filtrar OT
+    let personalFilter: any = undefined
+    if (session.user.rol === 'personal') {
+      // Buscar Personal por email (campos encriptados, hay que buscar todos y filtrar)
+      const allPersonal = await db.personal.findMany({ select: { id: true, email: true, nombre: true } })
+      const userEmail = session.user.email.toLowerCase()
+      const matched = allPersonal.find((p) => {
+        if (!p.email) return false
+        // El email en Personal está encriptado; lo desencriptamos para comparar
+        const dec = decrypt(p.email).toLowerCase()
+        return dec === userEmail
+      })
+
+      if (matched) {
+        // Filtrar OT donde asignadoId = matched.id O donde el trabajador está en personalOT
+        personalFilter = {
+          OR: [
+            { asignadoId: matched.id },
+            { personalOT: { some: { personalId: matched.id } } },
+          ],
+        }
+      } else {
+        // Si no se encuentra el Personal, devolver array vacío
+        return NextResponse.json([])
+      }
+    }
+
+    // Construir where combinando búsqueda + filtro de personal
+    const where: any = {}
+    if (search) {
+      where.OR = [
+        { otNum: { contains: search } },
+        { titulo: { contains: search } },
+        { estado: { contains: search } },
+      ]
+    }
+    if (personalFilter) {
+      // Combinar: si hay search, anidar con AND
+      if (search) {
+        where.AND = [personalFilter]
+      } else {
+        Object.assign(where, personalFilter)
+      }
+    }
+
     const ordenes = await db.ordenTrabajo.findMany({
-      where: search ? {
-        OR: [
-          { otNum: { contains: search } },
-          { titulo: { contains: search } },
-          { estado: { contains: search } },
-        ]
-      } : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       include: {
         propiedad: true,
         asignado: true,
@@ -34,7 +74,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' }
     })
-    
+
     // Transform centroCosto to include codigo in the response for display
     // Parse photos from JSON strings to arrays
     const ordenesWithCC = ordenes.map(ot => ({
@@ -43,7 +83,7 @@ export async function GET(request: NextRequest) {
       fotosAntes: ot.fotosAntes ? JSON.parse(ot.fotosAntes) : [],
       fotosDespues: ot.fotosDespues ? JSON.parse(ot.fotosDespues) : [],
     }))
-    
+
     return NextResponse.json(ordenesWithCC)
   } catch (error) {
     console.error('Error fetching ordenes:', error)

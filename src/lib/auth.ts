@@ -707,6 +707,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'ots.ver', 'ots.progreso',
     // Solicitudes de Compra — todos pueden crear
     'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Catálogos (para ver manuales de herramientas)
+    'catalogos.ver',
   ],
   auditor: [
     // Solo lectura para auditoría

@@ -10,6 +10,8 @@ import {
 const CONDOMINIO_LAGUNA_NORTE = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
 // GET - Listar solicitudes de compra con filtros
+// Para roles no-admin: solo ven las que ellos crearon (solicitadoPorId = session.userId)
+// Excepción: supervisor y auditor ven todas (necesitan para aprobar/auditar)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
@@ -23,6 +25,13 @@ export async function GET(request: NextRequest) {
 
     const where: any = {
       condominioId: CONDOMINIO_LAGUNA_NORTE,
+    }
+
+    // Filtro por rol:
+    // - admin, supervisor, auditor: ven todas
+    // - usuario, personal: solo las que crearon ellos
+    if (session.user.rol !== 'admin' && session.user.rol !== 'supervisor' && session.user.rol !== 'auditor') {
+      where.solicitadoPorId = session.userId
     }
 
     if (estado) where.estado = estado

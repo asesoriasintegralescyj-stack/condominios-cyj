@@ -62,6 +62,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   cumplimiento: 'configuracion.ver',
   rondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
+  // 'usuarios' y 'permisos' se manejan con lógica especial (solo admin)
 }
 
 const menuItems: { section: string; items: { id: Module; label: string; icon: React.ReactNode }[] }[] = [
@@ -110,6 +111,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },
+      { id: 'permisos', label: 'Permisos del Sistema', icon: <Shield className="w-4 h-4" /> },
     ]
   },
 ]
@@ -123,6 +125,7 @@ export function Sidebar() {
   // Filtrar menú según permisos
   // El rol 'guardia' SOLO ve el módulo de Rondas (ni siquiera dashboard)
   const isGuardia = user?.rol === 'guardia'
+  const isPersonal = user?.rol === 'personal'
   const filteredMenuItems = menuItems.map(section => ({
     ...section,
     items: section.items.filter(item => {
@@ -130,8 +133,20 @@ export function Sidebar() {
       if (isGuardia) {
         return item.id === 'rondas'
       }
+
+      // Módulos exclusivos del admin: 'usuarios' y 'permisos'
+      if ((item.id === 'usuarios' || item.id === 'permisos') && !isAdmin()) {
+        return false
+      }
+
+      // Personal: NO ve 'aprobacionesot' (solo ve sus OT, no aprueba nada)
+      if (isPersonal && item.id === 'aprobacionesot') {
+        return false
+      }
+
       // Dashboard siempre visible para los demás roles
       if (item.id === 'dashboard') return true
+
       const permission = modulePermissions[item.id]
       if (!permission) return true
       return hasPermission(permission)

@@ -26,6 +26,7 @@ export type Module =
   | 'cumplimiento'
   | 'rondas'
   | 'solicitudescompra'
+  | 'permisos'
 
 interface CondominioInfo {
   id: string
