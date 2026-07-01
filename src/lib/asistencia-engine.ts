@@ -95,12 +95,18 @@ function addDays(fechaStr: string, days: number): string {
 
 // Normaliza nombre para comparación (mayúsculas, sin espacios extra, sin acentos)
 function normalizeName(nombre: string): string {
-  return nombre
+  return (nombre || '')
     .toUpperCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// Genera un conjunto de "tokens" de búsqueda (palabras de 3+ caracteres)
+function getNameTokens(nombre: string): string[] {
+  const norm = normalizeName(nombre)
+  return norm.split(' ').filter((t) => t.length > 2)
 }
 
 // ============================================
@@ -197,16 +203,25 @@ function matchTrabajador(
 ): boolean {
   const n1 = normalizeName(nombreHorario)
   const n2 = normalizeName(nombreRegistro)
-  // Coincidencia exacta
+
+  // 1. Coincidencia exacta normalizada
   if (n1 === n2) return true
-  // Coincidencia parcial (uno contiene al otro)
-  if (n1.includes(n2) || n2.includes(n1)) return true
-  // Coincidencia por apellido (última palabra)
-  const parts1 = n1.split(' ')
-  const parts2 = n2.split(' ')
-  const apellido1 = parts1[parts1.length - 1]
-  const apellido2 = parts2[parts2.length - 1]
-  if (apellido1 === apellido2 && apellido1.length > 3) return true
+
+  // 2. Coincidencia por tokens (todos los tokens del mas corto estan en el mas largo)
+  const tokens1 = getNameTokens(nombreHorario)
+  const tokens2 = getNameTokens(nombreRegistro)
+  const shorter = tokens1.length <= tokens2.length ? tokens1 : tokens2
+  const longer = tokens1.length <= tokens2.length ? tokens2 : tokens1
+  const allShorterInLonger = shorter.every((t) => longer.includes(t))
+  if (allShorterInLonger && shorter.length >= 2) return true
+
+  // 3. Coincidencia por ultimos 2 tokens (apellidos)
+  if (tokens1.length >= 2 && tokens2.length >= 2) {
+    const apellidos1 = tokens1.slice(-2).join(' ')
+    const apellidos2 = tokens2.slice(-2).join(' ')
+    if (apellidos1 === apellidos2) return true
+  }
+
   return false
 }
 

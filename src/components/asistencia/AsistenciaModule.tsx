@@ -1034,6 +1034,33 @@ export function AsistenciaModule() {
 function ImportTab({ onImport, importing }: { onImport: (h: File, r: File) => void; importing: boolean }) {
   const [horariosFile, setHorariosFile] = useState<File | null>(null)
   const [registrosFile, setRegistrosFile] = useState<File | null>(null)
+  const [limpiando, setLimpiando] = useState(false)
+
+  const handleLimpiar = async (soloFechasInvalidas: boolean = false) => {
+    if (!soloFechasInvalidas) {
+      if (!window.confirm('¿Está seguro de eliminar TODOS los datos de asistencia? Esta acción no se puede deshacer. Se borrarán: registros del reloj, inasistencias detectadas y justificaciones.')) {
+        return
+      }
+    }
+    setLimpiando(true)
+    try {
+      const res = await fetch('/api/asistencia/limpiar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ soloFechasInvalidas }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Datos limpiados')
+      } else {
+        toast.error(data.error || 'Error al limpiar')
+      }
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setLimpiando(false)
+    }
+  }
 
   return (
     <Card>
@@ -1044,9 +1071,44 @@ function ImportTab({ onImport, importing }: { onImport: (h: File, r: File) => vo
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Botón de limpiar datos */}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <p className="text-xs font-bold text-red-800">Limpiar datos antes de re-importar</p>
+              <p className="text-xs text-red-600 mt-0.5">
+                Si el reporte anterior salió con fechas incorrectas (1970) o ausencias masivas, limpia los datos antes de volver a importar.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                onClick={() => handleLimpiar(true)}
+                disabled={limpiando || importing}
+              >
+                {limpiando ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                Solo fechas inválidas (1970)
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                onClick={() => handleLimpiar(false)}
+                disabled={limpiando || importing}
+              >
+                {limpiando ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                Limpiar TODO
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
           <p className="font-bold mb-1">Instrucciones:</p>
           <ol className="list-decimal ml-4 space-y-1">
+            <li>Si es la primera vez: salta el paso de limpiar. Si ya importaste antes: <strong>limpia los datos primero</strong></li>
             <li>Sube el archivo <strong>HORARIOS TRABAJADORES.xlsx</strong> (con los turnos por día)</li>
             <li>Sube el archivo <strong>Registro asistencia .xls/.xlsx</strong> (exportado del reloj control)</li>
             <li>El sistema analizará automáticamente: atrasos, ausencias y salidas tempranas</li>

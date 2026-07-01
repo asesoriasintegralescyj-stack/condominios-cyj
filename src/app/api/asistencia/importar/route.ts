@@ -72,8 +72,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No se encontraron registros de asistencia en el archivo' }, { status: 400 })
     }
 
-    // Determinar rango de fechas de los registros
-    const fechas = registros.map((r) => r.fecha).sort()
+    // Determinar rango de fechas de los registros (filtrar fechas inválidas como 1970)
+    const fechas = registros
+      .map((r) => r.fecha)
+      .filter((f) => f && f >= '2000-01-01') // Ignorar fechas anteriores al año 2000
+      .sort()
+    if (fechas.length === 0) {
+      return NextResponse.json({ error: 'No se encontraron fechas válidas en los registros' }, { status: 400 })
+    }
     const fechaDesde = fechas[0]
     const fechaHasta = fechas[fechas.length - 1]
 
