@@ -252,6 +252,14 @@ export default function RondasGuardiaPage() {
     }
   }, [stopCamera, handleScan])
 
+  // Cuando scannerActive cambia a true, iniciar la cámara
+  // (el <video> ya está montado en el DOM en este punto)
+  useEffect(() => {
+    if (scannerActive && !manualMode && !scannerStarting && cameraState === 'idle') {
+      startCamera(facingMode)
+    }
+  }, [scannerActive, manualMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cleanup al desmontar
   useEffect(() => {
     return () => stopCamera()
@@ -316,7 +324,10 @@ export default function RondasGuardiaPage() {
         {!scannerActive && !manualMode && (
           <div className="flex-1 flex flex-col items-center justify-center gap-6 py-8">
             <button
-              onClick={() => startCamera(facingMode)}
+              onClick={() => {
+                // Marcar como activo PRIMERO para que el video se monte en el DOM
+                setScannerActive(true)
+              }}
               disabled={scannerStarting}
               className="group relative w-64 h-64 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 shadow-2xl shadow-amber-500/30 transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center"
             >
@@ -360,10 +371,9 @@ export default function RondasGuardiaPage() {
         {/* Vista del escáner activo */}
         {scannerActive && !manualMode && (
           <div className="flex-1 flex flex-col">
-            {/* Video nativo — SIEMPRE presente en el DOM */}
+            {/* Video nativo — se monta cuando scannerActive es true */}
             <div className="relative">
               <div className="w-full aspect-square max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border-4 border-amber-400 relative">
-                {/* Elemento video nativo — jsQR lee frames desde aquí */}
                 <video
                   ref={videoRef}
                   className="w-full h-full object-cover"
@@ -448,7 +458,7 @@ export default function RondasGuardiaPage() {
               <input type="text" value={manualCode} onChange={(e) => setManualCode(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleManualSubmit() }} placeholder="Ej: RONDA-ABC123 o https://..." className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400" autoFocus />
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => { setManualMode(false); setManualCode(''); startCamera(facingMode) }} variant="outline" className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10">
+              <Button onClick={() => { setManualMode(false); setManualCode(''); setScannerActive(true) }} variant="outline" className="flex-1 bg-white/5 border-white/20 text-white hover:bg-white/10">
                 <Camera className="w-4 h-4 mr-2" /> Volver a cámara
               </Button>
               <Button onClick={handleManualSubmit} disabled={!manualCode.trim() || registering} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white">
