@@ -10,7 +10,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Camera, RefreshCw, Keyboard, AlertCircle, ScanLine, CheckCircle2, X, LogOut, BookOpen } from 'lucide-react'
-import jsQR from 'jsqr'
 
 interface ScanRecord {
   id: string
@@ -30,7 +29,6 @@ export default function RondasGuardiaPage() {
 
   // Refs del escáner
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastScanRef = useRef<{ text: string; ts: number } | null>(null)
@@ -130,7 +128,7 @@ export default function RondasGuardiaPage() {
     }
   }, [registering])
 
-  // Iniciar cámara — getUserMedia + jsQR (funciona en Chrome, Firefox, Safari, Edge)
+  // Iniciar cámara — getUserMedia + jsQR (import dinámico)
   const startCamera = useCallback(async (mode: 'environment' | 'user') => {
     setScannerStarting(true)
     setCameraState('starting')
@@ -138,75 +136,100 @@ export default function RondasGuardiaPage() {
     stopCamera()
 
     try {
-      // 1. Obtener stream de cámara con getUserMedia
-      const constraints: MediaStreamConstraints = {
+      // 1. Importar jsQR dinámicamente (evita problemas de bundle en Next.js)
+      const jsQRModule = await import('jsqr')
+      const jsQR = jsQRModule.default || jsQRModule
+
+      // 2. Obtener stream de cámara
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: mode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
         audio: false,
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      })
       streamRef.current = stream
 
-      // 2. Conectar al video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        videoRef.current.setAttribute('playsinline', 'true')
-        videoRef.current.muted = true
-        await videoRef.current.play()
+      // 3. Conectar al video element y esperar a que esté listo
+      const video = videoRef.current
+      if (!video) {
+        setCameraState('error')
+        setErrorMsg('Error interno: elemento de video no encontrado')
+        return
       }
+
+      video.srcObject = stream
+      video.setAttribute('playsinline', 'true')
+      video.muted = true
+
+      // Esperar a que el video tenga datos cargados
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Timeout esperando cámara')), 10000)
+        video.onloadeddata = () => {
+          clearTimeout(timeout)
+          resolve()
+        }
+        video.onerror = () => {
+          clearTimeout(timeout)
+          reject(new Error('Error al cargar video'))
+        }
+        video.play().catch((e) => {
+          clearTimeout(timeout)
+          reject(e)
+        })
+      })
 
       setCameraState('scanning')
       setScannerActive(true)
 
-      // 3. Escanear QR con jsQR cada 300ms
-      // jsQR es una librería pura de JS que decodifica QR desde un canvas
-      // Funciona en TODOS los navegadores (Chrome, Firefox, Safari, Edge)
-      scanIntervalRef.current = setInterval(() => {
-        if (!videoRef.current || videoRef.current.readyState !== 4) return
+      // 4. Canvas para procesar frames
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })
+      if (!ctx) {
+        setCameraState('error')
+        setErrorMsg('No se pudo crear contexto de canvas')
+        return
+      }
 
-        const video = videoRef.current
-        const w = video.videoWidth
-        const h = video.videoHeight
+      // 5. Escanear QR cada 300ms con jsQR
+      scanIntervalRef.current = setInterval(() => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return
+
+        const v = videoRef.current
+        const w = v.videoWidth
+        const h = v.videoHeight
         if (w === 0 || h === 0) return
 
-        // Crear canvas temporal si no existe
-        if (!canvasRef.current) {
-          canvasRef.current = document.createElement('canvas')
-        }
-        const canvas = canvasRef.current
-        canvas.width = w
-        canvas.height = h
-        const ctx = canvas.getContext('2d', { willReadFrequently: true })
-        if (!ctx) return
+        // Escanear a resolución reducida para mejor performance
+        const scale = Math.min(1, 400 / Math.max(w, h))
+        const sw = Math.floor(w * scale)
+        const sh = Math.floor(h * scale)
 
-        // Dibujar frame del video al canvas
-        ctx.drawImage(video, 0, 0, w, h)
+        canvas.width = sw
+        canvas.height = sh
+        ctx.drawImage(v, 0, 0, sw, sh)
 
-        // Obtener datos de imagen
-        const imageData = ctx.getImageData(0, 0, w, h)
+        try {
+          const imageData = ctx.getImageData(0, 0, sw, sh)
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth',
+          })
 
-        // Decodificar QR con jsQR
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert',
-        })
-
-        if (code && code.data) {
-          const text = code.data
-          const now = Date.now()
-          const last = lastScanRef.current
-          // Cooldown de 3 segundos para el mismo código
-          if (last && last.text === text && now - last.ts < 3000) return
-          lastScanRef.current = { text, ts: now }
-          // Procesar el QR detectado
-          handleScan(text)
+          if (code && code.data) {
+            const text = code.data
+            const now = Date.now()
+            const last = lastScanRef.current
+            if (last && last.text === text && now - last.ts < 3000) return
+            lastScanRef.current = { text, ts: now }
+            handleScan(text)
+          }
+        } catch (e) {
+          // Error procesando frame, continuar
         }
       }, 300)
     } catch (err: any) {
-      console.error('Error getUserMedia:', err)
+      console.error('Error cámara:', err)
       const msg = String(err?.message || err || '').toLowerCase()
       if (msg.includes('permission') || msg.includes('denied') || msg.includes('notallowed')) {
         setCameraState('denied')
@@ -217,6 +240,9 @@ export default function RondasGuardiaPage() {
       } else if (msg.includes('notreadable') || msg.includes('track')) {
         setCameraState('error')
         setErrorMsg('La cámara está siendo usada por otra app. Cierra otras apps e intenta de nuevo.')
+      } else if (msg.includes('timeout')) {
+        setCameraState('error')
+        setErrorMsg('La cámara tardó demasiado en iniciar. Intenta de nuevo.')
       } else {
         setCameraState('error')
         setErrorMsg('Error: ' + (err?.message || 'desconocido') + '. Usa ingreso manual.')
@@ -338,7 +364,6 @@ export default function RondasGuardiaPage() {
             <div className="relative">
               <div className="w-full aspect-square max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border-4 border-amber-400 relative">
                 {/* Elemento video nativo — jsQR lee frames desde aquí */}
-                {/* @ts-ignore */}
                 <video
                   ref={videoRef}
                   className="w-full h-full object-cover"
