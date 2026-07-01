@@ -444,7 +444,8 @@ export async function GET(request: NextRequest) {
             const primeraEntrada = grupo?.entradas[0]
             const inas = inasistenciasTrabajador.get(fechaDia)
 
-            // Determinar color y texto
+            // Determinar color y texto RECALCULANDO en tiempo real
+            // (no confiar en inasistencias guardadas que pueden tener errores)
             let color = COLOR_SIN_REG
             let texto = 'SIN REGISTRO'
 
@@ -452,20 +453,27 @@ export async function GET(request: NextRequest) {
               color = COLOR_LIBRE
               texto = 'Libre'
             } else if (primeraEntrada) {
-              if (inas && inas.tipo === 'atraso') {
+              // Hay entrada → comparar hora real con esperada
+              const horaRealMin = parseHoraStr(primeraEntrada.hora)
+              const horaEsperadaMin = horarioInicio ? parseHoraStr(horarioInicio) : 0
+              let minutosAtraso = horaRealMin - horaEsperadaMin
+
+              // Para turno 4x4 noche (19:00-07:00), registro de madrugada no es atraso
+              if (horarioInicio === '19:00' && horaRealMin < 12 * 60) {
+                minutosAtraso = 0
+              }
+
+              if (minutosAtraso > 5) {
+                // Atraso real
                 color = COLOR_ATRASO
-                texto = `${primeraEntrada.hora} (${inas.minutosAtraso}min)`
-              } else if (inas && inas.tipo === 'salida_temprana') {
-                color = COLOR_ATRASO
-                texto = `${primeraEntrada.hora}`
-              } else if (inas && inas.tipo === 'colacion_excedida') {
-                color = COLOR_ATRASO
-                texto = `${primeraEntrada.hora}`
+                texto = `${primeraEntrada.hora} (+${minutosAtraso}min)`
               } else {
+                // OK — entrada correcta
                 color = COLOR_OK
                 texto = primeraEntrada.hora
               }
             } else {
+              // No hay entrada en dia laborable
               color = COLOR_FALTA
               texto = 'FALLA'
             }
@@ -590,6 +598,7 @@ export async function GET(request: NextRequest) {
 
             let horarioEsperado = 'Libre'
             let esLibre = false
+            let horarioInicioCSV: string | null = null
             const diaIdx = getDiaSemanaIdx(fechaDia)
 
             if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
@@ -601,6 +610,7 @@ export async function GET(request: NextRequest) {
               const diaEnCiclo = ((diffDays % 8) + 8) % 8
               if (diaEnCiclo < 4) {
                 horarioEsperado = horario.ciclo4x4Turno === 'noche' ? '19:00-07:00' : '07:00-19:00'
+                horarioInicioCSV = horario.ciclo4x4Turno === 'noche' ? '19:00' : '07:00'
               } else {
                 esLibre = true
                 horarioEsperado = 'Libre'
@@ -612,6 +622,7 @@ export async function GET(request: NextRequest) {
               const fin = horariosFinDia[diaIdx]
               if (ini && fin) {
                 horarioEsperado = `${ini}-${fin}`
+                horarioInicioCSV = ini
               } else {
                 esLibre = true
                 horarioEsperado = 'Libre'
@@ -623,12 +634,14 @@ export async function GET(request: NextRequest) {
             if (esLibre) {
               estado = 'LIBRE'
             } else if (primeraEntrada) {
-              if (inas && inas.tipo === 'atraso') {
+              // Recalcular en tiempo real
+              const horaRealMin = parseHoraStr(primeraEntrada.hora)
+              const horaEsperadaMin = horarioInicioCSV ? parseHoraStr(horarioInicioCSV) : 0
+              let diff = horaRealMin - horaEsperadaMin
+              if (horarioInicioCSV === '19:00' && horaRealMin < 12 * 60) diff = 0
+              if (diff > 5) {
                 estado = 'ATRASO'
-                minutosAtraso = inas.minutosAtraso || 0
-              } else if (inas && inas.tipo === 'salida_temprana') {
-                estado = 'SALIDA_TEMPRANA'
-                minutosAtraso = inas.minutosAtraso || 0
+                minutosAtraso = diff
               } else {
                 estado = 'OK'
               }

@@ -474,12 +474,16 @@ export function analizarAsistencia(
             })
           }
 
-          if (primeraSalida && segundaEntrada) {
+          // Solo calcular colacion para turnos fijos (no 4x4)
+          // En 4x4 las marcas de salida/entrada son fin de turno e inicio del siguiente
+          if (primeraSalida && segundaEntrada && turnoActivo.tipoTurno !== '4x4') {
             const minSalidaColacion = parseHora(primeraSalida.hora)
             const minRegresoColacion = parseHora(segundaEntrada.hora)
             let minutosColacion = minRegresoColacion - minSalidaColacion
             if (minutosColacion < 0) minutosColacion += 24 * 60
-            if (minutosColacion > 65) {
+            // Solo marcar colacion excedida si es mayor a 65 min Y menor a 4 horas
+            // (mas de 4 horas probablemente es un error de registro, no colacion)
+            if (minutosColacion > 65 && minutosColacion < 240) {
               colacionesExcedidas++
               totalColacionesExcedidas++
               inasistencias.push({
