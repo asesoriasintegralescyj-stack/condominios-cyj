@@ -57,7 +57,7 @@ export default function RondasGuardiaPage() {
       .catch(() => router.push('/login'))
   }, [router])
 
-  // Detener todo
+  // Detener todo (sin cambiar scannerActive para no desmontar el video)
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current)
@@ -70,7 +70,7 @@ export default function RondasGuardiaPage() {
     if (videoRef.current) {
       videoRef.current.srcObject = null
     }
-    setScannerActive(false)
+    // NO hacer setScannerActive(false) aquí — eso desmontaría el <video>
   }, [])
 
   // GPS
@@ -267,6 +267,7 @@ export default function RondasGuardiaPage() {
 
   const handleLogout = async () => {
     stopCamera()
+    setScannerActive(false)
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/login')
   }
@@ -431,7 +432,7 @@ export default function RondasGuardiaPage() {
               <Button variant="outline" size="sm" onClick={() => { const n = facingMode === 'environment' ? 'user' : 'environment'; setFacingMode(n); startCamera(n) }} disabled={scannerStarting || registering} className="bg-white/5 border-white/20 text-white hover:bg-white/10">
                 <Camera className="w-3.5 h-3.5 mr-1.5" /> Cambiar cámara
               </Button>
-              <Button variant="outline" size="sm" onClick={() => { stopCamera(); setManualMode(true) }} disabled={registering} className="bg-white/5 border-white/20 text-white hover:bg-white/10">
+              <Button variant="outline" size="sm" onClick={() => { stopCamera(); setScannerActive(false); setManualMode(true) }} disabled={registering} className="bg-white/5 border-white/20 text-white hover:bg-white/10">
                 <Keyboard className="w-3.5 h-3.5 mr-1.5" /> Manual
               </Button>
             </div>
