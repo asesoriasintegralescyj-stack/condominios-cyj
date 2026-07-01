@@ -260,6 +260,19 @@ export interface ResultadoAnalisis {
   }>
 }
 
+
+function getLunesDeSemana(fechaStr: string): string {
+  const [y, m, d] = fechaStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dia = date.getDay()
+  const diff = dia === 0 ? -6 : 1 - dia
+  date.setDate(date.getDate() + diff)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
 export function analizarAsistencia(
   horarios: HorarioTrabajador[],
   registros: RegistroReloj[],
@@ -295,17 +308,24 @@ export function analizarAsistencia(
   let totalDiasPresentes = 0
   let totalColacionesExcedidas = 0
 
-  // Para cada horario de trabajador
-  for (const horario of horarios) {
-    const nombreNormalizado = normalizeName(horario.nombreTrabajador)
-    const registrosTrabajador = registrosPorTrabajador.get(nombreNormalizado) || []
+  // Agrupar horarios por trabajador (un trabajador puede tener TURNO A y TURNO B)
+  const horariosPorTrabajador = new Map<string, HorarioTrabajador[]>()
+  for (const h of horarios) {
+    const key = normalizeName(h.nombreTrabajador)
+    if (!horariosPorTrabajador.has(key)) horariosPorTrabajador.set(key, [])
+    horariosPorTrabajador.get(key)!.push(h)
+  }
 
-    // Buscar registros que coincidan con este trabajador (puede haber variaciones de nombre)
-    let registrosMatch = registrosTrabajador
-    if (registrosTrabajador.length === 0) {
-      // Intentar emparejamiento fuzzy
+  // Para cada trabajador (con todos sus turnos agrupados)
+  for (const [trabajadorKey, turnosTrabajador] of horariosPorTrabajador) {
+    const horarioA = turnosTrabajador.find((h) => h.turno === 'TURNO A') || turnosTrabajador[0]
+    const horarioB = turnosTrabajador.find((h) => h.turno === 'TURNO B')
+
+    // Buscar registros que coincidan con este trabajador
+    let registrosMatch = registrosPorTrabajador.get(trabajadorKey) || []
+    if (registrosMatch.length === 0) {
       for (const [key, regs] of registrosPorTrabajador.entries()) {
-        if (regs.length > 0 && matchTrabajador(horario.nombreTrabajador, regs[0].nombre)) {
+        if (regs.length > 0 && matchTrabajador(horarioA.nombreTrabajador, regs[0].nombre)) {
           registrosMatch = regs
           break
         }
@@ -313,7 +333,6 @@ export function analizarAsistencia(
     }
 
     // Agrupar registros por fecha, ordenados por hora
-    // Cada dia puede tener hasta 4 marcas: 1a Entrada, 1a Salida (colacion), 2a Entrada, 2a Salida
     const registrosPorFecha = new Map<string, { entradas: RegistroReloj[]; salidas: RegistroReloj[] }>()
     for (const reg of registrosMatch) {
       if (!registrosPorFecha.has(reg.fecha)) {
@@ -326,7 +345,6 @@ export function analizarAsistencia(
         grupo.salidas.push(reg)
       }
     }
-    // Ordenar entradas y salidas por hora dentro de cada fecha
     for (const [, grupo] of registrosPorFecha) {
       grupo.entradas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
       grupo.salidas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
@@ -341,169 +359,188 @@ export function analizarAsistencia(
     let totalMinutosAtraso = 0
     const departamento = registrosMatch[0]?.departamento || null
 
-    // Analizar cada fecha del rango
+    // Agrupar fechas por semana (lunes a sabado)
+    const semanasMap = new Map<string, string[]>()
     for (const fecha of fechas) {
-      totalDiasAnalizados++
+      const lunes = getLunesDeSemana(fecha)
+      if (!semanasMap.has(lunes)) semanasMap.set(lunes, [])
+      semanasMap.get(lunes)!.push(fecha)
+    }
 
-      // Obtener horario esperado
-      let horarioEsperado: { inicio: string | null; fin: string | null; esLibre: boolean }
-      if (horario.tipoTurno === '4x4') {
-        horarioEsperado = getHorarioEsperado4x4(horario, fecha)
-      } else {
-        horarioEsperado = getHorarioEsperadoFijo(horario, fecha)
+    // Por cada semana, determinar el turno activo
+    for (const [, fechasSemana] of semanasMap) {
+      // Buscar el primer registro de entrada de la semana
+      let primerRegistroSemana: RegistroReloj | null = null
+      for (const fecha of fechasSemana) {
+        const grupo = registrosPorFecha.get(fecha)
+        if (grupo && grupo.entradas.length > 0) {
+          primerRegistroSemana = grupo.entradas[0]
+          break
+        }
       }
 
-      // Si es día libre, saltar
-      if (horarioEsperado.esLibre || !horarioEsperado.inicio) {
-        diasLibres++
-        totalDiasLibres++
-        continue
+      // Determinar turno activo comparando el primer registro con A y B
+      let turnoActivo = horarioA
+      if (primerRegistroSemana && horarioB) {
+        const horaReal = parseHora(primerRegistroSemana.hora)
+        const inicioA = horarioA.lunesInicio ? parseHora(horarioA.lunesInicio) : 9999
+        const inicioB = horarioB.lunesInicio ? parseHora(horarioB.lunesInicio) : 9999
+        const diffA = Math.abs(horaReal - inicioA)
+        const diffB = Math.abs(horaReal - inicioB)
+        if (diffB < diffA) {
+          turnoActivo = horarioB
+        }
       }
 
-      const grupo = registrosPorFecha.get(fecha)
-      // 4 marcas: 1a Entrada, 1a Salida (colacion), 2a Entrada, 2a Salida
-      const primeraEntrada = grupo?.entradas[0]   // 1a entrada = inicio jornada
-      const primeraSalida = grupo?.salidas[0]      // 1a salida = salida a colacion
-      const segundaEntrada = grupo?.entradas[1]    // 2a entrada = regreso de colacion
-      const segundaSalida = grupo?.salidas[grupo.salidas.length - 1] // ultima salida = fin jornada
+      // Analizar cada fecha de la semana con el turno activo
+      for (const fecha of fechasSemana) {
+        totalDiasAnalizados++
 
-      if (!primeraEntrada) {
-        // Ausencia: no hay entrada en un dia laborable
-        ausencias++
-        totalAusencias++
-        inasistencias.push({
-          nombreTrabajador: horario.nombreTrabajador,
-          rut: horario.rut,
-          departamento,
-          fecha,
-          diaSemana: getDiaSemanaFromStr(fecha),
-          tipo: 'ausencia',
-          horaEsperadaInicio: horarioEsperado.inicio,
-          horaEsperadaFin: horarioEsperado.fin,
-          horaRealInicio: null,
-          horaRealFin: null,
-          minutosAtraso: 0,
-          tipoTurno: horario.tipoTurno,
-          primeraEntrada: null,
-          primeraSalida: null,
-          segundaEntrada: null,
-          segundaSalida: null,
-          minutosColacion: null,
-        })
-      } else {
-        // Hay entrada -> verificar atraso usando la 1a entrada
-        diasPresentes++
-        totalDiasPresentes++
-
-        const horaRealMin = parseHora(primeraEntrada.hora)
-        const horaEsperadaMin = parseHora(horarioEsperado.inicio)
-
-        // Para turno 4x4 noche (19:00-07:00), la entrada esperada es 19:00
-        // pero si el registro es de madrugada (ej: 01:00), pertenece al turno de la noche anterior
-        let minutosAtraso = horaRealMin - horaEsperadaMin
-        if (horarioEsperado.inicio === '19:00' && horaRealMin < 12 * 60) {
-          minutosAtraso = 0
+        let horarioEsperado: { inicio: string | null; fin: string | null; esLibre: boolean }
+        if (turnoActivo.tipoTurno === '4x4') {
+          horarioEsperado = getHorarioEsperado4x4(turnoActivo, fecha)
+        } else {
+          horarioEsperado = getHorarioEsperadoFijo(turnoActivo, fecha)
         }
 
-        // Atraso si supera la tolerancia
-        if (minutosAtraso > TOLERANCIA_MINUTOS) {
-          atrasos++
-          totalAtrasos++
-          totalMinutosAtraso += minutosAtraso
+        if (horarioEsperado.esLibre || !horarioEsperado.inicio) {
+          diasLibres++
+          totalDiasLibres++
+          continue
+        }
+
+        const grupo = registrosPorFecha.get(fecha)
+        const primeraEntrada = grupo?.entradas[0]
+        const primeraSalida = grupo?.salidas[0]
+        const segundaEntrada = grupo?.entradas[1]
+        const segundaSalida = grupo?.salidas[grupo.salidas.length - 1]
+
+        if (!primeraEntrada) {
+          ausencias++
+          totalAusencias++
           inasistencias.push({
-            nombreTrabajador: horario.nombreTrabajador,
-            rut: horario.rut,
+            nombreTrabajador: horarioA.nombreTrabajador,
+            rut: horarioA.rut,
             departamento,
             fecha,
             diaSemana: getDiaSemanaFromStr(fecha),
-            tipo: 'atraso',
+            tipo: 'ausencia',
             horaEsperadaInicio: horarioEsperado.inicio,
             horaEsperadaFin: horarioEsperado.fin,
-            horaRealInicio: primeraEntrada.hora,
-            horaRealFin: segundaSalida?.hora || null,
-            minutosAtraso,
-            tipoTurno: horario.tipoTurno,
-            primeraEntrada: primeraEntrada.hora,
-            primeraSalida: primeraSalida?.hora || null,
-            segundaEntrada: segundaEntrada?.hora || null,
-            segundaSalida: segundaSalida?.hora || null,
+            horaRealInicio: null,
+            horaRealFin: null,
+            minutosAtraso: 0,
+            tipoTurno: turnoActivo.tipoTurno,
+            primeraEntrada: null,
+            primeraSalida: null,
+            segundaEntrada: null,
+            segundaSalida: null,
             minutosColacion: null,
           })
-        }
+        } else {
+          diasPresentes++
+          totalDiasPresentes++
 
-        // Verificar colacion excedida (1a salida -> 2a entrada, debe ser <= 60 min)
-        if (primeraSalida && segundaEntrada) {
-          const minSalidaColacion = parseHora(primeraSalida.hora)
-          const minRegresoColacion = parseHora(segundaEntrada.hora)
-          let minutosColacion = minRegresoColacion - minSalidaColacion
-          // Si el regreso es de madrugada (ej: salida 23:50, regreso 00:50), ajustar
-          if (minutosColacion < 0) {
-            minutosColacion += 24 * 60
+          const horaRealMin = parseHora(primeraEntrada.hora)
+          const horaEsperadaMin = parseHora(horarioEsperado.inicio)
+
+          let minutosAtraso = horaRealMin - horaEsperadaMin
+          if (horarioEsperado.inicio === '19:00' && horaRealMin < 12 * 60) {
+            minutosAtraso = 0
           }
-          // Colacion esperada: 60 minutos. Tolerancia: 5 minutos (max 65)
-          const COLACION_MAXIMA = 65
-          if (minutosColacion > COLACION_MAXIMA) {
-            colacionesExcedidas++
-            totalColacionesExcedidas++
+
+          if (minutosAtraso > TOLERANCIA_MINUTOS) {
+            atrasos++
+            totalAtrasos++
+            totalMinutosAtraso += minutosAtraso
             inasistencias.push({
-              nombreTrabajador: horario.nombreTrabajador,
-              rut: horario.rut,
+              nombreTrabajador: horarioA.nombreTrabajador,
+              rut: horarioA.rut,
               departamento,
               fecha,
               diaSemana: getDiaSemanaFromStr(fecha),
-              tipo: 'colacion_excedida',
+              tipo: 'atraso',
               horaEsperadaInicio: horarioEsperado.inicio,
               horaEsperadaFin: horarioEsperado.fin,
               horaRealInicio: primeraEntrada.hora,
               horaRealFin: segundaSalida?.hora || null,
-              minutosAtraso: minutosColacion - 60, // minutos excedidos sobre los 60 esperados
-              tipoTurno: horario.tipoTurno,
-              primeraEntrada: primeraEntrada.hora,
-              primeraSalida: primeraSalida.hora,
-              segundaEntrada: segundaEntrada.hora,
-              segundaSalida: segundaSalida?.hora || null,
-              minutosColacion,
-            })
-          }
-        }
-
-        // Verificar salida temprana usando la ultima salida (2a salida)
-        if (segundaSalida && horarioEsperado.fin) {
-          const horaSalidaReal = parseHora(segundaSalida.hora)
-          const horaSalidaEsperada = parseHora(horarioEsperado.fin)
-          let minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
-          if (horarioEsperado.fin === '07:00' && horaSalidaReal > 12 * 60) {
-            minutosSalidaTemprana = 0
-          }
-          if (minutosSalidaTemprana > TOLERANCIA_MINUTOS) {
-            salidasTempranas++
-            totalSalidasTempranas++
-            inasistencias.push({
-              nombreTrabajador: horario.nombreTrabajador,
-              rut: horario.rut,
-              departamento,
-              fecha,
-              diaSemana: getDiaSemanaFromStr(fecha),
-              tipo: 'salida_temprana',
-              horaEsperadaInicio: horarioEsperado.inicio,
-              horaEsperadaFin: horarioEsperado.fin,
-              horaRealInicio: primeraEntrada.hora,
-              horaRealFin: segundaSalida.hora,
-              minutosAtraso: minutosSalidaTemprana,
-              tipoTurno: horario.tipoTurno,
+              minutosAtraso,
+              tipoTurno: turnoActivo.tipoTurno,
               primeraEntrada: primeraEntrada.hora,
               primeraSalida: primeraSalida?.hora || null,
               segundaEntrada: segundaEntrada?.hora || null,
-              segundaSalida: segundaSalida.hora,
+              segundaSalida: segundaSalida?.hora || null,
               minutosColacion: null,
             })
           }
+
+          if (primeraSalida && segundaEntrada) {
+            const minSalidaColacion = parseHora(primeraSalida.hora)
+            const minRegresoColacion = parseHora(segundaEntrada.hora)
+            let minutosColacion = minRegresoColacion - minSalidaColacion
+            if (minutosColacion < 0) minutosColacion += 24 * 60
+            if (minutosColacion > 65) {
+              colacionesExcedidas++
+              totalColacionesExcedidas++
+              inasistencias.push({
+                nombreTrabajador: horarioA.nombreTrabajador,
+                rut: horarioA.rut,
+                departamento,
+                fecha,
+                diaSemana: getDiaSemanaFromStr(fecha),
+                tipo: 'colacion_excedida',
+                horaEsperadaInicio: horarioEsperado.inicio,
+                horaEsperadaFin: horarioEsperado.fin,
+                horaRealInicio: primeraEntrada.hora,
+                horaRealFin: segundaSalida?.hora || null,
+                minutosAtraso: minutosColacion - 60,
+                tipoTurno: turnoActivo.tipoTurno,
+                primeraEntrada: primeraEntrada.hora,
+                primeraSalida: primeraSalida.hora,
+                segundaEntrada: segundaEntrada.hora,
+                segundaSalida: segundaSalida?.hora || null,
+                minutosColacion,
+              })
+            }
+          }
+
+          if (segundaSalida && horarioEsperado.fin) {
+            const horaSalidaReal = parseHora(segundaSalida.hora)
+            const horaSalidaEsperada = parseHora(horarioEsperado.fin)
+            let minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
+            if (horarioEsperado.fin === '07:00' && horaSalidaReal > 12 * 60) {
+              minutosSalidaTemprana = 0
+            }
+            if (minutosSalidaTemprana > TOLERANCIA_MINUTOS) {
+              salidasTempranas++
+              totalSalidasTempranas++
+              inasistencias.push({
+                nombreTrabajador: horarioA.nombreTrabajador,
+                rut: horarioA.rut,
+                departamento,
+                fecha,
+                diaSemana: getDiaSemanaFromStr(fecha),
+                tipo: 'salida_temprana',
+                horaEsperadaInicio: horarioEsperado.inicio,
+                horaEsperadaFin: horarioEsperado.fin,
+                horaRealInicio: primeraEntrada.hora,
+                horaRealFin: segundaSalida.hora,
+                minutosAtraso: minutosSalidaTemprana,
+                tipoTurno: turnoActivo.tipoTurno,
+                primeraEntrada: primeraEntrada.hora,
+                primeraSalida: primeraSalida?.hora || null,
+                segundaEntrada: segundaEntrada?.hora || null,
+                segundaSalida: segundaSalida.hora,
+                minutosColacion: null,
+              })
+            }
+          }
         }
       }
-    } // fin del for de fechas
+    }
 
     resumenPorTrabajador.push({
-      nombre: horario.nombreTrabajador,
+      nombre: horarioA.nombreTrabajador,
       departamento,
       diasPresentes,
       atrasos,

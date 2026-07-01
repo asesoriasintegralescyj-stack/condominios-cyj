@@ -21,7 +21,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const { soloFechasInvalidas } = body
 
-    let deleted = {
+    let deleted: {
+      registros: number
+      inasistencias: number
+      justificaciones: number
+      horarios?: number
+    } = {
       registros: 0,
       inasistencias: 0,
       justificaciones: 0,
@@ -37,25 +42,27 @@ export async function POST(request: NextRequest) {
         where: { fecha: { lt: '2000-01-01' } },
       }).then((r) => r.count).catch(() => 0)
     } else {
-      // Borrar TODO
-      // Primero borrar justificaciones (por la FK)
+      // Borrar TODO (incluyendo horarios)
       deleted.justificaciones = await db.justificacionAsistencia.deleteMany({})
         .then((r) => r.count).catch(() => 0)
 
-      // Luego borrar inasistencias
       deleted.inasistencias = await db.inasistenciaAtraso.deleteMany({})
         .then((r) => r.count).catch(() => 0)
 
-      // Finalmente borrar registros del reloj
       deleted.registros = await db.registroAsistenciaReloj.deleteMany({})
         .then((r) => r.count).catch(() => 0)
+
+      // Tambien borrar horarios para que se recarguen limpios al importar
+      const horariosDeleted = await db.horarioTrabajador.deleteMany({})
+        .then((r) => r.count).catch(() => 0)
+      deleted.horarios = horariosDeleted
     }
 
     return NextResponse.json({
       success: true,
       message: soloFechasInvalidas
         ? `Fechas inválidas eliminadas: ${deleted.registros} registros, ${deleted.inasistencias} inasistencias`
-        : `Datos limpiados: ${deleted.registros} registros, ${deleted.inasistencias} inasistencias, ${deleted.justificaciones} justificaciones`,
+        : `Datos limpiados completamente: ${deleted.registros} registros, ${deleted.inasistencias} inasistencias, ${deleted.justificaciones} justificaciones, ${deleted.horarios || 0} horarios`,
       deleted,
     })
   } catch (error) {
