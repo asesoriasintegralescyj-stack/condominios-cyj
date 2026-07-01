@@ -89,6 +89,20 @@ export default function RondasGuardiaPage() {
       }
       html5QrCodeRef.current = null
     }
+    // Limpiar fallback de getUserMedia
+    const videoEl = document.getElementById(containerId) as HTMLVideoElement | null
+    if (videoEl) {
+      if ((videoEl as any)._detectInterval) {
+        clearInterval((videoEl as any)._detectInterval)
+        ;(videoEl as any)._detectInterval = null
+      }
+      if ((videoEl as any)._stream) {
+        const stream = (videoEl as any)._stream as MediaStream
+        stream.getTracks().forEach((t) => t.stop())
+        ;(videoEl as any)._stream = null
+      }
+      videoEl.srcObject = null
+    }
     setScannerActive(false)
   }, [])
 
@@ -100,6 +114,7 @@ export default function RondasGuardiaPage() {
     await stopCamera()
 
     try {
+      // Metodo 1: Intentar con html5-qrcode (funciona en la mayoria de los navegadores)
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode')
 
       const html5QrCode = new Html5Qrcode(containerId, {
@@ -143,7 +158,53 @@ export default function RondasGuardiaPage() {
       setCameraState('scanning')
       setScannerActive(true)
     } catch (err: any) {
-      console.error('Error iniciando cámara:', err)
+      console.error('Error iniciando cámara con html5-qrcode:', err)
+
+      // Metodo 2: Fallback con getUserMedia nativo + BarcodeDetector
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: mode },
+        })
+        const videoElement = document.getElementById(containerId) as HTMLVideoElement
+        if (videoElement) {
+          videoElement.srcObject = stream
+          videoElement.setAttribute('playsinline', 'true')
+          videoElement.play()
+          // Usar BarcodeDetector si esta disponible (Chrome/Edge)
+          if ('BarcodeDetector' in window) {
+            const detector = new (window as any).BarcodeDetector({
+              formats: ['qr_code'],
+            })
+            const detectInterval = setInterval(async () => {
+              try {
+                const barcodes = await detector.detect(videoElement)
+                if (barcodes && barcodes.length > 0) {
+                  const decodedText = barcodes[0].rawValue
+                  const now = Date.now()
+                  const last = lastScanRef.current
+                  if (last && last.text === decodedText && now - last.ts < 3000) return
+                  lastScanRef.current = { text: decodedText, ts: now }
+                  Promise.resolve(handleScan(decodedText)).catch((e) =>
+                    console.error('Error en handleScan:', e),
+                  )
+                }
+              } catch {
+                // ignorar
+              }
+            }, 500)
+            // Guardar referencia para limpiar despues
+            ;(videoElement as any)._detectInterval = detectInterval
+            ;(videoElement as any)._stream = stream
+          }
+          setCameraState('scanning')
+          setScannerActive(true)
+          return
+        }
+      } catch (fallbackErr: any) {
+        console.error('Fallback tambien fallo:', fallbackErr)
+      }
+
+      // Si ambos metodos fallan, mostrar error
       const msg = String(err?.message || err || '')
       if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('notallowed')) {
         setCameraState('denied')
@@ -153,12 +214,12 @@ export default function RondasGuardiaPage() {
         setErrorMsg('No se encontró ninguna cámara en este dispositivo.')
       } else {
         setCameraState('error')
-        setErrorMsg('No se pudo iniciar la cámara: ' + (msg || 'error desconocido'))
+        setErrorMsg('No se pudo iniciar la cámara. Intenta con "Reiniciar" o usa "Ingreso manual".')
       }
     } finally {
       setScannerStarting(false)
     }
-  }, [stopCamera])
+  }, [stopCamera, registering])
 
   // Detener cámara al desmontar
   useEffect(() => {
@@ -167,14 +228,48 @@ export default function RondasGuardiaPage() {
     }
   }, [stopCamera])
 
+  // Obtener ubicacion GPS actual
+  const getGPSLocation = (): Promise<{ latitud: number; longitud: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null)
+        return
+      }
+      // Timeout de 5 segundos para no bloquear el registro
+      const timeoutId = setTimeout(() => resolve(null), 5000)
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          clearTimeout(timeoutId)
+          resolve({
+            latitud: position.coords.latitude,
+            longitud: position.coords.longitude,
+          })
+        },
+        (error) => {
+          clearTimeout(timeoutId)
+          console.warn('GPS no disponible:', error.message)
+          resolve(null)
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
+      )
+    })
+  }
+
   const handleScan = async (text: string) => {
     if (registering) return
     setRegistering(true)
     try {
+      // Obtener ubicacion GPS en paralelo (no bloquea si falla)
+      const gps = await getGPSLocation()
+
       const res = await fetch('/api/rondas/registrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: text }),
+        body: JSON.stringify({
+          codigo: text,
+          latitud: gps?.latitud,
+          longitud: gps?.longitud,
+        }),
       })
       const data = await res.json()
 

@@ -19,7 +19,7 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
 // Colores del reporte (RGB)
 const COLOR_OK = [198, 224, 180]       // #C6E0B4 verde
@@ -204,7 +204,7 @@ export async function GET(request: NextRequest) {
       const colNombre = 45
       const colTurno = 20
       const colSemana = 22
-      const colDia = (pageWidth - margin * 2 - colNombre - colTurno - colSemana) / 6
+      const colDia = (pageWidth - margin * 2 - colNombre - colTurno - colSemana) / 7
       const tableWidth = colNombre + colTurno + colSemana + colDia * 6
 
       // Agrupar horarios por trabajador (un trabajador puede tener TURNO A y TURNO B)
@@ -280,7 +280,7 @@ export async function GET(request: NextRequest) {
 
           // Generar los 6 dias (Lun-Sab) de esta semana
           const diasSemana: string[] = []
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             diasSemana.push(addDays(semanaInicio, i))
           }
 
@@ -330,12 +330,12 @@ export async function GET(request: NextRequest) {
           doc.text('Turno', margin + colNombre + 1, yPos + 3.5)
           doc.text('Semana', margin + colNombre + colTurno + 1, yPos + 3.5)
           let xPos = margin + colNombre + colTurno + colSemana
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
               doc.text('-', xPos + 1, yPos + 3.5)
             } else {
-              doc.text(`${DIAS_CORTOS[i + 1]} ${formatFechaCorta(fechaDia)}`, xPos + 1, yPos + 3.5)
+              doc.text(`${DIAS_CORTOS[i]} ${formatFechaCorta(fechaDia)}`, xPos + 1, yPos + 3.5)
             }
             xPos += colDia
           }
@@ -351,7 +351,7 @@ export async function GET(request: NextRequest) {
           doc.text(`TURNO ${turnoLabel}`, margin + colNombre + 1, yPos + 3.5)
           doc.text(formatFechaCorta(semanaInicio), margin + colNombre + colTurno + 1, yPos + 3.5)
           xPos = margin + colNombre + colTurno + colSemana
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
               doc.text('-', xPos + 1, yPos + 3.5)
@@ -398,7 +398,7 @@ export async function GET(request: NextRequest) {
           doc.setFont('helvetica', 'normal')
           doc.text('ANALISIS', margin + colNombre + 1, yPos + 3.5)
           xPos = margin + colNombre + colTurno + colSemana
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
               doc.setFillColor(240, 240, 240)
@@ -423,6 +423,7 @@ export async function GET(request: NextRequest) {
               if (diaEnCiclo < 4) {
                 horarioInicio = turnoActivo.ciclo4x4Turno === 'noche' ? '19:00' : '07:00'
               } else {
+                // Dia libre del ciclo 4x4
                 esLibre = true
               }
             } else {
@@ -588,7 +589,7 @@ export async function GET(request: NextRequest) {
         }
 
         for (const semanaInicio of semanas) {
-          for (let i = 0; i < 6; i++) {
+          for (let i = 0; i < 7; i++) {
             const fechaDia = addDays(semanaInicio, i)
             if (fechaDia > fechaHasta) continue
 
