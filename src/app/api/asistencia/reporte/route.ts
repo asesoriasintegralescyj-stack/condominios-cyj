@@ -443,10 +443,10 @@ export async function GET(request: NextRequest) {
             // Obtener registro real
             const grupo = registrosTrabajador.get(fechaDia)
             const primeraEntrada = grupo?.entradas[0]
+            const primeraSalida = grupo?.salidas[0]
             const inas = inasistenciasTrabajador.get(fechaDia)
 
             // Determinar color y texto RECALCULANDO en tiempo real
-            // (no confiar en inasistencias guardadas que pueden tener errores)
             let color = COLOR_SIN_REG
             let texto = 'SIN REGISTRO'
 
@@ -465,16 +465,29 @@ export async function GET(request: NextRequest) {
               }
 
               if (minutosAtraso > 5) {
-                // Atraso real
                 color = COLOR_ATRASO
                 texto = `${primeraEntrada.hora} (+${minutosAtraso}min)`
               } else {
-                // OK — entrada correcta
                 color = COLOR_OK
                 texto = primeraEntrada.hora
               }
+            } else if (primeraSalida && horarioInicio === '19:00') {
+              // TURNO NOCHE 4x4: no hay entrada pero hay salida matutina
+              // Esto significa que el trabajador viene del turno de la noche anterior
+              // (entró a las 19:00 del día anterior, salió a las 07:00 de hoy)
+              // Es una jornada valida → mostrar como OK
+              const horaSalidaMin = parseHoraStr(primeraSalida.hora)
+              if (horaSalidaMin < 12 * 60) {
+                // Salida matutina = fin del turno de noche anterior → OK
+                color = COLOR_OK
+                texto = primeraSalida.hora
+              } else {
+                // Salida en la tarde/noche sin entrada previa → raro, marcar FALLA
+                color = COLOR_FALTA
+                texto = 'FALLA'
+              }
             } else {
-              // No hay entrada en dia laborable
+              // No hay entrada ni salida en dia laborable
               color = COLOR_FALTA
               texto = 'FALLA'
             }
@@ -632,6 +645,7 @@ export async function GET(request: NextRequest) {
 
             let estado = 'SIN_REGISTRO'
             let minutosAtraso = 0
+            const primeraSalidaCSV = grupo?.salidas[0]
             if (esLibre) {
               estado = 'LIBRE'
             } else if (primeraEntrada) {
@@ -645,6 +659,14 @@ export async function GET(request: NextRequest) {
                 minutosAtraso = diff
               } else {
                 estado = 'OK'
+              }
+            } else if (primeraSalidaCSV && horarioInicioCSV === '19:00') {
+              // TURNO NOCHE 4x4: salida matutina = fin del turno anterior → OK
+              const horaSalidaMin = parseHoraStr(primeraSalidaCSV.hora)
+              if (horaSalidaMin < 12 * 60) {
+                estado = 'OK'
+              } else {
+                estado = 'FALTA'
               }
             } else {
               estado = 'FALTA'

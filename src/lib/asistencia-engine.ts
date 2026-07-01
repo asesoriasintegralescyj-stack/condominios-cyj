@@ -717,20 +717,43 @@ export function calcularCiclo4x4Inicio(
 ): string | null {
   if (horario.tipoTurno !== '4x4') return null
 
-  // Buscar el primer registro de entrada de este trabajador
   const nombreNorm = normalizeName(horario.nombreTrabajador)
   const registrosTrabajador = registros.filter((r) => {
     if (normalizeName(r.nombre) === nombreNorm) return true
     return matchTrabajador(horario.nombreTrabajador, r.nombre)
   })
 
-  // Ordenar por fecha
   registrosTrabajador.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
 
-  // Buscar el primer día con entrada
-  const primerRegistro = registrosTrabajador.find((r) => r.tipoRegistro === 'Entrada')
-  if (!primerRegistro) return null
+  // Buscar el primer registro de entrada
+  const primerEntrada = registrosTrabajador.find((r) => r.tipoRegistro === 'Entrada')
+  if (primerEntrada) {
+    // Para turno noche: si hay una "Salida" matutina ANTES de la primera entrada,
+    // significa que el turno empezó el día anterior
+    if (horario.ciclo4x4Turno === 'noche') {
+      const primerSalidaMatutina = registrosTrabajador.find(
+        (r) => r.tipoRegistro === 'Salida' && r.hora < '12:00',
+      )
+      if (primerSalidaMatutina && primerSalidaMatutina.fecha < primerEntrada.fecha) {
+        // Hay una salida matutina antes que la primera entrada → el ciclo empezó el día anterior
+        const [y, m, d] = primerSalidaMatutina.fecha.split('-').map(Number)
+        const fechaAnterior = new Date(y, m - 1, d - 1)
+        return `${fechaAnterior.getFullYear()}-${String(fechaAnterior.getMonth() + 1).padStart(2, '0')}-${String(fechaAnterior.getDate()).padStart(2, '0')}`
+      }
+    }
+    return primerEntrada.fecha
+  }
 
-  // El ciclo inicia en ese día (es el primer día de trabajo del ciclo 4x4)
-  return primerRegistro.fecha
+  // Si no hay entrada, usar la primera salida (para noche, retroceder 1 día)
+  const primerRegistro = registrosTrabajador[0]
+  if (primerRegistro) {
+    if (horario.ciclo4x4Turno === 'noche') {
+      const [y, m, d] = primerRegistro.fecha.split('-').map(Number)
+      const fechaAnterior = new Date(y, m - 1, d - 1)
+      return `${fechaAnterior.getFullYear()}-${String(fechaAnterior.getMonth() + 1).padStart(2, '0')}-${String(fechaAnterior.getDate()).padStart(2, '0')}`
+    }
+    return primerRegistro.fecha
+  }
+
+  return null
 }
