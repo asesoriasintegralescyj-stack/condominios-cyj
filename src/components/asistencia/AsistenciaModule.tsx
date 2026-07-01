@@ -172,11 +172,13 @@ export function AsistenciaModule() {
   }, [fetchData])
 
   // Importar archivos
-  const handleImport = async (horariosFile: File, registrosFile: File) => {
+  const handleImport = async (horariosFile: File | null, registrosFile: File) => {
     setImporting(true)
     try {
       const formData = new FormData()
-      formData.append('horarios', horariosFile)
+      if (horariosFile) {
+        formData.append('horarios', horariosFile)
+      }
       formData.append('registros', registrosFile)
 
       const res = await fetch('/api/asistencia/importar', {
@@ -1040,7 +1042,7 @@ export function AsistenciaModule() {
 // ============================================
 // Componente: ImportTab
 // ============================================
-function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File, r: File) => void; importing: boolean; onCleaned: () => void }) {
+function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File | null, r: File) => void; importing: boolean; onCleaned: () => void }) {
   const [horariosFile, setHorariosFile] = useState<File | null>(null)
   const [registrosFile, setRegistrosFile] = useState<File | null>(null)
   const [limpiando, setLimpiando] = useState(false)
@@ -1130,7 +1132,7 @@ function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File, r: 
         <div className="grid md:grid-cols-2 gap-4">
           {/* Horarios */}
           <div className="space-y-2">
-            <Label className="text-xs font-bold">1. Archivo de Horarios (.xlsx)</Label>
+            <Label className="text-xs font-bold">1. Archivo de Horarios (.xlsx) <span className="text-gray-400 font-normal">— Opcional si ya están cargados</span></Label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
               <input
                 type="file"
@@ -1171,8 +1173,8 @@ function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File, r: 
 
         <div className="flex justify-end">
           <Button
-            onClick={() => horariosFile && registrosFile && onImport(horariosFile, registrosFile)}
-            disabled={!horariosFile || !registrosFile || importing}
+            onClick={() => registrosFile && onImport(horariosFile || null, registrosFile)}
+            disabled={!registrosFile || importing}
             className="bg-[#0f2040] hover:bg-[#1a3155]"
           >
             {importing ? (

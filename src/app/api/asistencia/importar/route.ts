@@ -40,25 +40,50 @@ export async function POST(request: NextRequest) {
     const horariosFile = formData.get('horarios') as File | null
     const registrosFile = formData.get('registros') as File | null
 
-    if (!horariosFile || !registrosFile) {
+    if (!registrosFile) {
       return NextResponse.json(
-        { error: 'Debe subir ambos archivos: horarios y registros de asistencia' },
+        { error: 'Debe subir el archivo de registros de asistencia' },
         { status: 400 },
       )
     }
 
     // Leer archivos con xlsx
     const XLSX = await import('xlsx')
-    const horariosBuffer = await horariosFile.arrayBuffer()
     const registrosBuffer = await registrosFile.arrayBuffer()
-
-    const horariosWb = XLSX.read(horariosBuffer, { type: 'array' })
     const registrosWb = XLSX.read(registrosBuffer, { type: 'array' })
 
-    // Parsear horarios
-    const horariosSheet = horariosWb.Sheets[horariosWb.SheetNames[0]]
-    const horariosRaw = XLSX.utils.sheet_to_json(horariosSheet)
-    const horarios = parseHorariosExcel(horariosRaw as any[])
+    // Parsear horarios (si se subieron) o cargar los existentes de la BD
+    let horarios: any[] = []
+    if (horariosFile) {
+      const horariosBuffer = await horariosFile.arrayBuffer()
+      const horariosWb = XLSX.read(horariosBuffer, { type: 'array' })
+      const horariosSheet = horariosWb.Sheets[horariosWb.SheetNames[0]]
+      const horariosRaw = XLSX.utils.sheet_to_json(horariosSheet)
+      horarios = parseHorariosExcel(horariosRaw as any[])
+    } else {
+      // Cargar horarios existentes de la BD
+      const horariosBD = await db.horarioTrabajador.findMany()
+      horarios = horariosBD.map((h) => ({
+        nombreTrabajador: h.nombreTrabajador,
+        rut: h.rut,
+        turno: h.turno,
+        tipoTurno: h.tipoTurno,
+        lunesInicio: h.lunesInicio,
+        lunesFin: h.lunesFin,
+        martesInicio: h.martesInicio,
+        martesFin: h.martesFin,
+        miercolesInicio: h.miercolesInicio,
+        miercolesFin: h.miercolesFin,
+        juevesInicio: h.juevesInicio,
+        juevesFin: h.juevesFin,
+        viernesInicio: h.viernesInicio,
+        viernesFin: h.viernesFin,
+        sabadoInicio: h.sabadoInicio,
+        sabadoFin: h.sabadoFin,
+        ciclo4x4Inicio: h.ciclo4x4Inicio,
+        ciclo4x4Turno: h.ciclo4x4Turno,
+      }))
+    }
 
     // Parsear registros (saltar las 4 filas de metadata)
     const registrosSheet = registrosWb.Sheets[registrosWb.SheetNames[0]]
@@ -66,7 +91,7 @@ export async function POST(request: NextRequest) {
     const registros = parseRegistroAsistenciaExcel(registrosRaw as any[])
 
     if (horarios.length === 0) {
-      return NextResponse.json({ error: 'No se encontraron horarios en el archivo' }, { status: 400 })
+      return NextResponse.json({ error: 'No hay horarios cargados. Sube el archivo de horarios la primera vez.' }, { status: 400 })
     }
     if (registros.length === 0) {
       return NextResponse.json({ error: 'No se encontraron registros de asistencia en el archivo' }, { status: 400 })
