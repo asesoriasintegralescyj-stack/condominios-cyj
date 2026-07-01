@@ -230,6 +230,12 @@ export function RondasModule() {
 
   useEffect(() => {
     fetchRondas()
+    // Auto-refresh cada 30 segundos para mantener los contadores actualizados
+    // con las lecturas del guardia en tiempo real
+    const interval = setInterval(() => {
+      fetchRondas()
+    }, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleCreate = async () => {
@@ -296,15 +302,30 @@ export function RondasModule() {
 
   const handleViewRegistros = async (ronda: Ronda) => {
     setSelectedRonda(ronda)
+    setRegistrosDialogOpen(true)
+    await fetchRegistros(ronda.id)
+  }
+
+  // Función separada para poder reutilizar en el auto-refresh
+  const fetchRegistros = async (rondaId: string) => {
     try {
-      const res = await fetch(`/api/rondas/${ronda.id}`)
+      const res = await fetch(`/api/rondas/${rondaId}`)
       const data = await res.json()
       setRegistros(data.registros || [])
     } catch (error) {
       console.error('Error fetching registros:', error)
     }
-    setRegistrosDialogOpen(true)
   }
+
+  // Auto-refresh del diálogo de registros cada 15 segundos cuando está abierto
+  useEffect(() => {
+    if (registrosDialogOpen && selectedRonda) {
+      const interval = setInterval(() => {
+        fetchRegistros(selectedRonda.id)
+      }, 15000)
+      return () => clearInterval(interval)
+    }
+  }, [registrosDialogOpen, selectedRonda])
 
   const handleScanQR = () => {
     // Abrir el escáner con cámara (no el diálogo manual)
