@@ -60,6 +60,7 @@ interface Stats {
   atrasos: number
   ausencias: number
   salidasTempranas: number
+  colacionesExcedidas: number
   pendientes: number
   justificados: number
   aprobados: number
@@ -72,6 +73,7 @@ interface ResumenTrabajador {
   atrasos: number
   ausencias: number
   salidasTempranas: number
+  colacionesExcedidas: number
   totalMinutosAtraso: number
   pendientes: number
   justificados: number
@@ -83,6 +85,7 @@ const tipoColors: Record<string, string> = {
   atraso: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   ausencia: 'bg-red-100 text-red-800 border-red-200',
   salida_temprana: 'bg-orange-100 text-orange-800 border-orange-200',
+  colacion_excedida: 'bg-purple-100 text-purple-800 border-purple-200',
 }
 
 const estadoColors: Record<string, string> = {
@@ -96,6 +99,7 @@ const tipoLabels: Record<string, string> = {
   atraso: 'Atraso',
   ausencia: 'Ausencia',
   salida_temprana: 'Salida temprana',
+  colacion_excedida: 'Colación excedida',
 }
 
 // ============================================
@@ -323,7 +327,7 @@ export function AsistenciaModule() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
           <Card className="p-3">
             <div className="text-2xl font-bold text-[#0f2040]">{stats.total}</div>
             <div className="text-xs text-gray-500">Total</div>
@@ -339,6 +343,10 @@ export function AsistenciaModule() {
           <Card className="p-3">
             <div className="text-2xl font-bold text-orange-600">{stats.salidasTempranas}</div>
             <div className="text-xs text-gray-500">Sal. Tempranas</div>
+          </Card>
+          <Card className="p-3">
+            <div className="text-2xl font-bold text-purple-600">{stats.colacionesExcedidas || 0}</div>
+            <div className="text-xs text-gray-500">Col. Excedida</div>
           </Card>
           <Card className="p-3">
             <div className="text-2xl font-bold text-yellow-700">{stats.pendientes}</div>
@@ -415,6 +423,7 @@ export function AsistenciaModule() {
                       <SelectItem value="atraso">Atrasos</SelectItem>
                       <SelectItem value="ausencia">Ausencias</SelectItem>
                       <SelectItem value="salida_temprana">Salidas tempranas</SelectItem>
+                      <SelectItem value="colacion_excedida">Colación excedida</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

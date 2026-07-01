@@ -46,13 +46,19 @@ interface InasistenciaDetectada {
   departamento?: string | null
   fecha: string
   diaSemana: string
-  tipo: 'atraso' | 'ausencia' | 'salida_temprana'
+  tipo: 'atraso' | 'ausencia' | 'salida_temprana' | 'colacion_excedida'
   horaEsperadaInicio?: string | null
   horaEsperadaFin?: string | null
   horaRealInicio?: string | null
   horaRealFin?: string | null
   minutosAtraso: number
   tipoTurno: string
+  // Marcas del reloj (4 marcas: 1a entrada, 1a salida, 2a entrada, 2a salida)
+  primeraEntrada?: string | null
+  primeraSalida?: string | null   // salida a colacion
+  segundaEntrada?: string | null  // regreso de colacion
+  segundaSalida?: string | null   // fin de jornada
+  minutosColacion?: number | null // tiempo real de colacion (1a salida -> 2a entrada)
 }
 
 // ============================================
@@ -239,6 +245,7 @@ export interface ResultadoAnalisis {
   totalSalidasTempranas: number
   totalDiasLibres: number
   totalDiasPresentes: number
+  totalColacionesExcedidas: number
   inasistencias: InasistenciaDetectada[]
   resumenPorTrabajador: Array<{
     nombre: string
@@ -247,6 +254,7 @@ export interface ResultadoAnalisis {
     atrasos: number
     ausencias: number
     salidasTempranas: number
+    colacionesExcedidas: number
     diasLibres: number
     totalMinutosAtraso: number
   }>
@@ -285,6 +293,7 @@ export function analizarAsistencia(
   let totalSalidasTempranas = 0
   let totalDiasLibres = 0
   let totalDiasPresentes = 0
+  let totalColacionesExcedidas = 0
 
   // Para cada horario de trabajador
   for (const horario of horarios) {
@@ -303,7 +312,8 @@ export function analizarAsistencia(
       }
     }
 
-    // Agrupar registros por fecha
+    // Agrupar registros por fecha, ordenados por hora
+    // Cada dia puede tener hasta 4 marcas: 1a Entrada, 1a Salida (colacion), 2a Entrada, 2a Salida
     const registrosPorFecha = new Map<string, { entradas: RegistroReloj[]; salidas: RegistroReloj[] }>()
     for (const reg of registrosMatch) {
       if (!registrosPorFecha.has(reg.fecha)) {
@@ -316,11 +326,17 @@ export function analizarAsistencia(
         grupo.salidas.push(reg)
       }
     }
+    // Ordenar entradas y salidas por hora dentro de cada fecha
+    for (const [, grupo] of registrosPorFecha) {
+      grupo.entradas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+      grupo.salidas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+    }
 
     let diasPresentes = 0
     let atrasos = 0
     let ausencias = 0
     let salidasTempranas = 0
+    let colacionesExcedidas = 0
     let diasLibres = 0
     let totalMinutosAtraso = 0
     const departamento = registrosMatch[0]?.departamento || null
@@ -345,11 +361,14 @@ export function analizarAsistencia(
       }
 
       const grupo = registrosPorFecha.get(fecha)
-      const primeraEntrada = grupo?.entradas[0]
-      const ultimaSalida = grupo?.salidas[grupo.salidas.length - 1]
+      // 4 marcas: 1a Entrada, 1a Salida (colacion), 2a Entrada, 2a Salida
+      const primeraEntrada = grupo?.entradas[0]   // 1a entrada = inicio jornada
+      const primeraSalida = grupo?.salidas[0]      // 1a salida = salida a colacion
+      const segundaEntrada = grupo?.entradas[1]    // 2a entrada = regreso de colacion
+      const segundaSalida = grupo?.salidas[grupo.salidas.length - 1] // ultima salida = fin jornada
 
       if (!primeraEntrada) {
-        // Ausencia: no hay entrada en un día laborable
+        // Ausencia: no hay entrada en un dia laborable
         ausencias++
         totalAusencias++
         inasistencias.push({
@@ -365,9 +384,14 @@ export function analizarAsistencia(
           horaRealFin: null,
           minutosAtraso: 0,
           tipoTurno: horario.tipoTurno,
+          primeraEntrada: null,
+          primeraSalida: null,
+          segundaEntrada: null,
+          segundaSalida: null,
+          minutosColacion: null,
         })
       } else {
-        // Hay entrada → verificar atraso
+        // Hay entrada -> verificar atraso usando la 1a entrada
         diasPresentes++
         totalDiasPresentes++
 
@@ -378,7 +402,6 @@ export function analizarAsistencia(
         // pero si el registro es de madrugada (ej: 01:00), pertenece al turno de la noche anterior
         let minutosAtraso = horaRealMin - horaEsperadaMin
         if (horarioEsperado.inicio === '19:00' && horaRealMin < 12 * 60) {
-          // Turno noche: registro de madrugada → no es atraso (pertenece al turno)
           minutosAtraso = 0
         }
 
@@ -397,20 +420,59 @@ export function analizarAsistencia(
             horaEsperadaInicio: horarioEsperado.inicio,
             horaEsperadaFin: horarioEsperado.fin,
             horaRealInicio: primeraEntrada.hora,
-            horaRealFin: ultimaSalida?.hora || null,
+            horaRealFin: segundaSalida?.hora || null,
             minutosAtraso,
             tipoTurno: horario.tipoTurno,
+            primeraEntrada: primeraEntrada.hora,
+            primeraSalida: primeraSalida?.hora || null,
+            segundaEntrada: segundaEntrada?.hora || null,
+            segundaSalida: segundaSalida?.hora || null,
+            minutosColacion: null,
           })
         }
 
-        // Verificar salida temprana
-        if (ultimaSalida && horarioEsperado.fin) {
-          const horaSalidaReal = parseHora(ultimaSalida.hora)
+        // Verificar colacion excedida (1a salida -> 2a entrada, debe ser <= 60 min)
+        if (primeraSalida && segundaEntrada) {
+          const minSalidaColacion = parseHora(primeraSalida.hora)
+          const minRegresoColacion = parseHora(segundaEntrada.hora)
+          let minutosColacion = minRegresoColacion - minSalidaColacion
+          // Si el regreso es de madrugada (ej: salida 23:50, regreso 00:50), ajustar
+          if (minutosColacion < 0) {
+            minutosColacion += 24 * 60
+          }
+          // Colacion esperada: 60 minutos. Tolerancia: 5 minutos (max 65)
+          const COLACION_MAXIMA = 65
+          if (minutosColacion > COLACION_MAXIMA) {
+            colacionesExcedidas++
+            totalColacionesExcedidas++
+            inasistencias.push({
+              nombreTrabajador: horario.nombreTrabajador,
+              rut: horario.rut,
+              departamento,
+              fecha,
+              diaSemana: getDiaSemanaFromStr(fecha),
+              tipo: 'colacion_excedida',
+              horaEsperadaInicio: horarioEsperado.inicio,
+              horaEsperadaFin: horarioEsperado.fin,
+              horaRealInicio: primeraEntrada.hora,
+              horaRealFin: segundaSalida?.hora || null,
+              minutosAtraso: minutosColacion - 60, // minutos excedidos sobre los 60 esperados
+              tipoTurno: horario.tipoTurno,
+              primeraEntrada: primeraEntrada.hora,
+              primeraSalida: primeraSalida.hora,
+              segundaEntrada: segundaEntrada.hora,
+              segundaSalida: segundaSalida?.hora || null,
+              minutosColacion,
+            })
+          }
+        }
+
+        // Verificar salida temprana usando la ultima salida (2a salida)
+        if (segundaSalida && horarioEsperado.fin) {
+          const horaSalidaReal = parseHora(segundaSalida.hora)
           const horaSalidaEsperada = parseHora(horarioEsperado.fin)
-          // Para turno noche (19:00-07:00), la salida esperada 07:00 es del día siguiente
           let minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
           if (horarioEsperado.fin === '07:00' && horaSalidaReal > 12 * 60) {
-            // Turno noche: salida en la tarde → pertenece al turno del día
             minutosSalidaTemprana = 0
           }
           if (minutosSalidaTemprana > TOLERANCIA_MINUTOS) {
@@ -426,14 +488,19 @@ export function analizarAsistencia(
               horaEsperadaInicio: horarioEsperado.inicio,
               horaEsperadaFin: horarioEsperado.fin,
               horaRealInicio: primeraEntrada.hora,
-              horaRealFin: ultimaSalida.hora,
+              horaRealFin: segundaSalida.hora,
               minutosAtraso: minutosSalidaTemprana,
               tipoTurno: horario.tipoTurno,
+              primeraEntrada: primeraEntrada.hora,
+              primeraSalida: primeraSalida?.hora || null,
+              segundaEntrada: segundaEntrada?.hora || null,
+              segundaSalida: segundaSalida.hora,
+              minutosColacion: null,
             })
           }
         }
       }
-    }
+    } // fin del for de fechas
 
     resumenPorTrabajador.push({
       nombre: horario.nombreTrabajador,
@@ -442,6 +509,7 @@ export function analizarAsistencia(
       atrasos,
       ausencias,
       salidasTempranas,
+      colacionesExcedidas,
       diasLibres,
       totalMinutosAtraso,
     })
@@ -455,6 +523,7 @@ export function analizarAsistencia(
     totalSalidasTempranas,
     totalDiasLibres,
     totalDiasPresentes,
+    totalColacionesExcedidas,
     inasistencias,
     resumenPorTrabajador,
   }

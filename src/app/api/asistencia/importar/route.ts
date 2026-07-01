@@ -250,6 +250,7 @@ export async function GET(request: NextRequest) {
       atrasos: inasistencias.filter((i) => i.tipo === 'atraso').length,
       ausencias: inasistencias.filter((i) => i.tipo === 'ausencia').length,
       salidasTempranas: inasistencias.filter((i) => i.tipo === 'salida_temprana').length,
+      colacionesExcedidas: inasistencias.filter((i) => i.tipo === 'colacion_excedida').length,
       pendientes: inasistencias.filter((i) => i.estado === 'pendiente').length,
       justificados: inasistencias.filter((i) => i.estado === 'justificado').length,
       aprobados: inasistencias.filter((i) => i.estado === 'aprobado').length,
@@ -267,6 +268,7 @@ export async function GET(request: NextRequest) {
           atrasos: 0,
           ausencias: 0,
           salidasTempranas: 0,
+          colacionesExcedidas: 0,
           totalMinutosAtraso: 0,
           pendientes: 0,
           justificados: 0,
@@ -278,6 +280,7 @@ export async function GET(request: NextRequest) {
       if (inas.tipo === 'atraso') t.atrasos++
       if (inas.tipo === 'ausencia') t.ausencias++
       if (inas.tipo === 'salida_temprana') t.salidasTempranas++
+      if (inas.tipo === 'colacion_excedida') t.colacionesExcedidas++
       t.totalMinutosAtraso += inas.minutosAtraso || 0
       if (inas.estado === 'pendiente') t.pendientes++
       if (inas.estado === 'justificado') t.justificados++
