@@ -73,6 +73,29 @@ function parseHoraStr(hora: string): number {
   return h * 60 + m
 }
 
+// Fuzzy matching de nombres (igual que el motor de análisis)
+function matchTrabajadorReporte(nombreHorario: string, nombreRegistro: string): boolean {
+  const n1 = normalize(nombreHorario)
+  const n2 = nombreRegistro // ya viene normalizado del Map
+
+  if (n1 === n2) return true
+
+  const tokens1 = n1.split(' ').filter((t) => t.length > 2)
+  const tokens2 = n2.split(' ').filter((t) => t.length > 2)
+  const shorter = tokens1.length <= tokens2.length ? tokens1 : tokens2
+  const longer = tokens1.length <= tokens2.length ? tokens2 : tokens1
+  const allShorterInLonger = shorter.every((t) => longer.includes(t))
+  if (allShorterInLonger && shorter.length >= 2) return true
+
+  if (tokens1.length >= 2 && tokens2.length >= 2) {
+    const apellidos1 = tokens1.slice(-2).join(' ')
+    const apellidos2 = tokens2.slice(-2).join(' ')
+    if (apellidos1 === apellidos2) return true
+  }
+
+  return false
+}
+
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) {
@@ -197,9 +220,28 @@ export async function GET(request: NextRequest) {
         const horarioA = horariosTrabajador.find((h) => h.turno === 'TURNO A') || horariosTrabajador[0]
         const horarioB = horariosTrabajador.find((h) => h.turno === 'TURNO B')
 
-        // Buscar registros del reloj para este trabajador
-        const registrosTrabajador = registrosMap.get(trabajadorKey) || new Map()
-        const inasistenciasTrabajador = inasMap.get(trabajadorKey) || new Map()
+        // Buscar registros del reloj para este trabajador (con fuzzy matching)
+        let registrosTrabajador = registrosMap.get(trabajadorKey) || new Map()
+        if (registrosTrabajador.size === 0) {
+          // Intentar fuzzy matching: buscar entre todos los registros
+          for (const [key, regs] of registrosMap.entries()) {
+            if (matchTrabajadorReporte(horarioA.nombreTrabajador, key)) {
+              registrosTrabajador = regs
+              break
+            }
+          }
+        }
+
+        // Buscar inasistencias para este trabajador (con fuzzy matching)
+        let inasistenciasTrabajador = inasMap.get(trabajadorKey) || new Map()
+        if (inasistenciasTrabajador.size === 0) {
+          for (const [key, inas] of inasMap.entries()) {
+            if (matchTrabajadorReporte(horarioA.nombreTrabajador, key)) {
+              inasistenciasTrabajador = inas
+              break
+            }
+          }
+        }
 
         // Buscar departamento
         let departamento = ''
@@ -516,8 +558,26 @@ export async function GET(request: NextRequest) {
       const rows: any[] = []
       for (const horario of horariosFiltrados) {
         const nombreNorm = normalize(horario.nombreTrabajador)
-        const registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
-        const inasistenciasTrabajador = inasMap.get(nombreNorm) || new Map()
+        // Fuzzy matching para registros
+        let registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
+        if (registrosTrabajador.size === 0) {
+          for (const [key, regs] of registrosMap.entries()) {
+            if (matchTrabajadorReporte(horario.nombreTrabajador, key)) {
+              registrosTrabajador = regs
+              break
+            }
+          }
+        }
+        // Fuzzy matching para inasistencias
+        let inasistenciasTrabajador = inasMap.get(nombreNorm) || new Map()
+        if (inasistenciasTrabajador.size === 0) {
+          for (const [key, inas] of inasMap.entries()) {
+            if (matchTrabajadorReporte(horario.nombreTrabajador, key)) {
+              inasistenciasTrabajador = inas
+              break
+            }
+          }
+        }
 
         for (const semanaInicio of semanas) {
           for (let i = 0; i < 6; i++) {
