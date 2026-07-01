@@ -792,7 +792,7 @@ export function AsistenciaModule() {
         {/* ============================================ */}
         {canJustificar && (
           <TabsContent value="importar" className="space-y-3 mt-3">
-            <ImportTab onImport={handleImport} importing={importing} />
+            <ImportTab onImport={handleImport} importing={importing} onCleaned={fetchData} />
           </TabsContent>
         )}
       </Tabs>
@@ -1040,7 +1040,7 @@ export function AsistenciaModule() {
 // ============================================
 // Componente: ImportTab
 // ============================================
-function ImportTab({ onImport, importing }: { onImport: (h: File, r: File) => void; importing: boolean }) {
+function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File, r: File) => void; importing: boolean; onCleaned: () => void }) {
   const [horariosFile, setHorariosFile] = useState<File | null>(null)
   const [registrosFile, setRegistrosFile] = useState<File | null>(null)
   const [limpiando, setLimpiando] = useState(false)
@@ -1061,6 +1061,8 @@ function ImportTab({ onImport, importing }: { onImport: (h: File, r: File) => vo
       const data = await res.json()
       if (res.ok) {
         toast.success(data.message || 'Datos limpiados')
+        // Recargar datos en la UI (limpiar las tablas)
+        onCleaned()
       } else {
         toast.error(data.error || 'Error al limpiar')
       }
