@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Camera, RefreshCw, Keyboard, AlertCircle, ScanLine, CheckCircle2, X, LogOut, BookOpen } from 'lucide-react'
+import jsQR from 'jsqr'
 
 interface ScanRecord {
   id: string
@@ -29,10 +30,10 @@ export default function RondasGuardiaPage() {
 
   // Refs del escáner
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const detectIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastScanRef = useRef<{ text: string; ts: number } | null>(null)
-  const html5QrRef = useRef<any>(null)
 
   // Estado
   const [scannerActive, setScannerActive] = useState(false)
@@ -60,29 +61,16 @@ export default function RondasGuardiaPage() {
 
   // Detener todo
   const stopCamera = useCallback(() => {
-    // Limpiar intervalo de detección
-    if (detectIntervalRef.current) {
-      clearInterval(detectIntervalRef.current)
-      detectIntervalRef.current = null
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current)
+      scanIntervalRef.current = null
     }
-    // Detener stream nativo
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
-    // Limpiar video element
     if (videoRef.current) {
       videoRef.current.srcObject = null
-    }
-    // Limpiar html5-qrcode si estaba activo
-    if (html5QrRef.current) {
-      try {
-        if (html5QrRef.current.isScanning) {
-          html5QrRef.current.stop().catch(() => {})
-        }
-        html5QrRef.current.clear().catch(() => {})
-      } catch {}
-      html5QrRef.current = null
     }
     setScannerActive(false)
   }, [])
@@ -142,7 +130,7 @@ export default function RondasGuardiaPage() {
     }
   }, [registering])
 
-  // Iniciar cámara — Método nativo con getUserMedia
+  // Iniciar cámara — getUserMedia + jsQR (funciona en Chrome, Firefox, Safari, Edge)
   const startCamera = useCallback(async (mode: 'environment' | 'user') => {
     setScannerStarting(true)
     setCameraState('starting')
@@ -150,7 +138,7 @@ export default function RondasGuardiaPage() {
     stopCamera()
 
     try {
-      // SOLUCIÓN: Usar getUserMedia directamente (más confiable que html5-qrcode)
+      // 1. Obtener stream de cámara con getUserMedia
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: { ideal: mode },
@@ -163,7 +151,7 @@ export default function RondasGuardiaPage() {
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
 
-      // Conectar stream al video element
+      // 2. Conectar al video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.setAttribute('playsinline', 'true')
@@ -174,69 +162,49 @@ export default function RondasGuardiaPage() {
       setCameraState('scanning')
       setScannerActive(true)
 
-      // Detectar QR: intentar BarcodeDetector, si no disponible, usar html5-qrcode
-      const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window
+      // 3. Escanear QR con jsQR cada 300ms
+      // jsQR es una librería pura de JS que decodifica QR desde un canvas
+      // Funciona en TODOS los navegadores (Chrome, Firefox, Safari, Edge)
+      scanIntervalRef.current = setInterval(() => {
+        if (!videoRef.current || videoRef.current.readyState !== 4) return
 
-      if (hasBarcodeDetector) {
-        // Método 1: BarcodeDetector nativo (Chrome/Edge Android)
-        try {
-          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] })
-          detectIntervalRef.current = setInterval(async () => {
-            if (!videoRef.current || videoRef.current.readyState < 2) return
-            try {
-              const barcodes = await detector.detect(videoRef.current)
-              if (barcodes && barcodes.length > 0) {
-                const text = barcodes[0].rawValue
-                const now = Date.now()
-                const last = lastScanRef.current
-                if (last && last.text === text && now - last.ts < 3000) return
-                lastScanRef.current = { text, ts: now }
-                handleScan(text)
-              }
-            } catch {}
-          }, 400)
-          return // éxito con BarcodeDetector
-        } catch (e) {
-          console.warn('BarcodeDetector falló, intentando html5-qrcode:', e)
+        const video = videoRef.current
+        const w = video.videoWidth
+        const h = video.videoHeight
+        if (w === 0 || h === 0) return
+
+        // Crear canvas temporal si no existe
+        if (!canvasRef.current) {
+          canvasRef.current = document.createElement('canvas')
         }
-      }
+        const canvas = canvasRef.current
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })
+        if (!ctx) return
 
-      // Método 2: Fallback con html5-qrcode usando el mismo video element
-      // Crear un div temporal para html5-qrcode
-      const tempDiv = document.createElement('div')
-      tempDiv.style.display = 'none'
-      document.body.appendChild(tempDiv)
-      try {
-        const { Html5Qrcode } = await import('html5-qrcode')
-        const html5Qr = new Html5Qrcode('guardia-qr-reader-hidden', { verbose: false })
-        html5QrRef.current = html5Qr
-        // Detener el stream nativo y dejar que html5-qrcode tome el control
-        streamRef.current?.getTracks().forEach((t) => t.stop())
-        streamRef.current = null
-        if (videoRef.current) videoRef.current.srcObject = null
+        // Dibujar frame del video al canvas
+        ctx.drawImage(video, 0, 0, w, h)
 
-        await html5Qr.start(
-          { facingMode: mode },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          (decodedText: string) => {
-            const now = Date.now()
-            const last = lastScanRef.current
-            if (last && last.text === decodedText && now - last.ts < 3000) return
-            lastScanRef.current = { text: decodedText, ts: now }
-            handleScan(decodedText)
-          },
-          () => {},
-        )
-      } catch (html5Err) {
-        console.error('html5-qrcode también falló:', html5Err)
-        // Si html5-qrcode falla, restaurar el stream nativo (solo video sin detección)
-        if (videoRef.current && streamRef.current) {
-          videoRef.current.srcObject = streamRef.current
-          videoRef.current.play()
+        // Obtener datos de imagen
+        const imageData = ctx.getImageData(0, 0, w, h)
+
+        // Decodificar QR con jsQR
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        })
+
+        if (code && code.data) {
+          const text = code.data
+          const now = Date.now()
+          const last = lastScanRef.current
+          // Cooldown de 3 segundos para el mismo código
+          if (last && last.text === text && now - last.ts < 3000) return
+          lastScanRef.current = { text, ts: now }
+          // Procesar el QR detectado
+          handleScan(text)
         }
-        setCameraState('error')
-        setErrorMsg('Tu navegador no soporta detección de QR automática. Usa el botón "Ingreso manual".')
-      }
+      }, 300)
     } catch (err: any) {
       console.error('Error getUserMedia:', err)
       const msg = String(err?.message || err || '').toLowerCase()
@@ -369,18 +337,15 @@ export default function RondasGuardiaPage() {
             {/* Video nativo — SIEMPRE presente en el DOM */}
             <div className="relative">
               <div className="w-full aspect-square max-w-sm mx-auto rounded-2xl overflow-hidden bg-black border-4 border-amber-400 relative">
-                {/* Elemento video nativo */}
+                {/* Elemento video nativo — jsQR lee frames desde aquí */}
                 {/* @ts-ignore */}
                 <video
                   ref={videoRef}
-                  id="guardia-qr-reader-hidden"
                   className="w-full h-full object-cover"
                   autoPlay
                   playsInline
                   muted
                 />
-                {/* html5-qrcode renderiza dentro de este div */}
-                <div id="guardia-qr-reader" className="absolute inset-0" />
 
                 {/* Overlay con marco de escaneo */}
                 {cameraState === 'scanning' && (

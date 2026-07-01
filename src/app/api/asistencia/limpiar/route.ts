@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
         where: { fecha: { lt: '2000-01-01' } },
       }).then((r) => r.count).catch(() => 0)
     } else {
-      // Borrar TODO (incluyendo horarios)
+      // Borrar TODO PERO conservar horarios (ya están guardados)
       deleted.justificaciones = await db.justificacionAsistencia.deleteMany({})
         .then((r) => r.count).catch(() => 0)
 
@@ -52,10 +52,7 @@ export async function POST(request: NextRequest) {
       deleted.registros = await db.registroAsistenciaReloj.deleteMany({})
         .then((r) => r.count).catch(() => 0)
 
-      // Tambien borrar horarios para que se recarguen limpios al importar
-      const horariosDeleted = await db.horarioTrabajador.deleteMany({})
-        .then((r) => r.count).catch(() => 0)
-      deleted.horarios = horariosDeleted
+      // NO borrar HorarioTrabajador — se conservan para no tener que reimportar la nomina
     }
 
     return NextResponse.json({

@@ -90,12 +90,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Limpiar TODOS los datos anteriores antes de importar
-    // (no solo los del rango de fechas, para evitar que datos viejos se mezclen)
+    // Limpiar datos anteriores PERO conservar horarios (ya están guardados)
     await db.justificacionAsistencia.deleteMany({})
     await db.inasistenciaAtraso.deleteMany({})
     await db.registroAsistenciaReloj.deleteMany({})
-    await db.horarioTrabajador.deleteMany({})
+    // NO borrar HorarioTrabajador — se hace upsert abajo para mantenerlos
 
     // Guardar horarios (upsert por nombreTrabajador + turno)
     for (const horario of horarios) {
