@@ -67,6 +67,12 @@ function normalize(s: string): string {
   return s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
 }
 
+
+function parseHoraStr(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return h * 60 + m
+}
+
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) {
@@ -178,11 +184,22 @@ export async function GET(request: NextRequest) {
       const colDia = (pageWidth - margin * 2 - colNombre - colTurno - colSemana) / 6
       const tableWidth = colNombre + colTurno + colSemana + colDia * 6
 
-      // Por cada trabajador
-      for (const horario of horariosFiltrados) {
-        const nombreNorm = normalize(horario.nombreTrabajador)
-        const registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
-        const inasistenciasTrabajador = inasMap.get(nombreNorm) || new Map()
+      // Agrupar horarios por trabajador (un trabajador puede tener TURNO A y TURNO B)
+      const horariosPorTrabajador = new Map<string, any[]>()
+      for (const h of horariosFiltrados) {
+        const key = normalize(h.nombreTrabajador)
+        if (!horariosPorTrabajador.has(key)) horariosPorTrabajador.set(key, [])
+        horariosPorTrabajador.get(key)!.push(h)
+      }
+
+      // Por cada trabajador (con todos sus turnos)
+      for (const [trabajadorKey, horariosTrabajador] of horariosPorTrabajador) {
+        const horarioA = horariosTrabajador.find((h) => h.turno === 'TURNO A') || horariosTrabajador[0]
+        const horarioB = horariosTrabajador.find((h) => h.turno === 'TURNO B')
+
+        // Buscar registros del reloj para este trabajador
+        const registrosTrabajador = registrosMap.get(trabajadorKey) || new Map()
+        const inasistenciasTrabajador = inasMap.get(trabajadorKey) || new Map()
 
         // Buscar departamento
         let departamento = ''
@@ -191,9 +208,13 @@ export async function GET(request: NextRequest) {
             departamento = grupo.entradas[0].departamento
             break
           }
+          if (grupo.salidas[0]?.departamento) {
+            departamento = grupo.salidas[0].departamento
+            break
+          }
         }
 
-        // Salto de página si no hay espacio para header + 3 filas
+        // Salto de pagina si no hay espacio
         if (yPos > pageHeight - 25) {
           doc.addPage()
           yPos = 15
@@ -205,28 +226,59 @@ export async function GET(request: NextRequest) {
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(8)
         doc.setFont('helvetica', 'bold')
-        doc.text(`${horario.nombreTrabajador}  —  ${departamento || horario.turno}`, margin + 1, yPos + 4)
+        doc.text(`${horarioA.nombreTrabajador}  -  ${departamento || ''}`, margin + 1, yPos + 4)
         yPos += 6
 
-        // Por cada semana
+        // Por cada semana del mes
         for (const semanaInicio of semanas) {
-          // Salto de página
           if (yPos > pageHeight - 20) {
             doc.addPage()
             yPos = 15
           }
 
-          // Generar los 6 días (Lun-Sáb) de esta semana
+          // Generar los 6 dias (Lun-Sab) de esta semana
           const diasSemana: string[] = []
           for (let i = 0; i < 6; i++) {
             diasSemana.push(addDays(semanaInicio, i))
           }
 
-          // Verificar si hay datos en esta semana (si no, saltar)
+          // Verificar si hay datos en esta semana
           const tieneDatos = diasSemana.some((f) => f <= fechaHasta)
           if (!tieneDatos) continue
 
-          // Fila 1: Header de días (Lun, Mar, Mié, Jue, Vie, Sáb)
+          // DETERMINAR TURNO ACTIVO para esta semana:
+          // Buscar el primer registro de entrada de la semana y ver si coincide mas con A o B
+          let turnoActivo = horarioA // por defecto A
+          let turnoLabel = 'A'
+
+          // Buscar primer registro de la semana
+          let primerRegistroSemana: any = null
+          for (const fechaDia of diasSemana) {
+            if (fechaDia > fechaHasta) continue
+            const grupo = registrosTrabajador.get(fechaDia)
+            if (grupo && grupo.entradas.length > 0) {
+              primerRegistroSemana = grupo.entradas[0]
+              break
+            }
+          }
+
+          if (primerRegistroSemana && horarioB) {
+            // Comparar hora del registro con horarios de A y B
+            const horaReal = parseHoraStr(primerRegistroSemana.hora)
+            const inicioA = horarioA.lunesInicio ? parseHoraStr(horarioA.lunesInicio) : 9999
+            const inicioB = horarioB.lunesInicio ? parseHoraStr(horarioB.lunesInicio) : 9999
+            const diffA = Math.abs(horaReal - inicioA)
+            const diffB = Math.abs(horaReal - inicioB)
+            if (diffB < diffA) {
+              turnoActivo = horarioB
+              turnoLabel = 'B'
+            } else {
+              turnoActivo = horarioA
+              turnoLabel = 'A'
+            }
+          }
+
+          // Fila 1: Header de dias
           doc.setFillColor(COLOR_HEADER_YELLOW[0], COLOR_HEADER_YELLOW[1], COLOR_HEADER_YELLOW[2])
           doc.rect(margin, yPos, tableWidth, 5, 'F')
           doc.setTextColor(0, 0, 0)
@@ -239,7 +291,7 @@ export async function GET(request: NextRequest) {
           for (let i = 0; i < 6; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
-              doc.text('—', xPos + 1, yPos + 3.5)
+              doc.text('-', xPos + 1, yPos + 3.5)
             } else {
               doc.text(`${DIAS_CORTOS[i + 1]} ${formatFechaCorta(fechaDia)}`, xPos + 1, yPos + 3.5)
             }
@@ -247,46 +299,45 @@ export async function GET(request: NextRequest) {
           }
           yPos += 5
 
-          // Fila 2: Horario esperado (Turno A)
+          // Fila 2: Horario esperado (del turno activo)
           doc.setFillColor(245, 245, 245)
           doc.rect(margin, yPos, tableWidth, 5, 'F')
           doc.setTextColor(40, 40, 40)
           doc.setFont('helvetica', 'normal')
           doc.setFontSize(6)
-          doc.text(horario.nombreTrabajador.substring(0, 25), margin + 1, yPos + 3.5)
-          doc.text(horario.turno, margin + colNombre + 1, yPos + 3.5)
+          doc.text(horarioA.nombreTrabajador.substring(0, 25), margin + 1, yPos + 3.5)
+          doc.text(`TURNO ${turnoLabel}`, margin + colNombre + 1, yPos + 3.5)
           doc.text(formatFechaCorta(semanaInicio), margin + colNombre + colTurno + 1, yPos + 3.5)
           xPos = margin + colNombre + colTurno + colSemana
           for (let i = 0; i < 6; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
-              doc.text('—', xPos + 1, yPos + 3.5)
+              doc.text('-', xPos + 1, yPos + 3.5)
             } else {
-              // Obtener horario esperado para este día
               let horarioStr = 'Libre'
               const diaIdx = getDiaSemanaIdx(fechaDia)
 
-              if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
-                const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
+              if (turnoActivo.tipoTurno === '4x4' && turnoActivo.ciclo4x4Inicio) {
+                const [y, m, d] = turnoActivo.ciclo4x4Inicio.split('-').map(Number)
                 const cicloInicio = new Date(y, m - 1, d)
                 const [y2, m2, d2] = fechaDia.split('-').map(Number)
                 const fechaDate = new Date(y2, m2 - 1, d2)
                 const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
                 const diaEnCiclo = ((diffDays % 8) + 8) % 8
                 if (diaEnCiclo < 4) {
-                  horarioStr = horario.ciclo4x4Turno === 'noche' ? '19:00-07:00' : '07:00-19:00'
+                  horarioStr = turnoActivo.ciclo4x4Turno === 'noche' ? '19:00-07:00' : '07:00-19:00'
                 } else {
                   horarioStr = 'Libre'
                 }
               } else {
                 const horariosDia = [
-                  null, // Dom
-                  [horario.lunesInicio, horario.lunesFin],
-                  [horario.martesInicio, horario.martesFin],
-                  [horario.miercolesInicio, horario.miercolesFin],
-                  [horario.juevesInicio, horario.juevesFin],
-                  [horario.viernesInicio, horario.viernesFin],
-                  [horario.sabadoInicio, horario.sabadoFin],
+                  null,
+                  [turnoActivo.lunesInicio, turnoActivo.lunesFin],
+                  [turnoActivo.martesInicio, turnoActivo.martesFin],
+                  [turnoActivo.miercolesInicio, turnoActivo.miercolesFin],
+                  [turnoActivo.juevesInicio, turnoActivo.juevesFin],
+                  [turnoActivo.viernesInicio, turnoActivo.viernesFin],
+                  [turnoActivo.sabadoInicio, turnoActivo.sabadoFin],
                 ]
                 const [ini, fin] = horariosDia[diaIdx] || [null, null]
                 horarioStr = ini && fin ? `${ini}-${fin}` : 'Libre'
@@ -297,51 +348,50 @@ export async function GET(request: NextRequest) {
           }
           yPos += 5
 
-          // Fila 3: ANÁLISIS (hora real registrada con colores)
+          // Fila 3: ANALISIS (hora real registrada con colores)
           doc.text('', margin + 1, yPos + 3.5)
           doc.setFont('helvetica', 'bold')
           doc.setTextColor(40, 40, 40)
           doc.text('', margin + 1, yPos + 3.5)
           doc.setFont('helvetica', 'normal')
-          doc.text('ANÁLISIS', margin + colNombre + 1, yPos + 3.5)
+          doc.text('ANALISIS', margin + colNombre + 1, yPos + 3.5)
           xPos = margin + colNombre + colTurno + colSemana
           for (let i = 0; i < 6; i++) {
             const fechaDia = diasSemana[i]
             if (fechaDia > fechaHasta) {
-              // Celda vacía
               doc.setFillColor(240, 240, 240)
               doc.rect(xPos, yPos, colDia, 6, 'F')
-              doc.text('—', xPos + 1, yPos + 4)
+              doc.text('-', xPos + 1, yPos + 4)
               xPos += colDia
               continue
             }
 
-            // Obtener horario esperado
+            // Obtener horario esperado del turno activo
             let esLibre = false
             let horarioInicio: string | null = null
             const diaIdx = getDiaSemanaIdx(fechaDia)
 
-            if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
-              const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
+            if (turnoActivo.tipoTurno === '4x4' && turnoActivo.ciclo4x4Inicio) {
+              const [y, m, d] = turnoActivo.ciclo4x4Inicio.split('-').map(Number)
               const cicloInicio = new Date(y, m - 1, d)
               const [y2, m2, d2] = fechaDia.split('-').map(Number)
               const fechaDate = new Date(y2, m2 - 1, d2)
               const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
               const diaEnCiclo = ((diffDays % 8) + 8) % 8
               if (diaEnCiclo < 4) {
-                horarioInicio = horario.ciclo4x4Turno === 'noche' ? '19:00' : '07:00'
+                horarioInicio = turnoActivo.ciclo4x4Turno === 'noche' ? '19:00' : '07:00'
               } else {
                 esLibre = true
               }
             } else {
               const horariosDia = [
                 null,
-                horario.lunesInicio,
-                horario.martesInicio,
-                horario.miercolesInicio,
-                horario.juevesInicio,
-                horario.viernesInicio,
-                horario.sabadoInicio,
+                turnoActivo.lunesInicio,
+                turnoActivo.martesInicio,
+                turnoActivo.miercolesInicio,
+                turnoActivo.juevesInicio,
+                turnoActivo.viernesInicio,
+                turnoActivo.sabadoInicio,
               ]
               horarioInicio = horariosDia[diaIdx] || null
               if (!horarioInicio) esLibre = true
@@ -360,11 +410,13 @@ export async function GET(request: NextRequest) {
               color = COLOR_LIBRE
               texto = 'Libre'
             } else if (primeraEntrada) {
-              // Hay entrada
               if (inas && inas.tipo === 'atraso') {
                 color = COLOR_ATRASO
                 texto = `${primeraEntrada.hora} (${inas.minutosAtraso}min)`
               } else if (inas && inas.tipo === 'salida_temprana') {
+                color = COLOR_ATRASO
+                texto = `${primeraEntrada.hora}`
+              } else if (inas && inas.tipo === 'colacion_excedida') {
                 color = COLOR_ATRASO
                 texto = `${primeraEntrada.hora}`
               } else {
@@ -372,7 +424,6 @@ export async function GET(request: NextRequest) {
                 texto = primeraEntrada.hora
               }
             } else {
-              // No hay entrada en día laborable
               color = COLOR_FALTA
               texto = 'FALLA'
             }
@@ -391,7 +442,7 @@ export async function GET(request: NextRequest) {
             doc.setTextColor(0, 0, 0)
             doc.text(texto, xPos + 1, yPos + 4)
 
-            // Justificación si existe
+            // Justificacion si existe
             if (inas?.justificacion) {
               doc.setFontSize(4)
               doc.setTextColor(0, 0, 100)
@@ -404,7 +455,7 @@ export async function GET(request: NextRequest) {
           }
           yPos += 7
 
-          // Línea separadora entre semanas
+          // Linea separadora entre semanas
           doc.setDrawColor(200, 200, 200)
           doc.setLineWidth(0.2)
           doc.line(margin, yPos, margin + tableWidth, yPos)
