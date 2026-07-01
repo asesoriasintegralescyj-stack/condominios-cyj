@@ -168,6 +168,53 @@ export function RondasModule() {
   const [qrLoading, setQrLoading] = useState(false)
   const [downloadingAll, setDownloadingAll] = useState(false)
 
+  // Filtros de registros
+  const [registroFiltroFechaDesde, setRegistroFiltroFechaDesde] = useState('')
+  const [registroFiltroFechaHasta, setRegistroFiltroFechaHasta] = useState('')
+  const [registroFiltroPersonal, setRegistroFiltroPersonal] = useState('')
+
+  // Registros filtrados
+  const registrosFiltrados = useMemo(() => {
+    let lista = registros
+    if (registroFiltroFechaDesde) {
+      lista = lista.filter((r) => r.fecha >= registroFiltroFechaDesde)
+    }
+    if (registroFiltroFechaHasta) {
+      lista = lista.filter((r) => r.fecha <= registroFiltroFechaHasta)
+    }
+    if (registroFiltroPersonal.trim()) {
+      const q = registroFiltroPersonal.toLowerCase()
+      lista = lista.filter((r) => (r.usuarioNombre || '').toLowerCase().includes(q))
+    }
+    return lista
+  }, [registros, registroFiltroFechaDesde, registroFiltroFechaHasta, registroFiltroPersonal])
+
+  // Exportar registros a CSV
+  const exportarRegistrosCSV = () => {
+    const headers = ['Ronda', 'Usuario', 'Fecha', 'Hora', 'Ubicacion', 'Latitud', 'Longitud', 'Observaciones']
+    const rows = registrosFiltrados.map((r) => [
+      selectedRonda?.nombre || '',
+      r.usuarioNombre || 'Desconocido',
+      r.fecha,
+      r.hora,
+      r.ubicacion || '',
+      r.latitud ?? '',
+      r.longitud ?? '',
+      r.observaciones || '',
+    ])
+    const csv = [headers, ...rows]
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `registros_rondas_${selectedRonda?.codigo || 'todas'}_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`CSV exportado: ${registrosFiltrados.length} registro(s)`)
+  }
+
   const fetchRondas = async () => {
     try {
       const res = await fetch('/api/rondas')
@@ -995,30 +1042,73 @@ export function RondasModule() {
 
       {/* Registros Dialog */}
       <Dialog open={registrosDialogOpen} onOpenChange={setRegistrosDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Registros — {selectedRonda?.nombre}</DialogTitle>
           </DialogHeader>
+
+          {/* Filtros y exportación */}
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            <div>
+              <Label className="text-[10px] text-gray-500">Desde</Label>
+              <Input
+                type="date"
+                value={registroFiltroFechaDesde}
+                onChange={(e) => setRegistroFiltroFechaDesde(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-gray-500">Hasta</Label>
+              <Input
+                type="date"
+                value={registroFiltroFechaHasta}
+                onChange={(e) => setRegistroFiltroFechaHasta(e.target.value)}
+                className="h-8 text-xs w-[140px]"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] text-gray-500">Personal</Label>
+              <Input
+                placeholder="Nombre..."
+                value={registroFiltroPersonal}
+                onChange={(e) => setRegistroFiltroPersonal(e.target.value)}
+                className="h-8 text-xs w-[150px]"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() => exportarRegistrosCSV()}
+              disabled={registrosFiltrados.length === 0}
+            >
+              <Download className="w-3.5 h-3.5 mr-1" />
+              Exportar CSV
+            </Button>
+          </div>
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Hora</TableHead>
-                  <TableHead>Ubicación</TableHead>
-                  <TableHead>Observaciones</TableHead>
+                  <TableHead className="min-w-[120px]">Usuario</TableHead>
+                  <TableHead className="min-w-[90px]">Fecha</TableHead>
+                  <TableHead className="min-w-[70px]">Hora</TableHead>
+                  <TableHead className="min-w-[150px]">Ubicación</TableHead>
+                  <TableHead className="min-w-[100px]">GPS</TableHead>
+                  <TableHead className="min-w-[100px]">Observaciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {registros.length === 0 ? (
+                {registrosFiltrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-4 text-gray-500">
-                      No hay registros
+                    <TableCell colSpan={6} className="text-center py-4 text-gray-500">
+                      No hay registros con los filtros seleccionados
                     </TableCell>
                   </TableRow>
                 ) : (
-                  registros.map((reg) => (
+                  registrosFiltrados.map((reg) => (
                     <TableRow key={reg.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -1028,14 +1118,33 @@ export function RondasModule() {
                       </TableCell>
                       <TableCell>{reg.fecha}</TableCell>
                       <TableCell>{reg.hora}</TableCell>
-                      <TableCell>{reg.ubicacion || '-'}</TableCell>
-                      <TableCell>{reg.observaciones || '-'}</TableCell>
+                      <TableCell className="text-xs">{reg.ubicacion || '-'}</TableCell>
+                      <TableCell className="text-xs">
+                        {reg.latitud != null && reg.longitud != null ? (
+                          <a
+                            href={`https://www.google.com/maps?q=${reg.latitud},${reg.longitud}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            {reg.latitud.toFixed(5)}, {reg.longitud.toFixed(5)}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">Sin GPS</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">{reg.observaciones || '-'}</TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
             </Table>
           </div>
+          {registrosFiltrados.length > 0 && (
+            <p className="text-xs text-gray-500 text-right">
+              {registrosFiltrados.length} registro(s) de {registros.length} total
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 
