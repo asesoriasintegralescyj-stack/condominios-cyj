@@ -532,11 +532,41 @@ export function parseRegistroAsistenciaExcel(data: any[]): RegistroReloj[] {
   for (const row of data) {
     if (!row.Nombre || !row['Fecha/Hora']) continue
 
-    const fechaHora = new Date(row['Fecha/Hora'])
+    let fechaHora: Date
+
+    // Detectar si Fecha/Hora es un número (formato serial de Excel) o un string/Date
+    const raw = row['Fecha/Hora']
+    if (raw instanceof Date) {
+      fechaHora = raw
+    } else if (typeof raw === 'number') {
+      // Excel serial date: días desde 1899-12-30
+      // Excel epoch = 1899-12-30 = 25569 días antes de 1970-01-01
+      const excelEpoch = new Date(1899, 11, 30)
+      fechaHora = new Date(excelEpoch.getTime() + raw * 24 * 60 * 60 * 1000)
+    } else if (typeof raw === 'string') {
+      // Probar formatos comunes: "2026-06-30 19:16:35", "30/06/2026 19:16:35"
+      fechaHora = new Date(raw)
+      if (isNaN(fechaHora.getTime())) {
+        // Probar formato DD/MM/YYYY HH:MM:SS
+        const m = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/)
+        if (m) {
+          fechaHora = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6]))
+        }
+      }
+    } else {
+      continue
+    }
+
     if (isNaN(fechaHora.getTime())) continue
 
-    const fecha = fechaHora.toISOString().split('T')[0]
-    const hora = fechaHora.toTimeString().split(' ')[0].substring(0, 5)
+    // Formatear fecha y hora usando métodos locales (no UTC) para evitar desfase
+    const yyyy = fechaHora.getFullYear()
+    const mm = String(fechaHora.getMonth() + 1).padStart(2, '0')
+    const dd = String(fechaHora.getDate()).padStart(2, '0')
+    const fecha = `${yyyy}-${mm}-${dd}`
+    const hh = String(fechaHora.getHours()).padStart(2, '0')
+    const min = String(fechaHora.getMinutes()).padStart(2, '0')
+    const hora = `${hh}:${min}`
 
     registros.push({
       nombre: String(row.Nombre).trim(),

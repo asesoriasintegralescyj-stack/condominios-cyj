@@ -1,13 +1,15 @@
 /**
- * API para generar reporte de asistencia POR TRABAJADOR.
+ * API para generar reporte de asistencia POR TRABAJADOR — Formato semanal.
  *
- * Formato del reporte:
- *   Por cada trabajador:
- *     - Nombre del trabajador (header)
- *     - Tabla con todos los días del rango:
- *       Fecha | Día | Horario Esperado | Horario Registro | Estado (con color)
- *     - Estados: BIEN (verde), ATRASO (amarillo), INASISTENCIA (rojo), DÍA LIBRE (gris), SALIDA TEMPRANA (naranja)
- *     - Justificación (si existe)
+ * Formato (según imagen de referencia):
+ * Por cada trabajador, por cada semana del mes:
+ *   - Fila 1: Nombre | Turno | Fecha inicio semana | Horario esperado Lun-Sáb
+ *   - Fila 2: (vacío) | Turno B | (vacío) | Horario esperado Lun-Sáb (si tiene turno B)
+ *   - Fila 3: (vacío) | ANÁLISIS | (vacío) | Hora real registrada con colores:
+ *       Verde (#C6E0B4) = OK (a tiempo)
+ *       Amarillo (#FFFF00) = Atraso
+ *       Rojo (#FFC7CE) = SIN REGISTRO / FALLA
+ *       Gris = DÍA LIBRE
  *
  * GET ?formato=pdf|csv&fechaDesde=YYYY-MM-DD&fechaHasta=YYYY-MM-DD&trabajador=nombre
  */
@@ -16,33 +18,53 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
-// Colores para el PDF
-const COLORS = {
-  BIEN: { fill: [209, 250, 229], text: [22, 163, 74] },         // verde
-  ATRASO: { fill: [254, 243, 199], text: [146, 64, 14] },       // amarillo
-  INASISTENCIA: { fill: [254, 226, 226], text: [153, 27, 27] }, // rojo
-  SALIDA_TEMPRANA: { fill: [255, 237, 213], text: [154, 52, 18] }, // naranja
-  DIA_LIBRE: { fill: [241, 245, 249], text: [100, 116, 139] },  // gris
-  SIN_REGISTRO: { fill: [248, 250, 252], text: [148, 163, 184] },
-}
-
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+const DIAS_CORTOS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-function getDiaSemana(fechaStr: string): string {
+// Colores del reporte (RGB)
+const COLOR_OK = [198, 224, 180]       // #C6E0B4 verde
+const COLOR_ATRASO = [255, 255, 0]     // #FFFF00 amarillo
+const COLOR_FALTA = [255, 199, 206]    // #FFC7CE rojo
+const COLOR_LIBRE = [217, 217, 217]    // gris
+const COLOR_SIN_REG = [255, 199, 206]  // rojo
+const COLOR_HEADER = [15, 32, 64]      // azul corporativo
+const COLOR_HEADER_YELLOW = [255, 192, 0] // amarillo header
+
+function getDiaSemanaIdx(fechaStr: string): number {
   const [y, m, d] = fechaStr.split('-').map(Number)
-  return DIAS_SEMANA[new Date(y, m - 1, d).getDay()]
+  return new Date(y, m - 1, d).getDay()
 }
 
-function formatFecha(fechaStr: string): string {
-  const [y, m, d] = fechaStr.split('-')
-  return `${d}-${m}`
+function getLunesDeSemana(fechaStr: string): string {
+  // Devuelve el lunes de la semana de la fecha dada
+  const [y, m, d] = fechaStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dia = date.getDay() // 0=Dom, 1=Lun, ..., 6=Sáb
+  const diff = dia === 0 ? -6 : 1 - dia // Si es domingo, retroceder 6 días; si no, ir al lunes
+  date.setDate(date.getDate() + diff)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
 function addDays(fechaStr: string, days: number): string {
   const [y, m, d] = fechaStr.split('-').map(Number)
   const date = new Date(y, m - 1, d)
   date.setDate(date.getDate() + days)
-  return date.toISOString().split('T')[0]
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+function formatFechaCorta(fechaStr: string): string {
+  const [y, m, d] = fechaStr.split('-')
+  return `${d}-${m}`
+}
+
+function normalize(s: string): string {
+  return s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
 }
 
 export async function GET(request: NextRequest) {
@@ -65,12 +87,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Obtener todos los horarios
+    // Obtener horarios
     const horarios = await db.horarioTrabajador.findMany({
       orderBy: { nombreTrabajador: 'asc' },
     })
 
-    // Filtrar por trabajador si se especifica
     let horariosFiltrados = horarios
     if (trabajadorFilter) {
       horariosFiltrados = horarios.filter((h) =>
@@ -79,207 +100,47 @@ export async function GET(request: NextRequest) {
     }
 
     if (horariosFiltrados.length === 0) {
-      return NextResponse.json(
-        { error: 'No hay horarios cargados. Importa los archivos primero.' },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: 'No hay horarios cargados' }, { status: 400 })
     }
 
-    // Obtener todos los registros del reloj en el rango
+    // Obtener registros del reloj
     const registros = await db.registroAsistenciaReloj.findMany({
       where: { fecha: { gte: fechaDesde, lte: fechaHasta } },
       orderBy: { fechaHora: 'asc' },
     })
 
-    // Obtener todas las inasistencias/atrasos en el rango
+    // Obtener inasistencias
     const inasistencias = await db.inasistenciaAtraso.findMany({
       where: { fecha: { gte: fechaDesde, lte: fechaHasta } },
       include: { justificacion: true },
     })
 
-    // Agrupar registros por trabajador (nombre normalizado) y fecha
+    // Agrupar registros por trabajador y fecha
     const registrosMap = new Map<string, Map<string, { entradas: any[]; salidas: any[] }>>()
-
-    const normalize = (s: string) =>
-      s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim()
-
     for (const reg of registros) {
       const key = normalize(reg.nombre)
-      if (!registrosMap.has(key)) {
-        registrosMap.set(key, new Map())
-      }
+      if (!registrosMap.has(key)) registrosMap.set(key, new Map())
       const porFecha = registrosMap.get(key)!
-      if (!porFecha.has(reg.fecha)) {
-        porFecha.set(reg.fecha, { entradas: [], salidas: [] })
-      }
+      if (!porFecha.has(reg.fecha)) porFecha.set(reg.fecha, { entradas: [], salidas: [] })
       const grupo = porFecha.get(reg.fecha)!
-      if (reg.tipoRegistro === 'Entrada') {
-        grupo.entradas.push(reg)
-      } else if (reg.tipoRegistro === 'Salida') {
-        grupo.salidas.push(reg)
-      }
+      if (reg.tipoRegistro === 'Entrada') grupo.entradas.push(reg)
+      else if (reg.tipoRegistro === 'Salida') grupo.salidas.push(reg)
     }
 
     // Agrupar inasistencias por trabajador y fecha
-    const inasistenciasMap = new Map<string, Map<string, any>>()
+    const inasMap = new Map<string, Map<string, any>>()
     for (const inas of inasistencias) {
       const key = normalize(inas.nombreTrabajador)
-      if (!inasistenciasMap.has(key)) {
-        inasistenciasMap.set(key, new Map())
-      }
-      inasistenciasMap.get(key)!.set(inas.fecha, inas)
+      if (!inasMap.has(key)) inasMap.set(key, new Map())
+      inasMap.get(key)!.set(inas.fecha, inas)
     }
 
-    // Generar lista de fechas
-    const fechas: string[] = []
-    let fechaActual = fechaDesde
+    // Generar lista de semanas (lunes a sábado)
+    const semanas: string[] = [] // fecha del lunes de cada semana
+    let fechaActual = getLunesDeSemana(fechaDesde)
     while (fechaActual <= fechaHasta) {
-      fechas.push(fechaActual)
-      fechaActual = addDays(fechaActual, 1)
-    }
-
-    // Construir datos por trabajador
-    const trabajadoresData: Array<{
-      nombre: string
-      departamento?: string | null
-      turno: string
-      tipoTurno: string
-      dias: Array<{
-        fecha: string
-        diaSemana: string
-        horarioEsperado: string
-        horarioRegistro: string
-        estado: string // BIEN, ATRASO, INASISTENCIA, SALIDA_TEMPRANA, DIA_LIBRE, SIN_REGISTRO
-        minutosAtraso: number
-        justificacion?: any
-      }>
-    }> = []
-
-    for (const horario of horariosFiltrados) {
-      const nombreNorm = normalize(horario.nombreTrabajador)
-      const registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
-      const inasistenciasTrabajador = inasistenciasMap.get(nombreNorm) || new Map()
-
-      // Buscar departamento del primer registro
-      let departamento: string | null = null
-      for (const [, grupo] of registrosTrabajador) {
-        if (grupo.entradas[0]?.departamento) {
-          departamento = grupo.entradas[0].departamento
-          break
-        }
-        if (grupo.salidas[0]?.departamento) {
-          departamento = grupo.salidas[0].departamento
-          break
-        }
-      }
-
-      const dias: any[] = []
-
-      for (const fecha of fechas) {
-        const diaSemana = getDiaSemana(fecha)
-
-        // Obtener horario esperado
-        let horarioInicio: string | null = null
-        let horarioFin: string | null = null
-        let esLibre = false
-
-        if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
-          // Calcular día del ciclo 4x4
-          const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
-          const cicloInicio = new Date(y, m - 1, d)
-          const [y2, m2, d2] = fecha.split('-').map(Number)
-          const fechaDate = new Date(y2, m2 - 1, d2)
-          const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
-          const diaEnCiclo = ((diffDays % 8) + 8) % 8
-          if (diaEnCiclo < 4) {
-            if (horario.ciclo4x4Turno === 'noche') {
-              horarioInicio = '19:00'
-              horarioFin = '07:00'
-            } else {
-              horarioInicio = '07:00'
-              horarioFin = '19:00'
-            }
-          } else {
-            esLibre = true
-          }
-        } else {
-          // Turno fijo
-          switch (diaSemana) {
-            case 'Lunes': horarioInicio = horario.lunesInicio; horarioFin = horario.lunesFin; break
-            case 'Martes': horarioInicio = horario.martesInicio; horarioFin = horario.martesFin; break
-            case 'Miércoles': horarioInicio = horario.miercolesInicio; horarioFin = horario.miercolesFin; break
-            case 'Jueves': horarioInicio = horario.juevesInicio; horarioFin = horario.juevesFin; break
-            case 'Viernes': horarioInicio = horario.viernesInicio; horarioFin = horario.viernesFin; break
-            case 'Sábado': horarioInicio = horario.sabadoInicio; horarioFin = horario.sabadoFin; break
-            case 'Domingo': esLibre = true; break
-          }
-          if (!horarioInicio) esLibre = true
-        }
-
-        const horarioEsperado = esLibre ? 'Libre' : (horarioInicio && horarioFin ? `${horarioInicio} - ${horarioFin}` : '—')
-
-        // Obtener registros reales
-        const grupo = registrosTrabajador.get(fecha)
-        const primeraEntrada = grupo?.entradas[0]
-        const ultimaSalida = grupo?.salidas[grupo.salidas.length - 1]
-        const horarioRegistro = primeraEntrada
-          ? `${primeraEntrada.hora}${ultimaSalida ? ' - ' + ultimaSalida.hora : ''}`
-          : '—'
-
-        // Determinar estado
-        let estado = 'SIN_REGISTRO'
-        let minutosAtraso = 0
-
-        if (esLibre) {
-          estado = 'DIA_LIBRE'
-        } else if (primeraEntrada) {
-          // Hay entrada → verificar si es atraso
-          const inas = inasistenciasTrabajador.get(fecha)
-          if (inas) {
-            if (inas.tipo === 'atraso') {
-              estado = 'ATRASO'
-              minutosAtraso = inas.minutosAtraso || 0
-            } else if (inas.tipo === 'salida_temprana') {
-              estado = 'SALIDA_TEMPRANA'
-              minutosAtraso = inas.minutosAtraso || 0
-            } else {
-              estado = 'BIEN'
-            }
-          } else {
-            estado = 'BIEN'
-          }
-        } else {
-          // No hay entrada en día laborable
-          const inas = inasistenciasTrabajador.get(fecha)
-          if (inas && inas.tipo === 'ausencia') {
-            estado = 'INASISTENCIA'
-          } else {
-            estado = 'INASISTENCIA'
-          }
-        }
-
-        // Justificación
-        const inas = inasistenciasTrabajador.get(fecha)
-        const justificacion = inas?.justificacion || undefined
-
-        dias.push({
-          fecha,
-          diaSemana,
-          horarioEsperado,
-          horarioRegistro,
-          estado,
-          minutosAtraso,
-          justificacion,
-        })
-      }
-
-      trabajadoresData.push({
-        nombre: horario.nombreTrabajador,
-        departamento,
-        turno: horario.turno,
-        tipoTurno: horario.tipoTurno,
-        dias,
-      })
+      semanas.push(fechaActual)
+      fechaActual = addDays(fechaActual, 7)
     }
 
     // ============================================
@@ -287,218 +148,397 @@ export async function GET(request: NextRequest) {
     // ============================================
     if (formato === 'pdf') {
       const { default: jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
-      const margin = 10
-      const contentWidth = pageWidth - margin * 2
+      const margin = 8
 
       // Header corporativo
-      doc.setFillColor(15, 32, 64)
-      doc.rect(0, 0, pageWidth, 18, 'F')
+      doc.setFillColor(COLOR_HEADER[0], COLOR_HEADER[1], COLOR_HEADER[2])
+      doc.rect(0, 0, pageWidth, 15, 'F')
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(13)
+      doc.setFontSize(12)
       doc.setFont('helvetica', 'bold')
-      doc.text('Reporte de Asistencia por Trabajador', margin, 11)
-      doc.setFontSize(8)
+      doc.text('Reporte de Asistencia — Condominio Laguna Norte', margin, 9)
+      doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
       doc.text(
-        `Condominio Laguna Norte  ·  ${formatFecha(fechaDesde)} al ${formatFecha(fechaHasta)}  ·  Generado: ${new Date().toLocaleDateString('es-CL')}`,
+        `Período: ${formatFechaCorta(fechaDesde)} al ${formatFechaCorta(fechaHasta)}  ·  Generado: ${new Date().toLocaleDateString('es-CL')}`,
         margin,
-        16,
+        13,
       )
 
-      let yPos = 24
+      let yPos = 20
+
+      // Columnas: Nombre | Turno | Semana | Lun | Mar | Mié | Jue | Vie | Sáb
+      const colNombre = 45
+      const colTurno = 20
+      const colSemana = 22
+      const colDia = (pageWidth - margin * 2 - colNombre - colTurno - colSemana) / 6
+      const tableWidth = colNombre + colTurno + colSemana + colDia * 6
 
       // Por cada trabajador
-      for (const trabajador of trabajadoresData) {
-        // Salto de página si no hay espacio suficiente (mínimo 40mm para header + al menos 2 filas)
-        if (yPos > pageHeight - 50) {
-          doc.addPage()
-          yPos = 20
+      for (const horario of horariosFiltrados) {
+        const nombreNorm = normalize(horario.nombreTrabajador)
+        const registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
+        const inasistenciasTrabajador = inasMap.get(nombreNorm) || new Map()
+
+        // Buscar departamento
+        let departamento = ''
+        for (const [, grupo] of registrosTrabajador) {
+          if (grupo.entradas[0]?.departamento) {
+            departamento = grupo.entradas[0].departamento
+            break
+          }
         }
 
-        // Header del trabajador
-        doc.setFillColor(15, 32, 64)
-        doc.rect(margin, yPos, contentWidth, 7, 'F')
+        // Salto de página si no hay espacio para header + 3 filas
+        if (yPos > pageHeight - 25) {
+          doc.addPage()
+          yPos = 15
+        }
+
+        // Nombre del trabajador (header)
+        doc.setFillColor(COLOR_HEADER[0], COLOR_HEADER[1], COLOR_HEADER[2])
+        doc.rect(margin, yPos, tableWidth, 6, 'F')
         doc.setTextColor(255, 255, 255)
-        doc.setFontSize(9)
+        doc.setFontSize(8)
         doc.setFont('helvetica', 'bold')
-        doc.text(
-          `${trabajador.nombre}  —  ${trabajador.turno} (${trabajador.tipoTurno})${trabajador.departamento ? '  —  ' + trabajador.departamento : ''}`,
-          margin + 1,
-          yPos + 5,
-        )
-        yPos += 7
+        doc.text(`${horario.nombreTrabajador}  —  ${departamento || horario.turno}`, margin + 1, yPos + 4)
+        yPos += 6
 
-        // Cabecera de tabla
-        const colWidths = [16, 20, 35, 35, 30, 45]
-        const tableWidth = colWidths.reduce((a, b) => a + b, 0)
-        const tableX = margin + (contentWidth - tableWidth) / 2 // centrar
-
-        doc.setFillColor(241, 245, 249)
-        doc.rect(tableX, yPos, tableWidth, 5, 'F')
-        doc.setTextColor(15, 32, 64)
-        doc.setFontSize(6)
-        doc.setFont('helvetica', 'bold')
-        const headers = ['Fecha', 'Día', 'Horario Trab.', 'Horario Reg.', 'Estado', 'Justificación']
-        let xPos = tableX + 1
-        headers.forEach((h, i) => {
-          doc.text(h, xPos, yPos + 3.5)
-          xPos += colWidths[i]
-        })
-        yPos += 5
-
-        // Filas de días
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6)
-
-        for (const dia of trabajador.dias) {
+        // Por cada semana
+        for (const semanaInicio of semanas) {
           // Salto de página
-          if (yPos > pageHeight - 15) {
+          if (yPos > pageHeight - 20) {
             doc.addPage()
-            yPos = 20
+            yPos = 15
           }
 
-          // Color de fondo según estado
-          const color = COLORS[dia.estado as keyof typeof COLORS] || COLORS.SIN_REGISTRO
-          doc.setFillColor(color.fill[0], color.fill[1], color.fill[2])
-          doc.rect(tableX, yPos, tableWidth, 5, 'F')
+          // Generar los 6 días (Lun-Sáb) de esta semana
+          const diasSemana: string[] = []
+          for (let i = 0; i < 6; i++) {
+            diasSemana.push(addDays(semanaInicio, i))
+          }
 
-          // Bordes
-          doc.setDrawColor(200, 200, 200)
-          doc.setLineWidth(0.1)
-          doc.rect(tableX, yPos, tableWidth, 5)
+          // Verificar si hay datos en esta semana (si no, saltar)
+          const tieneDatos = diasSemana.some((f) => f <= fechaHasta)
+          if (!tieneDatos) continue
 
-          // Texto
-          doc.setTextColor(color.text[0], color.text[1], color.text[2])
-
-          const estadoLabel =
-            dia.estado === 'BIEN' ? 'BIEN' :
-            dia.estado === 'ATRASO' ? `ATRASO (${dia.minutosAtraso}min)` :
-            dia.estado === 'INASISTENCIA' ? 'INASISTENCIA' :
-            dia.estado === 'SALIDA_TEMPRANA' ? 'SALIDA TEMP.' :
-            dia.estado === 'DIA_LIBRE' ? 'DÍA LIBRE' : 'SIN REGISTRO'
-
-          const justText = dia.justificacion
-            ? `${dia.justificacion.tipoJustificacion}${dia.justificacion.estado === 'aprobado' ? ' (OK)' : dia.justificacion.estado === 'rechazado' ? ' (RECH.)' : ''}`
-            : ''
-
-          const rowData = [
-            formatFecha(dia.fecha),
-            dia.diaSemana.substring(0, 3),
-            dia.horarioEsperado,
-            dia.horarioRegistro,
-            estadoLabel,
-            justText,
-          ]
-          xPos = tableX + 1
-          rowData.forEach((cell, i) => {
-            doc.text(String(cell).substring(0, colWidths[i] / 1.8), xPos, yPos + 3.5)
-            xPos += colWidths[i]
-          })
+          // Fila 1: Header de días (Lun, Mar, Mié, Jue, Vie, Sáb)
+          doc.setFillColor(COLOR_HEADER_YELLOW[0], COLOR_HEADER_YELLOW[1], COLOR_HEADER_YELLOW[2])
+          doc.rect(margin, yPos, tableWidth, 5, 'F')
+          doc.setTextColor(0, 0, 0)
+          doc.setFontSize(6)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Nombre', margin + 1, yPos + 3.5)
+          doc.text('Turno', margin + colNombre + 1, yPos + 3.5)
+          doc.text('Semana', margin + colNombre + colTurno + 1, yPos + 3.5)
+          let xPos = margin + colNombre + colTurno + colSemana
+          for (let i = 0; i < 6; i++) {
+            const fechaDia = diasSemana[i]
+            if (fechaDia > fechaHasta) {
+              doc.text('—', xPos + 1, yPos + 3.5)
+            } else {
+              doc.text(`${DIAS_CORTOS[i + 1]} ${formatFechaCorta(fechaDia)}`, xPos + 1, yPos + 3.5)
+            }
+            xPos += colDia
+          }
           yPos += 5
+
+          // Fila 2: Horario esperado (Turno A)
+          doc.setFillColor(245, 245, 245)
+          doc.rect(margin, yPos, tableWidth, 5, 'F')
+          doc.setTextColor(40, 40, 40)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(6)
+          doc.text(horario.nombreTrabajador.substring(0, 25), margin + 1, yPos + 3.5)
+          doc.text(horario.turno, margin + colNombre + 1, yPos + 3.5)
+          doc.text(formatFechaCorta(semanaInicio), margin + colNombre + colTurno + 1, yPos + 3.5)
+          xPos = margin + colNombre + colTurno + colSemana
+          for (let i = 0; i < 6; i++) {
+            const fechaDia = diasSemana[i]
+            if (fechaDia > fechaHasta) {
+              doc.text('—', xPos + 1, yPos + 3.5)
+            } else {
+              // Obtener horario esperado para este día
+              let horarioStr = 'Libre'
+              const diaIdx = getDiaSemanaIdx(fechaDia)
+
+              if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
+                const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
+                const cicloInicio = new Date(y, m - 1, d)
+                const [y2, m2, d2] = fechaDia.split('-').map(Number)
+                const fechaDate = new Date(y2, m2 - 1, d2)
+                const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
+                const diaEnCiclo = ((diffDays % 8) + 8) % 8
+                if (diaEnCiclo < 4) {
+                  horarioStr = horario.ciclo4x4Turno === 'noche' ? '19:00-07:00' : '07:00-19:00'
+                } else {
+                  horarioStr = 'Libre'
+                }
+              } else {
+                const horariosDia = [
+                  null, // Dom
+                  [horario.lunesInicio, horario.lunesFin],
+                  [horario.martesInicio, horario.martesFin],
+                  [horario.miercolesInicio, horario.miercolesFin],
+                  [horario.juevesInicio, horario.juevesFin],
+                  [horario.viernesInicio, horario.viernesFin],
+                  [horario.sabadoInicio, horario.sabadoFin],
+                ]
+                const [ini, fin] = horariosDia[diaIdx] || [null, null]
+                horarioStr = ini && fin ? `${ini}-${fin}` : 'Libre'
+              }
+              doc.text(horarioStr, xPos + 1, yPos + 3.5)
+            }
+            xPos += colDia
+          }
+          yPos += 5
+
+          // Fila 3: ANÁLISIS (hora real registrada con colores)
+          doc.text('', margin + 1, yPos + 3.5)
+          doc.setFont('helvetica', 'bold')
+          doc.setTextColor(40, 40, 40)
+          doc.text('', margin + 1, yPos + 3.5)
+          doc.setFont('helvetica', 'normal')
+          doc.text('ANÁLISIS', margin + colNombre + 1, yPos + 3.5)
+          xPos = margin + colNombre + colTurno + colSemana
+          for (let i = 0; i < 6; i++) {
+            const fechaDia = diasSemana[i]
+            if (fechaDia > fechaHasta) {
+              // Celda vacía
+              doc.setFillColor(240, 240, 240)
+              doc.rect(xPos, yPos, colDia, 6, 'F')
+              doc.text('—', xPos + 1, yPos + 4)
+              xPos += colDia
+              continue
+            }
+
+            // Obtener horario esperado
+            let esLibre = false
+            let horarioInicio: string | null = null
+            const diaIdx = getDiaSemanaIdx(fechaDia)
+
+            if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
+              const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
+              const cicloInicio = new Date(y, m - 1, d)
+              const [y2, m2, d2] = fechaDia.split('-').map(Number)
+              const fechaDate = new Date(y2, m2 - 1, d2)
+              const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
+              const diaEnCiclo = ((diffDays % 8) + 8) % 8
+              if (diaEnCiclo < 4) {
+                horarioInicio = horario.ciclo4x4Turno === 'noche' ? '19:00' : '07:00'
+              } else {
+                esLibre = true
+              }
+            } else {
+              const horariosDia = [
+                null,
+                horario.lunesInicio,
+                horario.martesInicio,
+                horario.miercolesInicio,
+                horario.juevesInicio,
+                horario.viernesInicio,
+                horario.sabadoInicio,
+              ]
+              horarioInicio = horariosDia[diaIdx] || null
+              if (!horarioInicio) esLibre = true
+            }
+
+            // Obtener registro real
+            const grupo = registrosTrabajador.get(fechaDia)
+            const primeraEntrada = grupo?.entradas[0]
+            const inas = inasistenciasTrabajador.get(fechaDia)
+
+            // Determinar color y texto
+            let color = COLOR_SIN_REG
+            let texto = 'SIN REGISTRO'
+
+            if (esLibre) {
+              color = COLOR_LIBRE
+              texto = 'Libre'
+            } else if (primeraEntrada) {
+              // Hay entrada
+              if (inas && inas.tipo === 'atraso') {
+                color = COLOR_ATRASO
+                texto = `${primeraEntrada.hora} (${inas.minutosAtraso}min)`
+              } else if (inas && inas.tipo === 'salida_temprana') {
+                color = COLOR_ATRASO
+                texto = `${primeraEntrada.hora}`
+              } else {
+                color = COLOR_OK
+                texto = primeraEntrada.hora
+              }
+            } else {
+              // No hay entrada en día laborable
+              color = COLOR_FALTA
+              texto = 'FALLA'
+            }
+
+            // Pintar celda con color
+            doc.setFillColor(color[0], color[1], color[2])
+            doc.rect(xPos, yPos, colDia, 6, 'F')
+
+            // Borde
+            doc.setDrawColor(180, 180, 180)
+            doc.setLineWidth(0.1)
+            doc.rect(xPos, yPos, colDia, 6)
+
+            // Texto
+            doc.setFontSize(6)
+            doc.setTextColor(0, 0, 0)
+            doc.text(texto, xPos + 1, yPos + 4)
+
+            // Justificación si existe
+            if (inas?.justificacion) {
+              doc.setFontSize(4)
+              doc.setTextColor(0, 0, 100)
+              doc.text(inas.justificacion.tipoJustificacion.substring(0, 8), xPos + 1, yPos + 5.5)
+              doc.setFontSize(6)
+              doc.setTextColor(0, 0, 0)
+            }
+
+            xPos += colDia
+          }
+          yPos += 7
+
+          // Línea separadora entre semanas
+          doc.setDrawColor(200, 200, 200)
+          doc.setLineWidth(0.2)
+          doc.line(margin, yPos, margin + tableWidth, yPos)
+          yPos += 2
         }
 
-        // Resumen del trabajador
-        const totalBien = trabajador.dias.filter((d) => d.estado === 'BIEN').length
-        const totalAtrasos = trabajador.dias.filter((d) => d.estado === 'ATRASO').length
-        const totalAusencias = trabajador.dias.filter((d) => d.estado === 'INASISTENCIA').length
-        const totalLibres = trabajador.dias.filter((d) => d.estado === 'DIA_LIBRE').length
-        const totalSalidas = trabajador.dias.filter((d) => d.estado === 'SALIDA_TEMPRANA').length
-        const totalMinutos = trabajador.dias.reduce((acc, d) => acc + (d.minutosAtraso || 0), 0)
-
-        yPos += 2
-        doc.setFillColor(245, 245, 245)
-        doc.rect(tableX, yPos, tableWidth, 5, 'F')
-        doc.setTextColor(40, 40, 40)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(6)
-        doc.text(
-          `Resumen: BIEN=${totalBien}  ATRASOS=${totalAtrasos}  AUSENCIAS=${totalAusencias}  SAL.TEMP=${totalSalidas}  LIBRES=${totalLibres}  MIN.TOTAL=${totalMinutos}`,
-          tableX + 1,
-          yPos + 3.5,
-        )
-        yPos += 10
+        // Espacio entre trabajadores
+        yPos += 4
       }
 
-      // Leyenda de colores al final
-      if (yPos > pageHeight - 30) {
+      // Leyenda al final
+      if (yPos > pageHeight - 20) {
         doc.addPage()
-        yPos = 20
+        yPos = 15
       }
-      yPos += 5
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(15, 32, 64)
+      doc.setFontSize(7)
+      doc.setTextColor(0, 0, 0)
       doc.text('Leyenda:', margin, yPos)
-      yPos += 5
+      yPos += 4
 
       const leyenda = [
-        { label: 'BIEN — Presente y a tiempo', color: COLORS.BIEN },
-        { label: 'ATRASO — Entró tarde (más de 5 min)', color: COLORS.ATRASO },
-        { label: 'INASISTENCIA — No registró entrada', color: COLORS.INASISTENCIA },
-        { label: 'SALIDA TEMP. — Salió antes de hora', color: COLORS.SALIDA_TEMPRANA },
-        { label: 'DÍA LIBRE — No le toca trabajar', color: COLORS.DIA_LIBRE },
+        { color: COLOR_OK, label: 'OK — Presente y a tiempo' },
+        { color: COLOR_ATRASO, label: 'Atraso — Entró tarde (con minutos)' },
+        { color: COLOR_FALTA, label: 'FALLA — No registró entrada' },
+        { color: COLOR_LIBRE, label: 'Libre — Día no laborable' },
       ]
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFontSize(6)
       for (const item of leyenda) {
-        doc.setFillColor(item.color.fill[0], item.color.fill[1], item.color.fill[2])
-        doc.rect(margin, yPos - 3, 4, 4, 'F')
-        doc.setTextColor(item.color.text[0], item.color.text[1], item.color.text[2])
-        doc.text(item.label, margin + 6, yPos)
-        yPos += 5
+        doc.setFillColor(item.color[0], item.color[1], item.color[2])
+        doc.rect(margin, yPos - 3, 4, 3, 'F')
+        doc.setDrawColor(150, 150, 150)
+        doc.rect(margin, yPos - 3, 4, 3)
+        doc.text(item.label, margin + 6, yPos - 0.5)
+        yPos += 4
       }
 
       const pdfBuffer = doc.output('arraybuffer')
       return new NextResponse(pdfBuffer, {
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="reporte_asistencia_por_trabajador_${fechaDesde}_${fechaHasta}.pdf"`,
+          'Content-Disposition': `attachment; filename="reporte_asistencia_${fechaDesde}_${fechaHasta}.pdf"`,
         },
       })
     }
 
     // ============================================
-    // GENERAR CSV
+    // CSV
     // ============================================
     if (formato === 'csv') {
       const headers = [
-        'Trabajador',
-        'Departamento',
-        'Turno',
-        'Fecha',
-        'Día',
-        'Horario Esperado',
-        'Horario Registro',
-        'Estado',
-        'Minutos Atraso',
-        'Justificación',
-        'Estado Justificación',
-        'Supervisor',
-        'Admin Revisor',
+        'Trabajador', 'Turno', 'Semana', 'Día', 'Fecha',
+        'Horario Esperado', 'Horario Registro', 'Estado', 'Minutos Atraso',
+        'Justificación', 'Estado Justificación',
       ]
 
       const rows: any[] = []
-      for (const t of trabajadoresData) {
-        for (const d of t.dias) {
-          rows.push([
-            t.nombre,
-            t.departamento || '',
-            t.turno,
-            d.fecha,
-            d.diaSemana,
-            d.horarioEsperado,
-            d.horarioRegistro,
-            d.estado,
-            d.minutosAtraso || 0,
-            d.justificacion?.tipoJustificacion || '',
-            d.justificacion?.estado || '',
-            d.justificacion?.supervisorNombre || '',
-            d.justificacion?.adminNombre || '',
-          ])
+      for (const horario of horariosFiltrados) {
+        const nombreNorm = normalize(horario.nombreTrabajador)
+        const registrosTrabajador = registrosMap.get(nombreNorm) || new Map()
+        const inasistenciasTrabajador = inasMap.get(nombreNorm) || new Map()
+
+        for (const semanaInicio of semanas) {
+          for (let i = 0; i < 6; i++) {
+            const fechaDia = addDays(semanaInicio, i)
+            if (fechaDia > fechaHasta) continue
+
+            const grupo = registrosTrabajador.get(fechaDia)
+            const primeraEntrada = grupo?.entradas[0]
+            const inas = inasistenciasTrabajador.get(fechaDia)
+
+            let horarioEsperado = 'Libre'
+            let esLibre = false
+            const diaIdx = getDiaSemanaIdx(fechaDia)
+
+            if (horario.tipoTurno === '4x4' && horario.ciclo4x4Inicio) {
+              const [y, m, d] = horario.ciclo4x4Inicio.split('-').map(Number)
+              const cicloInicio = new Date(y, m - 1, d)
+              const [y2, m2, d2] = fechaDia.split('-').map(Number)
+              const fechaDate = new Date(y2, m2 - 1, d2)
+              const diffDays = Math.floor((fechaDate.getTime() - cicloInicio.getTime()) / (1000 * 60 * 60 * 24))
+              const diaEnCiclo = ((diffDays % 8) + 8) % 8
+              if (diaEnCiclo < 4) {
+                horarioEsperado = horario.ciclo4x4Turno === 'noche' ? '19:00-07:00' : '07:00-19:00'
+              } else {
+                esLibre = true
+                horarioEsperado = 'Libre'
+              }
+            } else {
+              const horariosDia = [null, horario.lunesInicio, horario.martesInicio, horario.miercolesInicio, horario.juevesInicio, horario.viernesInicio, horario.sabadoInicio]
+              const horariosFinDia = [null, horario.lunesFin, horario.martesFin, horario.miercolesFin, horario.juevesFin, horario.viernesFin, horario.sabadoFin]
+              const ini = horariosDia[diaIdx]
+              const fin = horariosFinDia[diaIdx]
+              if (ini && fin) {
+                horarioEsperado = `${ini}-${fin}`
+              } else {
+                esLibre = true
+                horarioEsperado = 'Libre'
+              }
+            }
+
+            let estado = 'SIN_REGISTRO'
+            let minutosAtraso = 0
+            if (esLibre) {
+              estado = 'LIBRE'
+            } else if (primeraEntrada) {
+              if (inas && inas.tipo === 'atraso') {
+                estado = 'ATRASO'
+                minutosAtraso = inas.minutosAtraso || 0
+              } else if (inas && inas.tipo === 'salida_temprana') {
+                estado = 'SALIDA_TEMPRANA'
+                minutosAtraso = inas.minutosAtraso || 0
+              } else {
+                estado = 'OK'
+              }
+            } else {
+              estado = 'FALTA'
+            }
+
+            rows.push([
+              horario.nombreTrabajador,
+              horario.turno,
+              formatFechaCorta(semanaInicio),
+              DIAS_CORTOS[diaIdx],
+              fechaDia,
+              horarioEsperado,
+              primeraEntrada?.hora || '',
+              estado,
+              minutosAtraso,
+              inas?.justificacion?.tipoJustificacion || '',
+              inas?.justificacion?.estado || '',
+            ])
+          }
         }
       }
 
@@ -509,7 +549,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse('\ufeff' + csv, {
         headers: {
           'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename="reporte_asistencia_por_trabajador_${fechaDesde}_${fechaHasta}.csv"`,
+          'Content-Disposition': `attachment; filename="reporte_asistencia_${fechaDesde}_${fechaHasta}.csv"`,
         },
       })
     }
