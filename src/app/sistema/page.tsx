@@ -4,16 +4,25 @@ import { Sidebar } from '@/components/Sidebar'
 import { MainContent } from '@/components/MainContent'
 import { useSession } from '@/hooks/use-session'
 import { useAutoCondominio } from '@/hooks/use-auto-condominio'
+import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 
 export default function SistemaPage() {
-  const { user, authenticated, loading } = useSession()
+  const { user, authenticated, loading, refresh } = useSession()
   const { status: condominioStatus } = useAutoCondominio()
   const router = useRouter()
   const { currentModule, setCurrentModule } = useAppStore()
+
+  // Auto-refresh global cada 5 minutos
+  // Refresca la sesión y los datos del usuario
+  useAutoRefresh(() => {
+    if (authenticated) {
+      refresh()
+    }
+  }, 5 * 60 * 1000)
 
   useEffect(() => {
     if (!loading && !authenticated) {
@@ -22,7 +31,6 @@ export default function SistemaPage() {
   }, [loading, authenticated, router])
 
   // Si el usuario es guardia, redirigir a la página dedicada /rondas-guardia
-  // (no debe ver el sistema completo con sidebar)
   useEffect(() => {
     if (authenticated && user?.rol === 'guardia') {
       router.replace('/rondas-guardia')
@@ -48,14 +56,10 @@ export default function SistemaPage() {
     )
   }
 
-  // Si no está autenticado, no mostrar nada (ya se está redirigiendo)
   if (!authenticated) {
     return null
   }
 
-  // Mostrar loading mientras se carga el condominio principal en background.
-  // El sistema es para un solo condominio; una vez cargado, todos los módulos
-  // pueden usarlo vía useAppStore().currentCondominio
   if (condominioStatus === 'loading') {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-100">

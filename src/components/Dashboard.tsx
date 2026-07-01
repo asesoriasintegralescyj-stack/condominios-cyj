@@ -160,10 +160,16 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then(res => res.json())
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+    const fetchData = () => {
+      fetch('/api/dashboard')
+        .then(res => res.json())
+        .then(d => { setData(d); setLoading(false) })
+        .catch(() => setLoading(false))
+    }
+    fetchData()
+    // Auto-refresh cada 2 minutos
+    const interval = setInterval(fetchData, 120000)
+    return () => clearInterval(interval)
   }, [])
 
   if (loading) {

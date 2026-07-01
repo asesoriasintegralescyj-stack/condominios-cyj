@@ -218,6 +218,11 @@ export function SolicitudesComprasModule() {
 
   useEffect(() => {
     void fetchSolicitudes()
+    // Auto-refresh cada 60 segundos
+    const interval = setInterval(() => {
+      void fetchSolicitudes()
+    }, 60000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {

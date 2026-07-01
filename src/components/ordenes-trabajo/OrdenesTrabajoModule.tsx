@@ -324,6 +324,11 @@ export function OrdenesTrabajoModule() {
     void (async () => {
       await fetchCatalogs()
     })()
+    // Auto-refresh cada 60 segundos
+    const interval = setInterval(() => {
+      fetchOrdenes(search)
+    }, 60000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
