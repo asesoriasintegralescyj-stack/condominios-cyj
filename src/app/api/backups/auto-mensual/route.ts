@@ -628,7 +628,7 @@ export async function POST(request: Request) {
         console.log(`[Backup Auto] Enviando parte ${parteNum}/${totalPartes} (${parteMB} MB)...`)
 
         // Reintentar hasta 3 veces por parte
-        let resultado = { ok: false, error: '' }
+        let resultado: { ok: boolean; error?: string } = { ok: false, error: '' }
         for (let intento = 1; intento <= 3 && !resultado.ok; intento++) {
           console.log(`[Backup Auto] Parte ${parteNum} — intento ${intento}/3`)
           resultado = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
