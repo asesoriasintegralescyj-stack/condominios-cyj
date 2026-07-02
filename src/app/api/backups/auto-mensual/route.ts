@@ -632,6 +632,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'}`,
+      codeVersion: 'cd00d05-strict-limit',
       resumen: {
         ot: otCount,
         proyectos: proyCount,
