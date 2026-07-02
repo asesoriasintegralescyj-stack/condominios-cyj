@@ -160,7 +160,7 @@ const categoriaColors: Record<string, string> = {
 const estadoColors: Record<string, string> = {
   Activo: 'bg-green-100 text-green-700',
   Inactivo: 'bg-slate-100 text-slate-700',
-  'En Reparación': 'bg-yellow-100 text-yellow-700',
+  'En Reparación': 'bg-amber-100 text-amber-700',
   'Dado de Baja': 'bg-red-100 text-red-700',
 }
 
@@ -900,7 +900,7 @@ export function ActivosModule() {
             {/* Mantenimiento */}
             <div className="space-y-3 border-t pt-4">
               <Label className="flex items-center gap-2 text-sm font-semibold">
-                <Settings className="w-4 h-4 text-[#0f2040]" />
+                <Settings className="w-4 h-4 text-[#0f2044]" />
                 Mantenimiento
               </Label>
               <div className="space-y-1.5 min-w-0">
@@ -980,10 +980,10 @@ export function ActivosModule() {
                       className="hidden"
                       onChange={handleInformeMantencionUpload}
                     />
-                    <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2044] hover:bg-slate-50 transition-colors">
                       <Upload className="w-6 h-6 text-slate-400" />
                       <p className="text-sm text-slate-600">
-                        <span className="text-[#0f2040] font-semibold">
+                        <span className="text-[#0f2044] font-semibold">
                           Haz clic para subir
                         </span>{' '}
                         un PDF
@@ -1000,7 +1000,7 @@ export function ActivosModule() {
             {/* Manual de Usuario */}
             <div className="space-y-2 border-t pt-4 min-w-0">
               <Label className="flex items-center gap-2 text-sm font-semibold">
-                <FileText className="w-4 h-4 text-[#0f2040]" />
+                <FileText className="w-4 h-4 text-[#0f2044]" />
                 Manual de Usuario (PDF)
               </Label>
               {manual.nombre && !manual.removed ? (
@@ -1062,10 +1062,10 @@ export function ActivosModule() {
                     className="hidden"
                     onChange={handleManualUpload}
                   />
-                  <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2044] hover:bg-slate-50 transition-colors">
                     <Upload className="w-6 h-6 text-slate-400" />
                     <p className="text-sm text-slate-600">
-                      <span className="text-[#0f2040] font-semibold">
+                      <span className="text-[#0f2044] font-semibold">
                         Haz clic para subir
                       </span>{' '}
                       un PDF
@@ -1098,7 +1098,7 @@ export function ActivosModule() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <QrCode className="w-5 h-5 text-[#0f2040]" />
+              <QrCode className="w-5 h-5 text-[#0f2044]" />
               Código QR del Activo
             </DialogTitle>
           </DialogHeader>
@@ -1121,7 +1121,7 @@ export function ActivosModule() {
                   {qrActivo.nombre}
                 </p>
                 {qrActivo.serie && (
-                  <p className="text-xs font-mono text-[#0f2040]">
+                  <p className="text-xs font-mono text-[#0f2044]">
                     {qrActivo.serie}
                   </p>
                 )}
@@ -1136,7 +1136,7 @@ export function ActivosModule() {
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button
-                  className="flex-1 bg-[#0f2040] hover:bg-[#1a3060]"
+                  className="flex-1 bg-[#0f2044] hover:bg-[#1a3060]"
                   onClick={() => handleDownloadQr(qrActivo)}
                 >
                   <Download className="w-4 h-4 mr-2" />

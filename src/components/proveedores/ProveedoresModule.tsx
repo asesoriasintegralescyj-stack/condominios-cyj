@@ -38,7 +38,7 @@ interface Proveedor {
 const estadoColors: Record<string, string> = {
   'Activo': 'bg-green-100 text-green-700',
   'Inactivo': 'bg-slate-100 text-slate-700',
-  'En revisión': 'bg-yellow-100 text-yellow-700',
+  'En revisión': 'bg-amber-100 text-amber-700',
 }
 
 export function ProveedoresModule() {

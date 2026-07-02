@@ -448,12 +448,12 @@ export function BackupsModule() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-emerald-600" />
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-green-600" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 font-semibold uppercase">Último Respaldo</p>
-                <p className="text-sm font-bold text-emerald-600">
+                <p className="text-sm font-bold text-green-600">
                   {stats.ultimoBackup ? formatDate(stats.ultimoBackup) : 'Sin respaldos'}
                 </p>
               </div>

@@ -309,7 +309,7 @@ export function MaterialesModule() {
               <tbody>
                 {filteredMateriales.map((mat) => (
                   <tr key={mat.id} className="border-b last:border-0 hover:bg-slate-50">
-                    <td className="p-3 font-mono text-xs font-bold text-[#0f2040]">{mat.codigo}</td>
+                    <td className="p-3 font-mono text-xs font-bold text-[#0f2044]">{mat.codigo}</td>
                     <td className="p-3 font-medium">{mat.nombre}</td>
                     <td className="p-3 text-slate-600">{mat.categoria || '–'}</td>
                     <td className="p-3 text-slate-600">{mat.unidad}</td>

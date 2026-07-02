@@ -122,7 +122,7 @@ const ROL_LABELS: Record<string, { label: string; color: string }> = {
   admin: { label: 'Administrador', color: 'bg-amber-100 text-amber-800' },
   supervisor: { label: 'Supervisor', color: 'bg-blue-100 text-blue-800' },
   usuario: { label: 'Usuario', color: 'bg-green-100 text-green-800' },
-  personal: { label: 'Personal', color: 'bg-orange-100 text-orange-800' },
+  personal: { label: 'Personal', color: 'bg-amber-100 text-amber-800' },
   auditor: { label: 'Auditor', color: 'bg-slate-200 text-slate-800' },
   guardia: { label: 'Guardia', color: 'bg-purple-100 text-purple-800' },
 }
@@ -172,7 +172,7 @@ export function ManualesModule() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-[#0f2040] flex items-center gap-2">
+        <h2 className="text-xl font-bold text-[#0f2044] flex items-center gap-2">
           <BookOpen className="w-5 h-5" />
           Manuales y Capacitaciones
         </h2>
@@ -196,7 +196,7 @@ export function ManualesModule() {
 
       {/* Sección destacada: Tu capacitación */}
       {capacitacionUsuario && (
-        <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50">
+        <Card className="border-amber-300 bg-gradient-to-br from-amber-50 to-amber-50">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2 text-amber-900">
               <CheckCircle2 className="w-4 h-4" />
@@ -252,7 +252,7 @@ export function ManualesModule() {
 
       {/* Manual de Usuario completo */}
       <div>
-        <h3 className="text-sm font-bold text-[#0f2040] uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-[#0f2044] uppercase tracking-wider mb-3 flex items-center gap-2">
           <FileText className="w-4 h-4" />
           Manual de Usuario
         </h3>
@@ -272,7 +272,7 @@ export function ManualesModule() {
 
       {/* Capacitaciones por rol */}
       <div>
-        <h3 className="text-sm font-bold text-[#0f2040] uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-bold text-[#0f2044] uppercase tracking-wider mb-3 flex items-center gap-2">
           <Presentation className="w-4 h-4" />
           Capacitaciones por Rol
         </h3>
@@ -306,7 +306,7 @@ export function ManualesModule() {
       </Alert>
 
       {/* Ayuda técnica */}
-      <Card className="bg-gradient-to-br from-[#0f2040] to-[#1a3155] text-white">
+      <Card className="bg-gradient-to-br from-[#0f2044] to-[#1a3155] text-white">
         <CardContent className="p-5">
           <h3 className="font-bold flex items-center gap-2 mb-3">
             <AlertCircle className="w-5 h-5 text-amber-400" />

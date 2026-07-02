@@ -95,7 +95,7 @@ const TIPOS_ACCION = [
   { value: 'Eliminación', label: 'Eliminación', color: 'bg-red-100 text-red-700', icon: <Trash2 className="w-3 h-3" /> },
   { value: 'Exportación', label: 'Exportación', color: 'bg-green-100 text-green-700', icon: <Download className="w-3 h-3" /> },
   { value: 'Backup', label: 'Backup', color: 'bg-purple-100 text-purple-700', icon: <Database className="w-3 h-3" /> },
-  { value: 'Login', label: 'Login', color: 'bg-emerald-100 text-emerald-700', icon: <LogIn className="w-3 h-3" /> },
+  { value: 'Login', label: 'Login', color: 'bg-green-100 text-green-700', icon: <LogIn className="w-3 h-3" /> },
   { value: 'Logout', label: 'Logout', color: 'bg-slate-100 text-slate-700', icon: <LogOut className="w-3 h-3" /> },
 ]
 
@@ -273,10 +273,10 @@ export function AuditorModule() {
         <title>Reporte de Auditoría del Sistema</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 20px; }
-          h1 { color: #0f2040; margin-bottom: 10px; }
+          h1 { color: #0f2044; margin-bottom: 10px; }
           .subtitle { color: #64748b; margin-bottom: 20px; }
           table { width: 100%; border-collapse: collapse; font-size: 11px; }
-          th { background: #0f2040; color: white; padding: 8px; text-align: left; }
+          th { background: #0f2044; color: white; padding: 8px; text-align: left; }
           td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
           tr:nth-child(even) { background: #f8fafc; }
           .exitoso { color: #16a34a; }
@@ -284,7 +284,7 @@ export function AuditorModule() {
           .summary { margin-bottom: 20px; display: flex; gap: 20px; }
           .summary-item { background: #f8fafc; padding: 10px 20px; border-radius: 8px; }
           .summary-label { font-size: 10px; color: #64748b; text-transform: uppercase; }
-          .summary-value { font-size: 24px; font-weight: bold; color: #0f2040; }
+          .summary-value { font-size: 24px; font-weight: bold; color: #0f2044; }
           @media print { body { margin: 0; } }
         </style>
       </head>
@@ -378,12 +378,12 @@ export function AuditorModule() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-emerald-600" />
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-green-600" />
               </div>
               <div>
                 <p className="text-[10px] text-slate-500 font-semibold uppercase">Esta Semana</p>
-                <p className="text-2xl font-bold text-emerald-600">{stats.accionesSemana}</p>
+                <p className="text-2xl font-bold text-green-600">{stats.accionesSemana}</p>
               </div>
             </div>
           </CardContent>
@@ -428,7 +428,7 @@ export function AuditorModule() {
           <CardContent>
             <div className="flex flex-wrap gap-3">
               {stats.accionesPorModulo.map((item, idx) => {
-                const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500']
+                const colors = ['bg-blue-500', 'bg-green-500', 'bg-amber-500', 'bg-purple-500', 'bg-rose-500', 'bg-cyan-500', 'bg-amber-500', 'bg-rose-500', 'bg-blue-500', 'bg-cyan-500']
                 const maxCount = Math.max(...stats.accionesPorModulo.map(m => m.count))
                 const width = (item.count / maxCount) * 100
                 return (
@@ -792,8 +792,8 @@ export function AuditorModule() {
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-500 uppercase font-semibold mb-2">Datos Después</p>
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3">
-                      <pre className="text-xs text-emerald-800 whitespace-pre-wrap overflow-auto max-h-48">
+                    <div className="bg-green-50 border border-green-100 rounded-lg p-3">
+                      <pre className="text-xs text-green-800 whitespace-pre-wrap overflow-auto max-h-48">
                         {formatJSON(selectedAuditoria.datosDespues)}
                       </pre>
                     </div>

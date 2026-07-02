@@ -131,9 +131,9 @@ export function TareasModule() {
       case 'Urgente':
         return 'bg-red-100 text-red-700'
       case 'Alta':
-        return 'bg-orange-100 text-orange-700'
+        return 'bg-amber-100 text-amber-700'
       case 'Media':
-        return 'bg-yellow-100 text-yellow-700'
+        return 'bg-amber-100 text-amber-700'
       case 'Baja':
         return 'bg-green-100 text-green-700'
       default:
@@ -192,7 +192,7 @@ export function TareasModule() {
               <tbody>
                 {filteredTareas.map((tarea) => (
                   <tr key={tarea.id} className="border-b last:border-0 hover:bg-slate-50">
-                    <td className="p-3 font-mono text-xs font-bold text-[#0f2040]">{tarea.codigo}</td>
+                    <td className="p-3 font-mono text-xs font-bold text-[#0f2044]">{tarea.codigo}</td>
                     <td className="p-3 font-medium">{tarea.nombre}</td>
                     <td className="p-3 text-slate-600">{tarea.categoria || '–'}</td>
                     <td className="p-3 text-slate-600">{tarea.tipoMantencion || '–'}</td>

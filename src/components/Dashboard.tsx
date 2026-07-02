@@ -10,11 +10,12 @@ import {
   AlertTriangle,
   ShoppingCart,
   Shield,
-  FileCheck,
   Users,
   Package,
   DollarSign,
   ArrowRight,
+  FileText,
+  FileWarning,
 } from 'lucide-react'
 
 interface DashboardStats {
@@ -74,75 +75,50 @@ interface DashboardData {
   cumplimientoStats: CumplimientoStats
 }
 
-// ====== STYLES ======
-const colors = {
-  azul: '#1e40af',        // azul oscuro profesional
-  azulMedio: '#2563eb',
-  verde: '#15803d',       // verde oscuro profesional
-  verdeMedio: '#16a34a',
-  naranja: '#c2410c',     // naranja oscuro profesional
-  naranjaMedio: '#ea580c',
-  rojo: '#b91c1c',        // rojo oscuro profesional
-  rojoMedio: '#dc2626',
-  grisOscuro: '#1e293b',
-  grisMedio: '#475569',
-  grisClaro: '#e2e8f0',
-  fondoGris: '#f1f5f9',
-  blanco: '#ffffff',
+// Estados badge (igual que Cumplimiento)
+const ESTADO_BADGES: Record<string, string> = {
+  Pendiente: 'bg-slate-100 text-slate-700',
+  Completado: 'bg-green-100 text-green-700',
+  'En Progreso': 'bg-blue-100 text-blue-700',
+  Solicitado: 'bg-blue-100 text-blue-700',
+  Comprado: 'bg-green-100 text-green-700',
+  Rechazado: 'bg-red-100 text-red-700',
 }
 
-// Tonos pastel más oscuros (fondos de tarjetas con mejor contraste)
-const pastel = {
-  azul: '#dbeafe',        // azul pastel oscuro
-  verde: '#dcfce7',       // verde pastel oscuro
-  naranja: '#fed7aa',     // naranja pastel oscuro
-  rojo: '#fecaca',        // rojo pastel oscuro
-  gris: '#e2e8f0',        // gris pastel oscuro
-  amarillo: '#fde68a',    // amarillo pastel oscuro
-  purpura: '#e9d5ff',     // purpura pastel oscuro
-  cyan: '#cffafe',        // cyan pastel oscuro
+const PRIORIDAD_BADGES: Record<string, string> = {
+  Urgente: 'bg-red-100 text-red-700',
+  Alta: 'bg-amber-100 text-amber-700',
+  Media: 'bg-slate-100 text-slate-700',
+  Baja: 'bg-slate-100 text-slate-700',
 }
 
 interface CardConfig {
   titulo: string
   numero: number | string
   icon: React.ReactNode
-  color: string
-  bgColor?: string
+  gradient: string // ej: 'from-blue-500 to-blue-600'
   subtitulo?: string
   onClick?: () => void
 }
 
-function MetricCard({ titulo, numero, icon, color, bgColor, subtitulo, onClick }: CardConfig) {
+function MetricCard({ titulo, numero, icon, gradient, subtitulo, onClick }: CardConfig) {
   return (
     <div
       onClick={onClick}
-      className="rounded-md p-3 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group relative overflow-hidden"
-      style={{
-        backgroundColor: bgColor || '#ffffff',
-        border: `1px solid ${colors.grisClaro}`,
-        borderLeft: `3px solid ${color}`,
-      }}
+      className={`rounded-md bg-gradient-to-br ${gradient} text-white p-3 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group relative overflow-hidden`}
     >
-      {/* Decoración: barra superior sutil */}
-      <div
-        aria-hidden="true"
-        className="absolute top-0 right-0 w-12 h-12 rounded-bl-full opacity-20 transition-opacity group-hover:opacity-30 pointer-events-none z-0"
-        style={{ backgroundColor: color }}
-      />
-
-      <div className="flex items-center gap-1.5 mb-1 relative z-10 min-w-0">
-        <span style={{ color }} className="shrink-0">{icon}</span>
-        <span className="text-xs font-medium truncate" style={{ color: colors.grisMedio }}>{titulo}</span>
-      </div>
-      <div className="text-xl font-bold relative z-10 truncate leading-tight" style={{ color }}>
-        {numero}
+      <div className="flex items-center gap-2">
+        <span className="opacity-80 shrink-0">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs opacity-80 truncate">{titulo}</p>
+          <p className="text-xl font-bold truncate leading-tight">{numero}</p>
+        </div>
       </div>
       {subtitulo && (
-        <div className="text-[10px] mt-0.5 relative z-10 truncate" style={{ color: colors.grisMedio }}>{subtitulo}</div>
+        <p className="text-[10px] opacity-70 mt-1 truncate">{subtitulo}</p>
       )}
       {onClick && (
-        <div className="flex items-center gap-1 mt-1 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity relative z-10" style={{ color }}>
+        <div className="flex items-center gap-1 mt-1 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
           Ver detalles <ArrowRight className="w-2.5 h-2.5" />
         </div>
       )}
@@ -150,20 +126,20 @@ function MetricCard({ titulo, numero, icon, color, bgColor, subtitulo, onClick }
   )
 }
 
-function ProgressBar({ completadas, total, label }: { completadas: number; total: number; label: string }) {
+function ProgressBar({ completadas, total, label, color = 'bg-slate-500' }: { completadas: number; total: number; label: string; color?: string }) {
   const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
   return (
-    <div className="bg-white rounded-md border p-3" style={{ borderColor: colors.grisClaro }}>
+    <div className="bg-white rounded-md border border-slate-200 p-3">
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs" style={{ color: colors.grisMedio }}>
+        <span className="text-xs text-slate-600">
           {completadas} de {total} {label}
         </span>
-        <span className="text-xs font-bold" style={{ color: colors.azul }}>{pct}%</span>
+        <span className="text-xs font-bold text-blue-700">{pct}%</span>
       </div>
-      <div className="w-full rounded-full h-1.5 overflow-hidden" style={{ backgroundColor: colors.grisClaro }}>
+      <div className="w-full rounded-full h-2 overflow-hidden bg-slate-200">
         <div
-          className="h-1.5 rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: colors.azul }}
+          className={`h-2 rounded-full transition-all ${color}`}
+          style={{ width: `${pct}%` }}
         />
       </div>
     </div>
@@ -183,20 +159,19 @@ export function Dashboard() {
         .catch(() => setLoading(false))
     }
     fetchData()
-    // Auto-refresh cada 2 minutos
     const interval = setInterval(fetchData, 120000)
     return () => clearInterval(interval)
   }, [])
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="h-6 bg-gray-200 rounded w-64 animate-pulse" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="space-y-5">
+        <div className="h-6 bg-slate-200 rounded w-64 animate-pulse" />
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {[...Array(12)].map((_, i) => (
-            <div key={i} className="bg-white rounded-md border p-3 animate-pulse" style={{ borderColor: colors.grisClaro }}>
-              <div className="h-3 bg-gray-200 rounded w-2/3 mb-1.5"></div>
-              <div className="h-5 bg-gray-200 rounded w-1/2"></div>
+            <div key={i} className="bg-white rounded-md border border-slate-200 p-3 animate-pulse">
+              <div className="h-3 bg-slate-200 rounded w-2/3 mb-1.5"></div>
+              <div className="h-5 bg-slate-200 rounded w-1/2"></div>
             </div>
           ))}
         </div>
@@ -212,196 +187,174 @@ export function Dashboard() {
   const totalSC = stats.scTotal || 1
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Título */}
       <div className="flex items-center justify-between gap-3 min-w-0">
-        <h1 className="text-sm sm:text-lg font-semibold truncate" style={{ color: colors.azul }}>
+        <h1 className="text-lg font-semibold text-[#0f2044] truncate">
           Panel de Control — LAGUNA NORTE
         </h1>
       </div>
 
-      {/* Fila 1: Órdenes de Trabajo (4 cards clickeables) */}
+      {/* Fila 1: Órdenes de Trabajo */}
       <div>
-        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ color: colors.grisMedio }}>Órdenes de Trabajo</h2>
+        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Órdenes de Trabajo</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             titulo="Total OT"
             numero={totalOT}
-            icon={<Wrench className="w-3.5 h-3.5" />}
-            color={colors.grisOscuro}
-            bgColor={pastel.gris}
+            icon={<Wrench className="w-5 h-5" />}
+            gradient="from-slate-500 to-slate-600"
             subtitulo="Todas las órdenes"
             onClick={() => setCurrentModule('ot')}
           />
           <MetricCard
             titulo="Pendientes"
             numero={stats.otPendientes}
-            icon={<AlertTriangle className="w-3.5 h-3.5" />}
-            color={colors.naranja}
-            bgColor={pastel.naranja}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            gradient="from-amber-500 to-amber-600"
             subtitulo={`${stats.otPendientesAprobacion} por aprobar`}
             onClick={() => setCurrentModule('ot')}
           />
           <MetricCard
             titulo="En Progreso"
             numero={stats.otEnProgreso}
-            icon={<Clock className="w-3.5 h-3.5" />}
-            color={colors.azul}
-            bgColor={pastel.azul}
+            icon={<Clock className="w-5 h-5" />}
+            gradient="from-blue-500 to-blue-600"
             subtitulo="En ejecución"
             onClick={() => setCurrentModule('ot')}
           />
           <MetricCard
             titulo="Completadas"
             numero={stats.otCompletadas}
-            icon={<CheckCircle className="w-3.5 h-3.5" />}
-            color={colors.verde}
-            bgColor={pastel.verde}
+            icon={<CheckCircle className="w-5 h-5" />}
+            gradient="from-green-500 to-green-600"
             subtitulo="Terminadas"
             onClick={() => setCurrentModule('ot')}
           />
         </div>
       </div>
 
-      {/* Fila 2: Solicitudes de Compra (4 cards clickeables) */}
+      {/* Fila 2: Solicitudes de Compra */}
       <div>
-        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ color: colors.grisMedio }}>Solicitudes de Compra</h2>
+        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Solicitudes de Compra</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             titulo="Total Solicitudes"
             numero={stats.scTotal}
-            icon={<ShoppingCart className="w-3.5 h-3.5" />}
-            color={colors.grisOscuro}
-            bgColor={pastel.gris}
+            icon={<ShoppingCart className="w-5 h-5" />}
+            gradient="from-slate-500 to-slate-600"
             subtitulo={`Monto: ${formatCLP(stats.scMontoTotal)}`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
           <MetricCard
             titulo="Solicitadas"
             numero={stats.scSolicitadas}
-            icon={<Clock className="w-3.5 h-3.5" />}
-            color={colors.naranja}
-            bgColor={pastel.naranja}
+            icon={<Clock className="w-5 h-5" />}
+            gradient="from-amber-500 to-amber-600"
             subtitulo={`${Math.round(stats.scSolicitadas / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
           <MetricCard
             titulo="En Proceso"
             numero={stats.scEnProceso}
-            icon={<AlertTriangle className="w-3.5 h-3.5" />}
-            color={colors.azul}
-            bgColor={pastel.azul}
+            icon={<AlertTriangle className="w-5 h-5" />}
+            gradient="from-blue-500 to-blue-600"
             subtitulo={`${Math.round(stats.scEnProceso / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
           <MetricCard
             titulo="Compradas"
             numero={stats.scCompradas}
-            icon={<CheckCircle className="w-3.5 h-3.5" />}
-            color={colors.verde}
-            bgColor={pastel.verde}
+            icon={<CheckCircle className="w-5 h-5" />}
+            gradient="from-green-500 to-green-600"
             subtitulo={`${Math.round(stats.scCompradas / totalSC * 100)}% del total`}
             onClick={() => setCurrentModule('solicitudescompra')}
           />
         </div>
       </div>
 
-      {/* Fila 3: Recursos y Cumplimiento (4 cards clickeables) */}
+      {/* Fila 3: Recursos y Cumplimiento */}
       <div>
-        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide" style={{ color: colors.grisMedio }}>Recursos y Cumplimiento</h2>
+        <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Recursos y Cumplimiento</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <MetricCard
             titulo="Personal Activo"
             numero={stats.totalPersonal}
-            icon={<Users className="w-3.5 h-3.5" />}
-            color={colors.azul}
-            bgColor={pastel.azul}
+            icon={<Users className="w-5 h-5" />}
+            gradient="from-blue-500 to-blue-600"
             subtitulo="Empleados"
             onClick={() => setCurrentModule('personal')}
           />
           <MetricCard
             titulo="Activos"
             numero={stats.totalActivos}
-            icon={<Package className="w-3.5 h-3.5" />}
-            color={colors.grisOscuro}
-            bgColor={pastel.gris}
+            icon={<Package className="w-5 h-5" />}
+            gradient="from-slate-500 to-slate-600"
             subtitulo={`Valor: ${formatCLP(stats.valorActivos)}`}
             onClick={() => setCurrentModule('activos')}
           />
           <MetricCard
             titulo="Cumplimiento Legal"
             numero={`${cumplimientoStats.porcentajeGeneral}%`}
-            icon={<Shield className="w-3.5 h-3.5" />}
-            color={cumplimientoStats.porcentajeGeneral >= 80 ? colors.verde : colors.naranja}
-            bgColor={cumplimientoStats.porcentajeGeneral >= 80 ? pastel.verde : pastel.naranja}
+            icon={<Shield className="w-5 h-5" />}
+            gradient={cumplimientoStats.porcentajeGeneral >= 80 ? 'from-green-500 to-green-600' : 'from-amber-500 to-amber-600'}
             subtitulo={`${cumplimientoStats.completados} de ${cumplimientoStats.total} documentos`}
             onClick={() => setCurrentModule('cumplimiento')}
           />
           <MetricCard
             titulo="Caja Chica"
             numero={formatCLP(stats.saldoCaja)}
-            icon={<DollarSign className="w-3.5 h-3.5" />}
-            color={colors.verde}
-            bgColor={pastel.verde}
+            icon={<DollarSign className="w-5 h-5" />}
+            gradient="from-green-500 to-green-600"
             subtitulo="Saldo disponible"
             onClick={() => setCurrentModule('centrocostos')}
           />
         </div>
       </div>
 
-      {/* Barra de progreso OT */}
+      {/* Barras de progreso */}
       <ProgressBar
         completadas={stats.otCompletadas}
         total={totalOT}
         label="OT completadas"
+        color="bg-blue-500"
       />
-
-      {/* Barra de progreso Cumplimiento */}
       <ProgressBar
         completadas={cumplimientoStats.completados}
         total={cumplimientoStats.total}
         label="documentos cumplidos"
+        color="bg-green-500"
       />
 
       {/* Sección: OT Recientes + Solicitudes Recientes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* OT Recientes */}
-        <div className="bg-white rounded-md border p-3 overflow-hidden min-w-0" style={{ borderColor: colors.grisClaro }}>
+        <div className="bg-white rounded-md border border-slate-200 p-3 overflow-hidden min-w-0">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-xs font-semibold flex items-center gap-1.5 min-w-0" style={{ color: colors.grisOscuro }}>
-              <Wrench className="w-3.5 h-3.5 shrink-0" />
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-700 min-w-0">
+              <Wrench className="w-4 h-4 shrink-0" />
               <span className="truncate">OT Recientes</span>
             </h3>
             <button
               onClick={() => setCurrentModule('ot')}
-              className="text-[11px] font-medium flex items-center gap-1 hover:underline shrink-0"
-              style={{ color: colors.azul }}
+              className="text-xs font-medium flex items-center gap-1 hover:underline text-blue-700 shrink-0"
             >
-              Ver todas <ArrowRight className="w-2.5 h-2.5" />
+              Ver todas <ArrowRight className="w-3 h-3" />
             </button>
           </div>
           <div className="space-y-1.5">
             {recentOT.slice(0, 5).map((ot) => (
-              <div key={ot.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+              <div key={ot.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-200 last:border-0">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[11px] font-mono font-bold shrink-0" style={{ color: colors.grisOscuro }}>{ot.otNum}</span>
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-                      style={{
-                        backgroundColor: ot.estado === 'Completado' ? pastel.verde : ot.estado === 'Pendiente' ? pastel.amarillo : pastel.azul,
-                        color: ot.estado === 'Completado' ? colors.verde : ot.estado === 'Pendiente' ? colors.naranja : colors.azul,
-                      }}
-                    >
+                    <span className="text-xs font-mono font-bold text-slate-700 shrink-0">{ot.otNum}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${ESTADO_BADGES[ot.estado] || 'bg-slate-100 text-slate-700'}`}>
                       {ot.estado}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-600 mt-0.5 truncate">{ot.titulo}</div>
+                  <div className="text-xs text-slate-600 mt-0.5 truncate">{ot.titulo}</div>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{
-                  backgroundColor: ot.prioridad === 'Urgente' ? pastel.rojo : ot.prioridad === 'Alta' ? pastel.amarillo : pastel.gris,
-                  color: ot.prioridad === 'Urgente' ? colors.rojo : ot.prioridad === 'Alta' ? colors.naranja : colors.grisMedio,
-                }}>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${PRIORIDAD_BADGES[ot.prioridad] || 'bg-slate-100 text-slate-700'}`}>
                   {ot.prioridad}
                 </span>
               </div>
@@ -410,43 +363,36 @@ export function Dashboard() {
         </div>
 
         {/* Solicitudes de Compra Recientes */}
-        <div className="bg-white rounded-md border p-3 overflow-hidden min-w-0" style={{ borderColor: colors.grisClaro }}>
+        <div className="bg-white rounded-md border border-slate-200 p-3 overflow-hidden min-w-0">
           <div className="flex items-center justify-between gap-2 mb-2">
-            <h3 className="text-xs font-semibold flex items-center gap-1.5 min-w-0" style={{ color: colors.grisOscuro }}>
-              <ShoppingCart className="w-3.5 h-3.5 shrink-0" />
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-700 min-w-0">
+              <ShoppingCart className="w-4 h-4 shrink-0" />
               <span className="truncate">Solicitudes de Compra Recientes</span>
             </h3>
             <button
               onClick={() => setCurrentModule('solicitudescompra')}
-              className="text-[11px] font-medium flex items-center gap-1 hover:underline shrink-0"
-              style={{ color: colors.azul }}
+              className="text-xs font-medium flex items-center gap-1 hover:underline text-blue-700 shrink-0"
             >
-              Ver todas <ArrowRight className="w-2.5 h-2.5" />
+              Ver todas <ArrowRight className="w-3 h-3" />
             </button>
           </div>
           <div className="space-y-1.5">
             {solicitudesRecientes.length === 0 ? (
-              <p className="text-xs text-center py-3" style={{ color: colors.grisMedio }}>No hay solicitudes</p>
+              <p className="text-xs text-center py-3 text-slate-500">No hay solicitudes</p>
             ) : (
               solicitudesRecientes.map((sc) => (
-                <div key={sc.id} className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0" style={{ borderColor: colors.grisClaro }}>
+                <div key={sc.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-slate-200 last:border-0">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-[11px] font-mono font-bold shrink-0" style={{ color: colors.grisOscuro }}>{sc.codigo}</span>
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-                        style={{
-                          backgroundColor: sc.estado === 'Solicitado' ? pastel.azul : sc.estado === 'Comprado' ? pastel.verde : pastel.rojo,
-                          color: sc.estado === 'Solicitado' ? colors.azul : sc.estado === 'Comprado' ? colors.verde : colors.rojo,
-                        }}
-                      >
+                      <span className="text-xs font-mono font-bold text-slate-700 shrink-0">{sc.codigo}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${ESTADO_BADGES[sc.estado] || 'bg-slate-100 text-slate-700'}`}>
                         {sc.estado}
                       </span>
                     </div>
-                    <div className="text-[11px] text-slate-600 mt-0.5 truncate">{sc.titulo}</div>
+                    <div className="text-xs text-slate-600 mt-0.5 truncate">{sc.titulo}</div>
                   </div>
                   <div className="text-right shrink-0 ml-2 min-w-0">
-                    <div className="text-xs font-bold truncate" style={{ color: colors.grisOscuro }}>
+                    <div className="text-xs font-bold text-slate-700 truncate">
                       {formatCLP(sc.totalEstimado)}
                     </div>
                   </div>
@@ -458,7 +404,7 @@ export function Dashboard() {
       </div>
 
       {/* Footer info */}
-      <div className="text-[11px] text-center" style={{ color: colors.grisMedio }}>
+      <div className="text-xs text-center text-slate-500">
         Condominio LAGUNA NORTE · Sistema de Gestión · Asesorías Integrales CyJ
       </div>
     </div>

@@ -52,7 +52,7 @@ interface Personal {
 
 const contratoColors: Record<string, string> = {
   'Indefinido': 'bg-blue-100 text-blue-700',
-  'Plazo Fijo': 'bg-yellow-100 text-yellow-700',
+  'Plazo Fijo': 'bg-amber-100 text-amber-700',
   'Por Obra': 'bg-purple-100 text-purple-700',
   'Part-Time': 'bg-cyan-100 text-cyan-700',
 }
@@ -394,7 +394,7 @@ export function PersonalModule() {
                             {per.foto ? (
                               <Image unoptimized src={per.foto} alt={`Foto de ${per.nombre}`} width={28} height={28} className="h-7 w-7 rounded-full object-cover" />
                             ) : (
-                            <AvatarFallback className="bg-[#0f2040] text-white text-xs font-bold">
+                            <AvatarFallback className="bg-[#0f2044] text-white text-xs font-bold">
                               {per.nombre.charAt(0)}
                             </AvatarFallback>
                             )}
@@ -651,7 +651,7 @@ export function PersonalModule() {
                     {formData.foto ? (
                       <Image unoptimized src={formData.foto} alt="Foto del empleado" width={80} height={80} className="h-20 w-20 rounded-full object-cover" />
                     ) : (
-                      <AvatarFallback className="bg-[#0f2040] text-white text-2xl font-bold">
+                      <AvatarFallback className="bg-[#0f2044] text-white text-2xl font-bold">
                         {formData.nombre ? formData.nombre.charAt(0).toUpperCase() : '?'}
                       </AvatarFallback>
                     )}

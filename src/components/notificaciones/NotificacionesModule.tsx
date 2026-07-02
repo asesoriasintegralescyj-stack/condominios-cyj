@@ -74,7 +74,7 @@ const tipoColors: Record<string, string> = {
   'Alerta': 'bg-red-100 text-red-700',
   'Urgente': 'bg-red-100 text-red-700',
   'Recordatorio': 'bg-blue-100 text-blue-700',
-  'Modificación': 'bg-yellow-100 text-yellow-700',
+  'Modificación': 'bg-amber-100 text-amber-700',
   'Success': 'bg-green-100 text-green-700',
 }
 
@@ -88,7 +88,7 @@ const tipoDotColors: Record<string, string> = {
   'Alerta': 'bg-red-500',
   'Urgente': 'bg-red-500',
   'Recordatorio': 'bg-blue-500',
-  'Modificación': 'bg-yellow-500',
+  'Modificación': 'bg-amber-500',
   'Success': 'bg-green-500',
 }
 
@@ -98,7 +98,7 @@ const tipoBoxStyles: Record<string, string> = {
   'Alerta': 'border-red-500 bg-red-50',
   'Urgente': 'border-red-500 bg-red-50',
   'Recordatorio': 'border-blue-500 bg-blue-50',
-  'Modificación': 'border-yellow-500 bg-yellow-50',
+  'Modificación': 'border-amber-500 bg-amber-50',
   'Success': 'border-green-500 bg-green-50',
 }
 
@@ -288,7 +288,7 @@ export function NotificacionesModule() {
         <h2 className="text-lg font-bold text-slate-800">Centro de Notificaciones</h2>
         <Button 
           onClick={() => { resetForm(); setDialogOpen(true); }}
-          className="bg-[#0f2040] hover:bg-[#1a3155]"
+          className="bg-[#0f2044] hover:bg-[#1a3155]"
         >
           <Plus className="w-4 h-4 mr-2" />
           Nueva Notificación
@@ -494,7 +494,7 @@ export function NotificacionesModule() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} className="bg-[#0f2040]">
+            <Button onClick={handleSubmit} className="bg-[#0f2044]">
               <Send className="w-4 h-4 mr-2" />
               Enviar
             </Button>

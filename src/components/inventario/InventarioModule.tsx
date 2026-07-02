@@ -85,9 +85,9 @@ const formatDate = (dateString: string) => {
 }
 
 const categoriaColors: Record<string, string> = {
-  'Eléctrico': 'bg-yellow-100 text-yellow-700',
+  'Eléctrico': 'bg-amber-100 text-amber-700',
   'Fontanería': 'bg-blue-100 text-blue-700',
-  'Ferretería': 'bg-orange-100 text-orange-700',
+  'Ferretería': 'bg-amber-100 text-amber-700',
   'Pintura': 'bg-purple-100 text-purple-700',
   'Jardinería': 'bg-green-100 text-green-700',
   'Limpieza': 'bg-cyan-100 text-cyan-700',
@@ -373,7 +373,7 @@ export function InventarioModule() {
                 <Package className="w-5 h-5 text-slate-500" />
                 <div>
                   <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Items</div>
-                  <div className="text-xl font-bold text-[#0f2040]">{stats.total}</div>
+                  <div className="text-xl font-bold text-[#0f2044]">{stats.total}</div>
                 </div>
               </div>
             </Card>
@@ -400,7 +400,7 @@ export function InventarioModule() {
                 <TrendingDown className="w-5 h-5 text-blue-500" />
                 <div>
                   <div className="text-[10px] text-slate-500 font-semibold uppercase">Valor Total</div>
-                  <div className="text-lg font-bold text-[#0f2040]">{formatCLP(stats.valorTotal)}</div>
+                  <div className="text-lg font-bold text-[#0f2044]">{formatCLP(stats.valorTotal)}</div>
                 </div>
               </div>
             </Card>
@@ -475,7 +475,7 @@ export function InventarioModule() {
                         
                         return (
                           <tr key={mat.id} className={`border-b last:border-0 hover:bg-slate-50 ${isLowStock ? 'bg-red-50' : ''}`}>
-                            <td className="p-3 font-mono text-xs font-semibold text-[#0f2040]">
+                            <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
                               {mat.codigo || '–'}
                             </td>
                             <td className="p-3">
@@ -573,7 +573,7 @@ export function InventarioModule() {
                 <Calendar className="w-5 h-5 text-slate-500" />
                 <div>
                   <div className="text-[10px] text-slate-500 font-semibold uppercase">Movimientos Hoy</div>
-                  <div className="text-xl font-bold text-[#0f2040]">{movimientosStats.movimientosHoy}</div>
+                  <div className="text-xl font-bold text-[#0f2044]">{movimientosStats.movimientosHoy}</div>
                 </div>
               </div>
             </Card>

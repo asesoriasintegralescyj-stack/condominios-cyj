@@ -96,7 +96,7 @@ const ETAPAS_NOMBRES: Record<string, string> = {
 const ETAPAS_ORDER = Object.keys(ETAPAS_NOMBRES)
 
 // Color corporativo para los QR
-const QR_COLOR = '#0f2040'
+const QR_COLOR = '#0f2044'
 
 /**
  * Extrae { etapa, post } desde la URL del qrCodigo.
@@ -505,7 +505,7 @@ export function RondasModule() {
       const startY = margin + 18 // espacio para header
 
       const drawHeader = (pageNumber: number) => {
-        doc.setFillColor(15, 32, 64) // #0f2040
+        doc.setFillColor(15, 32, 64) // #0f2044
         doc.rect(0, 0, pageWidth, 18, 'F')
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(14)
@@ -686,8 +686,8 @@ export function RondasModule() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center shrink-0">
-                <Layers className="w-5 h-5 text-orange-600" />
+              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                <Layers className="w-5 h-5 text-amber-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{etapasCount}</p>
@@ -730,7 +730,7 @@ export function RondasModule() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-[#0f2040] flex items-center gap-2">
+              <h3 className="font-semibold text-[#0f2044] flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-green-600" />
                 Registros de esta sesión
               </h3>
@@ -804,7 +804,7 @@ export function RondasModule() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button onClick={handleScanQR} className="bg-[#0f2040] hover:bg-[#1a3155]">
+          <Button onClick={handleScanQR} className="bg-[#0f2044] hover:bg-[#1a3155]">
             <Camera className="w-4 h-4 mr-2" />
             Registrar Ronda
           </Button>
@@ -872,7 +872,7 @@ export function RondasModule() {
                       <Fragment key={group.etapa}>
                         {/* Fila separadora de etapa */}
                         <TableRow className="bg-slate-50 hover:bg-slate-50 border-y border-slate-200">
-                          <TableCell colSpan={7} className="font-semibold text-[#0f2040] py-2">
+                          <TableCell colSpan={7} className="font-semibold text-[#0f2044] py-2">
                             <div className="flex items-center gap-2">
                               <Layers className="w-4 h-4" />
                               Etapa {etapaNombre}
@@ -1204,7 +1204,7 @@ export function RondasModule() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Camera className="w-5 h-5 text-[#0f2040]" />
+              <Camera className="w-5 h-5 text-[#0f2044]" />
               Registrar Ronda — Escaneo QR
             </DialogTitle>
           </DialogHeader>

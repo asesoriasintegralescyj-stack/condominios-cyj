@@ -215,7 +215,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar with hamburger */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#0f2040] flex items-center px-4 z-50 shrink-0">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-[#0f2044] flex items-center px-4 z-50 shrink-0">
         <button
           onClick={() => setMobileOpen(true)}
           className="text-white p-1 -ml-1"
@@ -237,7 +237,7 @@ export function Sidebar() {
       <aside
         className={cn(
           'fixed md:relative z-50 md:z-auto',
-          'w-56 bg-[#0f2040] flex flex-col h-full shrink-0',
+          'w-56 bg-[#0f2044] flex flex-col h-full shrink-0',
           'transform transition-transform duration-300',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         )}

@@ -65,10 +65,10 @@ export function ReportesModule() {
         >
           <CardContent className="p-4 flex items-start gap-4">
             <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
-              <report.icon className="w-6 h-6 text-[#0f2040]" />
+              <report.icon className="w-6 h-6 text-[#0f2044]" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm text-[#0f2040]">{report.title}</div>
+              <div className="font-bold text-sm text-[#0f2044]">{report.title}</div>
               <div className="text-xs text-slate-500 mt-0.5">{report.desc}</div>
               <div className="flex items-center gap-1 mt-3 text-xs text-amber-600 font-semibold">
                 <Printer className="w-3.5 h-3.5" /> Exportar →
@@ -100,13 +100,13 @@ function generateReportHTML(tipo: string, data: any[]): string {
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; font-size: 11px; padding: 24px; color: #000; }
-        h1 { color: #0f2040; font-size: 16px; }
+        h1 { color: #0f2044; font-size: 16px; }
         table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-        th { background: #0f2040; color: white; padding: 7px 8px; font-size: 10px; text-align: left; }
+        th { background: #0f2044; color: white; padding: 7px 8px; font-size: 10px; text-align: left; }
         td { padding: 6px 8px; border-bottom: 1px solid #e8ecf0; font-size: 10.5px; }
         tr:nth-child(even) td { background: #f8fafc; }
         .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; border-bottom: 3px solid #f0a500; padding-bottom: 14px; }
-        .logo { width: 46px; height: 46px; background: #0f2040; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; }
+        .logo { width: 46px; height: 46px; background: #0f2044; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px; }
         .footer { margin-top: 14px; font-size: 9px; color: #94a3b8; }
       </style>
     </head>

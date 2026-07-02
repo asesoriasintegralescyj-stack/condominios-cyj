@@ -63,9 +63,9 @@ const formatDate = (d: string | null) => {
 }
 
 const tipoColors: Record<string, string> = {
-  'Mantenimiento': 'bg-orange-100 text-orange-700',
+  'Mantenimiento': 'bg-amber-100 text-amber-700',
   'Seguridad': 'bg-purple-100 text-purple-700',
-  'Eléctrica': 'bg-yellow-100 text-yellow-700',
+  'Eléctrica': 'bg-amber-100 text-amber-700',
   'Sanitaria': 'bg-blue-100 text-blue-700',
   'Estructural': 'bg-slate-100 text-slate-700',
   'General': 'bg-cyan-100 text-cyan-700',
@@ -73,7 +73,7 @@ const tipoColors: Record<string, string> = {
 
 const estadoColors: Record<string, string> = {
   'Planificado': 'bg-blue-100 text-blue-700',
-  'En Progreso': 'bg-yellow-100 text-yellow-700',
+  'En Progreso': 'bg-amber-100 text-amber-700',
   'Completado': 'bg-green-100 text-green-700',
   'Cancelado': 'bg-red-100 text-red-700',
 }
@@ -381,7 +381,7 @@ export function InspeccionesModule() {
             <div className="space-y-2 min-w-0">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-orange-500" />
+                  <Camera className="w-4 h-4 text-amber-500" />
                   Fotos ({fotos.length})
                 </Label>
                 <label className="cursor-pointer">
@@ -402,7 +402,7 @@ export function InspeccionesModule() {
               </div>
               <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                 {fotos.map((foto, i) => (
-                  <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200 min-w-0">
+                  <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-amber-200 min-w-0">
                     <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                     <button
                       type="button"
@@ -481,7 +481,7 @@ export function InspeccionesModule() {
                   <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">Fotos ({parseFotoArray(viewingInsp.fotos).length})</div>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                     {parseFotoArray(viewingInsp.fotos).map((foto, i) => (
-                      <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200 min-w-0">
+                      <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-amber-200 min-w-0">
                         <img src={foto} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
                       </div>
                     ))}

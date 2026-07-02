@@ -91,7 +91,7 @@ const UNIDADES = ['unidad', 'metro', 'm²', 'm³', 'kilo', 'saco', 'litro', 'gal
 
 const estadoColors: Record<string, string> = {
   Solicitado: 'bg-blue-100 text-blue-700',
-  'En Proceso': 'bg-yellow-100 text-yellow-700',
+  'En Proceso': 'bg-amber-100 text-amber-700',
   Comprado: 'bg-green-100 text-green-700',
   Rechazado: 'bg-red-100 text-red-700',
   Anulada: 'bg-slate-200 text-slate-700',
@@ -107,8 +107,8 @@ const etapaColors: Record<string, string> = {
 
 const prioridadColors: Record<string, string> = {
   Baja: 'bg-green-100 text-green-700',
-  Media: 'bg-yellow-100 text-yellow-700',
-  Alta: 'bg-orange-100 text-orange-700',
+  Media: 'bg-amber-100 text-amber-700',
+  Alta: 'bg-amber-100 text-amber-700',
   Urgente: 'bg-red-100 text-red-700',
 }
 
@@ -452,37 +452,27 @@ export function SolicitudesComprasModule() {
     <div className="space-y-5">
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Total</div>
-            <div className="text-2xl font-bold text-[#0f2040]">{stats.total}</div>
-            <div className="text-[10px] text-slate-400 mt-1">{formatCLP(stats.montoTotal)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Solicitadas</div>
-            <div className="text-2xl font-bold text-blue-600">{stats.solicitadas}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-slate-500">En Proceso</div>
-            <div className="text-2xl font-bold text-yellow-600">{stats.enProceso}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Compradas</div>
-            <div className="text-2xl font-bold text-green-600">{stats.completadas}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-slate-500">Monto Total</div>
-            <div className="text-lg font-bold text-[#0f2040]">{formatCLP(stats.montoTotal)}</div>
-          </CardContent>
-        </Card>
+        <div className="rounded-md bg-gradient-to-br from-[#0f2044] to-[#0a1628] text-white p-3">
+          <p className="text-xs opacity-80">Total</p>
+          <p className="text-xl font-bold">{stats.total}</p>
+          <p className="text-[10px] opacity-70 mt-1">{formatCLP(stats.montoTotal)}</p>
+        </div>
+        <div className="rounded-md bg-gradient-to-br from-amber-500 to-amber-600 text-white p-3">
+          <p className="text-xs opacity-80">Solicitadas</p>
+          <p className="text-xl font-bold">{stats.solicitadas}</p>
+        </div>
+        <div className="rounded-md bg-gradient-to-br from-blue-500 to-blue-600 text-white p-3">
+          <p className="text-xs opacity-80">En Proceso</p>
+          <p className="text-xl font-bold">{stats.enProceso}</p>
+        </div>
+        <div className="rounded-md bg-gradient-to-br from-green-500 to-green-600 text-white p-3">
+          <p className="text-xs opacity-80">Compradas</p>
+          <p className="text-xl font-bold">{stats.completadas}</p>
+        </div>
+        <div className="rounded-md bg-gradient-to-br from-slate-500 to-slate-600 text-white p-3">
+          <p className="text-xs opacity-80">Monto Total</p>
+          <p className="text-lg font-bold">{formatCLP(stats.montoTotal)}</p>
+        </div>
       </div>
 
       {/* Actions */}

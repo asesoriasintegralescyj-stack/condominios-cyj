@@ -237,7 +237,7 @@ function parseJsonArray<T = unknown>(raw: string | null | undefined): T[] {
 // ============================================
 const estadoBadgeColors: Record<string, string> = {
   'Planificado': 'bg-blue-100 text-blue-700 border-blue-200',
-  'En Ejecución': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  'En Ejecución': 'bg-amber-100 text-amber-700 border-amber-200',
   'Completado': 'bg-green-100 text-green-700 border-green-200',
   'Cancelado': 'bg-red-100 text-red-700 border-red-200',
   'Pausado': 'bg-slate-100 text-slate-700 border-slate-200',
@@ -245,22 +245,22 @@ const estadoBadgeColors: Record<string, string> = {
 
 const aprobacionColors: Record<string, string> = {
   'Aprobado': 'text-green-600 font-medium',
-  'En espera': 'text-orange-500 font-medium',
+  'En espera': 'text-amber-500 font-medium',
   'Aprobado por Supervisor': 'text-blue-600 font-medium',
-  'Pendiente': 'text-orange-500 font-medium',
+  'Pendiente': 'text-amber-500 font-medium',
   'Rechazado': 'text-red-600 font-medium',
 }
 
 const prioridadColors: Record<string, string> = {
   'Alta': 'bg-red-100 text-red-700',
-  'Media': 'bg-yellow-100 text-yellow-700',
+  'Media': 'bg-amber-100 text-amber-700',
   'Baja': 'bg-green-100 text-green-700',
   'Urgente': 'bg-red-200 text-red-800',
 }
 
 const estadoColors: Record<string, string> = {
   'Planificado': 'bg-blue-100 text-blue-700',
-  'En Ejecución': 'bg-yellow-100 text-yellow-700',
+  'En Ejecución': 'bg-amber-100 text-amber-700',
   'Completado': 'bg-green-100 text-green-700',
   'Cancelado': 'bg-red-100 text-red-700',
   'Pausado': 'bg-slate-100 text-slate-700',
@@ -270,7 +270,7 @@ const documentoTipoColors: Record<string, string> = {
   'cotizacion': 'bg-blue-100 text-blue-700',
   'respaldo': 'bg-green-100 text-green-700',
   'contrato': 'bg-purple-100 text-purple-700',
-  'factura': 'bg-orange-100 text-orange-700',
+  'factura': 'bg-amber-100 text-amber-700',
   'otro': 'bg-slate-100 text-slate-700',
 }
 
@@ -1297,7 +1297,7 @@ export function ProyectosModule() {
       let y = 14
 
       // ---------- Header ----------
-      doc.setFillColor(15, 32, 64) // #0f2040
+      doc.setFillColor(15, 32, 64) // #0f2044
       doc.rect(margin, y, pageWidth - margin * 2, 18, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(15)
@@ -1735,7 +1735,7 @@ export function ProyectosModule() {
           <button
             onClick={() => setVistaActiva('activos')}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              vistaActiva === 'activos' ? 'bg-[#0f2040] text-white' : 'text-slate-600 hover:bg-slate-100'
+              vistaActiva === 'activos' ? 'bg-[#0f2044] text-white' : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             En Proceso ({proyectosStats.activos})
@@ -1828,7 +1828,7 @@ export function ProyectosModule() {
           <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
             <table className="w-full text-xs whitespace-nowrap" style={{ minWidth: '1600px' }}>
               <thead>
-                <tr className="border-b bg-[#0f2040] text-white">
+                <tr className="border-b bg-[#0f2044] text-white">
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '40px' }}>#</th>
                   <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '200px' }} onClick={() => toggleSort('nombre')}>Descripción <SortIcon field="nombre" /></th>
                   <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('sector')}>Sector <SortIcon field="sector" /></th>
@@ -1868,7 +1868,7 @@ export function ProyectosModule() {
                     const totalAdj = (proy.tieneFotosAntes ? 1 : 0) + (proy.tieneFotosDespues ? 1 : 0) + (proy.tieneCotizaciones ? 1 : 0) + (proy.documentos?.length || 0)
                     return (
                       <tr key={proy.id} className={`border-b last:border-0 hover:bg-blue-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`} onClick={() => openDetailDialog(proy)}>
-                        <td className="text-center p-2 font-bold text-[#0f2040]">{extraerNumProyecto(proy.nombre)}</td>
+                        <td className="text-center p-2 font-bold text-[#0f2044]">{extraerNumProyecto(proy.nombre)}</td>
                         <td className="p-2 font-medium max-w-[250px] truncate" title={extraerDescripcion(proy.nombre)}>{extraerDescripcion(proy.nombre)}</td>
                         <td className="p-2 text-slate-600">{sector}</td>
                         <td className="p-2 text-slate-600">{tipo}</td>
@@ -2118,7 +2118,7 @@ export function ProyectosModule() {
                 {/* Section 1: Información Básica */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 1 · Información Básica</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Sección 1 · Información Básica</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="space-y-2 min-w-0">
@@ -2214,7 +2214,7 @@ export function ProyectosModule() {
                 {/* Section 2: Fechas y Tiempo */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 2 · Fechas y Tiempo</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Sección 2 · Fechas y Tiempo</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -2311,7 +2311,7 @@ export function ProyectosModule() {
                 {/* Section 3: Comentarios */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 3 · Comentarios</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Sección 3 · Comentarios</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="space-y-2 min-w-0">
@@ -2347,7 +2347,7 @@ export function ProyectosModule() {
                 {/* Section 4: Fotos */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Sección 4 · Fotos</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Sección 4 · Fotos</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2648,7 +2648,7 @@ export function ProyectosModule() {
                 {/* Cotizaciones */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Cotizaciones</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Cotizaciones</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="flex justify-between items-center">
@@ -2703,7 +2703,7 @@ export function ProyectosModule() {
                 {/* Documentos (sistema legacy) */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#0f2040] uppercase tracking-wide">Documentos Adjuntos</span>
+                    <span className="text-xs font-bold text-[#0f2044] uppercase tracking-wide">Documentos Adjuntos</span>
                     <Separator className="flex-1" />
                   </div>
                   <div className="flex justify-between items-center">
@@ -2903,7 +2903,7 @@ export function ProyectosModule() {
               </div>
               <div className="bg-white border rounded-lg p-3">
                 <div className="text-[10px] text-slate-500 uppercase">Monto Total</div>
-                <div className="text-xl font-bold text-[#0f2040]">{formatCLP(informeTotales.totalMonto)}</div>
+                <div className="text-xl font-bold text-[#0f2044]">{formatCLP(informeTotales.totalMonto)}</div>
               </div>
               <div className="bg-white border rounded-lg p-3">
                 <div className="text-[10px] text-slate-500 uppercase">Materiales</div>
@@ -2915,7 +2915,7 @@ export function ProyectosModule() {
               </div>
               <div className="bg-white border rounded-lg p-3">
                 <div className="text-[10px] text-slate-500 uppercase">Presupuesto Usado</div>
-                <div className="text-xl font-bold text-orange-700">{formatCLP(informeTotales.totalPresUsado)}</div>
+                <div className="text-xl font-bold text-amber-700">{formatCLP(informeTotales.totalPresUsado)}</div>
               </div>
             </div>
 
@@ -2946,7 +2946,7 @@ export function ProyectosModule() {
                     ) : (
                       proyectosInforme.map((p) => (
                         <tr key={p.id} className="border-t hover:bg-slate-50">
-                          <td className="p-2 font-bold text-[#0f2040]">{extraerNumProyecto(p.nombre)}</td>
+                          <td className="p-2 font-bold text-[#0f2044]">{extraerNumProyecto(p.nombre)}</td>
                           <td className="p-2 max-w-[250px] truncate" title={extraerDescripcion(p.nombre)}>{extraerDescripcion(p.nombre)}</td>
                           <td className="p-2 text-slate-600">{p.sector || p.ubicacion || '–'}</td>
                           <td className="p-2 text-slate-600">{p.tipoReparacion || p.categoria || '–'}</td>

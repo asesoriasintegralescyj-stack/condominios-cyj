@@ -82,14 +82,14 @@ interface ResumenTrabajador {
 }
 
 const tipoColors: Record<string, string> = {
-  atraso: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  atraso: 'bg-amber-100 text-amber-800 border-amber-200',
   ausencia: 'bg-red-100 text-red-800 border-red-200',
-  salida_temprana: 'bg-orange-100 text-orange-800 border-orange-200',
+  salida_temprana: 'bg-amber-100 text-amber-800 border-amber-200',
   colacion_excedida: 'bg-purple-100 text-purple-800 border-purple-200',
 }
 
 const estadoColors: Record<string, string> = {
-  pendiente: 'bg-yellow-100 text-yellow-800',
+  pendiente: 'bg-amber-100 text-amber-800',
   justificado: 'bg-blue-100 text-blue-800',
   aprobado: 'bg-green-100 text-green-800',
   rechazado: 'bg-red-100 text-red-800',
@@ -316,7 +316,7 @@ export function AsistenciaModule() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-xl font-bold text-[#0f2040] flex items-center gap-2">
+        <h2 className="text-xl font-bold text-[#0f2044] flex items-center gap-2">
           <Clock className="w-5 h-5" />
           Control de Asistencia
         </h2>
@@ -331,11 +331,11 @@ export function AsistenciaModule() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2">
           <Card className="p-3">
-            <div className="text-2xl font-bold text-[#0f2040]">{stats.total}</div>
+            <div className="text-2xl font-bold text-[#0f2044]">{stats.total}</div>
             <div className="text-xs text-gray-500">Total</div>
           </Card>
           <Card className="p-3">
-            <div className="text-2xl font-bold text-yellow-600">{stats.atrasos}</div>
+            <div className="text-2xl font-bold text-amber-600">{stats.atrasos}</div>
             <div className="text-xs text-gray-500">Atrasos</div>
           </Card>
           <Card className="p-3">
@@ -343,7 +343,7 @@ export function AsistenciaModule() {
             <div className="text-xs text-gray-500">Ausencias</div>
           </Card>
           <Card className="p-3">
-            <div className="text-2xl font-bold text-orange-600">{stats.salidasTempranas}</div>
+            <div className="text-2xl font-bold text-amber-600">{stats.salidasTempranas}</div>
             <div className="text-xs text-gray-500">Sal. Tempranas</div>
           </Card>
           <Card className="p-3">
@@ -351,7 +351,7 @@ export function AsistenciaModule() {
             <div className="text-xs text-gray-500">Col. Excedida</div>
           </Card>
           <Card className="p-3">
-            <div className="text-2xl font-bold text-yellow-700">{stats.pendientes}</div>
+            <div className="text-2xl font-bold text-amber-700">{stats.pendientes}</div>
             <div className="text-xs text-gray-500">Pendientes</div>
           </Card>
           <Card className="p-3">
@@ -474,7 +474,7 @@ export function AsistenciaModule() {
                 <Button
                   size="sm"
                   onClick={() => handleExport('pdf')}
-                  className="h-9 bg-[#0f2040] hover:bg-[#1a3155]"
+                  className="h-9 bg-[#0f2044] hover:bg-[#1a3155]"
                   disabled={inasistenciasFiltradas.length === 0}
                 >
                   <FileDown className="w-3.5 h-3.5 mr-1" /> PDF
@@ -558,7 +558,7 @@ export function AsistenciaModule() {
                               {canAprobar && i.justificacion && i.justificacion.estado === 'pendiente_revision' && (
                                 <Button
                                   size="sm"
-                                  className="h-7 px-2 text-xs bg-[#0f2040] hover:bg-[#1a3155]"
+                                  className="h-7 px-2 text-xs bg-[#0f2044] hover:bg-[#1a3155]"
                                   onClick={() => {
                                     setAprobTarget(i)
                                     setAprobAccion('')
@@ -632,7 +632,7 @@ export function AsistenciaModule() {
                           <td className="p-2 text-center font-mono">{t.ausencias}</td>
                           <td className="p-2 text-center font-mono">{t.salidasTempranas}</td>
                           <td className="p-2 text-center font-mono">{t.totalMinutosAtraso}</td>
-                          <td className="p-2 text-center font-mono text-yellow-700">{t.pendientes}</td>
+                          <td className="p-2 text-center font-mono text-amber-700">{t.pendientes}</td>
                           <td className="p-2 text-center font-mono text-green-700">{t.aprobados}</td>
                           <td className="p-2 text-center font-mono text-red-700">{t.rechazados}</td>
                         </tr>
@@ -703,7 +703,7 @@ export function AsistenciaModule() {
                                 <td className="p-2 text-center">
                                   <Button
                                     size="sm"
-                                    className="h-7 text-xs bg-[#0f2040] hover:bg-[#1a3155]"
+                                    className="h-7 text-xs bg-[#0f2044] hover:bg-[#1a3155]"
                                     onClick={() => {
                                       setAprobTarget(i)
                                       setAprobAccion('')
@@ -917,7 +917,7 @@ export function AsistenciaModule() {
             <Button
               onClick={handleJustificar}
               disabled={justLoading || !justTipo}
-              className="bg-[#0f2040] hover:bg-[#1a3155]"
+              className="bg-[#0f2044] hover:bg-[#1a3155]"
             >
               {justLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
               Enviar a revisión
@@ -942,7 +942,7 @@ export function AsistenciaModule() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <CheckSquare className="w-5 h-5 text-[#0f2040]" />
+              <CheckSquare className="w-5 h-5 text-[#0f2044]" />
               Revisar Justificación
             </DialogTitle>
             <DialogDescription>
@@ -1175,7 +1175,7 @@ function ImportTab({ onImport, importing, onCleaned }: { onImport: (h: File | nu
           <Button
             onClick={() => registrosFile && onImport(horariosFile || null, registrosFile)}
             disabled={!registrosFile || importing}
-            className="bg-[#0f2040] hover:bg-[#1a3155]"
+            className="bg-[#0f2044] hover:bg-[#1a3155]"
           >
             {importing ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Importando y analizando...</>

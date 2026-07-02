@@ -91,7 +91,7 @@ const formatCLP = (n: number) =>
 
 const estadoColors: Record<string, string> = {
   'Bueno': 'bg-green-100 text-green-700',
-  'Regular': 'bg-yellow-100 text-yellow-700',
+  'Regular': 'bg-amber-100 text-amber-700',
   'Malo': 'bg-red-100 text-red-700',
   'En reparación': 'bg-blue-100 text-blue-700',
 }
@@ -540,7 +540,7 @@ export function HerramientasModule() {
             <Wrench className="w-5 h-5 text-slate-500" />
             <div>
               <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Herramientas</div>
-              <div className="text-xl font-bold text-[#0f2040]">{stats.total}</div>
+              <div className="text-xl font-bold text-[#0f2044]">{stats.total}</div>
             </div>
           </div>
         </Card>
@@ -553,12 +553,12 @@ export function HerramientasModule() {
             </div>
           </div>
         </Card>
-        <Card className="p-3 border-yellow-200 bg-yellow-50">
+        <Card className="p-3 border-amber-200 bg-amber-50">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-yellow-500" />
+            <AlertCircle className="w-5 h-5 text-amber-500" />
             <div>
-              <div className="text-[10px] text-yellow-600 font-semibold uppercase">Regular</div>
-              <div className="text-xl font-bold text-yellow-600">{stats.regular}</div>
+              <div className="text-[10px] text-amber-600 font-semibold uppercase">Regular</div>
+              <div className="text-xl font-bold text-amber-600">{stats.regular}</div>
             </div>
           </div>
         </Card>
@@ -654,7 +654,7 @@ export function HerramientasModule() {
                 ) : (
                   filteredHerramientas.map((herr) => (
                     <tr key={herr.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 font-mono text-xs font-semibold text-[#0f2040]">
+                      <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
                         {herr.codigo || '–'}
                       </td>
                       <td className="p-3">
@@ -849,7 +849,7 @@ export function HerramientasModule() {
             {/* Mantenimiento */}
             <div className="space-y-3 border-t pt-4">
               <Label className="flex items-center gap-2 text-sm font-semibold">
-                <Settings className="w-4 h-4 text-[#0f2040]" />
+                <Settings className="w-4 h-4 text-[#0f2044]" />
                 Mantenimiento
               </Label>
               <div className="space-y-1.5 min-w-0">
@@ -918,10 +918,10 @@ export function HerramientasModule() {
                       className="hidden"
                       onChange={handleInformeMantencionUpload}
                     />
-                    <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2044] hover:bg-slate-50 transition-colors">
                       <Upload className="w-6 h-6 text-slate-400" />
                       <p className="text-sm text-slate-600">
-                        <span className="text-[#0f2040] font-semibold">Haz clic para subir</span> un PDF
+                        <span className="text-[#0f2044] font-semibold">Haz clic para subir</span> un PDF
                       </p>
                       <p className="text-xs text-slate-400">Solo archivos PDF · máx. ~5 MB recomendado</p>
                     </div>
@@ -933,7 +933,7 @@ export function HerramientasModule() {
             {/* Manual de Usuario */}
             <div className="space-y-2 border-t pt-4 min-w-0">
               <Label className="flex items-center gap-2 text-sm font-semibold">
-                <FileText className="w-4 h-4 text-[#0f2040]" />
+                <FileText className="w-4 h-4 text-[#0f2044]" />
                 Manual de Usuario (PDF)
               </Label>
               {manual.nombre && !manual.removed ? (
@@ -991,10 +991,10 @@ export function HerramientasModule() {
                     className="hidden"
                     onChange={handleManualUpload}
                   />
-                  <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2040] hover:bg-slate-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-slate-300 rounded-lg hover:border-[#0f2044] hover:bg-slate-50 transition-colors">
                     <Upload className="w-6 h-6 text-slate-400" />
                     <p className="text-sm text-slate-600">
-                      <span className="text-[#0f2040] font-semibold">Haz clic para subir</span> un PDF
+                      <span className="text-[#0f2044] font-semibold">Haz clic para subir</span> un PDF
                     </p>
                     <p className="text-xs text-slate-400">Solo archivos PDF · máx. ~5 MB recomendado</p>
                   </div>
@@ -1016,7 +1016,7 @@ export function HerramientasModule() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <QrCode className="w-5 h-5 text-[#0f2040]" />
+              <QrCode className="w-5 h-5 text-[#0f2044]" />
               Código QR de la Herramienta
             </DialogTitle>
           </DialogHeader>
@@ -1035,7 +1035,7 @@ export function HerramientasModule() {
                 <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Herramienta</p>
                 <p className="text-sm font-bold text-slate-900">{qrHerramienta.nombre}</p>
                 {qrHerramienta.codigo && (
-                  <p className="text-xs font-mono text-[#0f2040]">{qrHerramienta.codigo}</p>
+                  <p className="text-xs font-mono text-[#0f2044]">{qrHerramienta.codigo}</p>
                 )}
               </div>
               <div className="bg-slate-50 rounded-lg p-3 space-y-1">
@@ -1046,7 +1046,7 @@ export function HerramientasModule() {
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
-                  className="flex-1 bg-[#0f2040] hover:bg-[#1a3060]"
+                  className="flex-1 bg-[#0f2044] hover:bg-[#1a3060]"
                   onClick={() => handleDownloadQr(qrHerramienta)}
                 >
                   <Download className="w-4 h-4 mr-2" />

@@ -360,7 +360,7 @@ export function PermisosModule() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h2 className="text-xl font-bold text-[#0f2040] flex items-center gap-2">
+        <h2 className="text-xl font-bold text-[#0f2044] flex items-center gap-2">
           <Shield className="w-5 h-5" />
           Permisos del Sistema por Rol
         </h2>
@@ -392,7 +392,7 @@ export function PermisosModule() {
               {rol.locked && <Lock className="w-3 h-3 text-slate-400 ml-auto" />}
             </div>
             <p className="text-[10px] text-gray-500 leading-tight">{rol.descripcion}</p>
-            <div className="mt-1 text-[10px] font-medium text-[#0f2040]">
+            <div className="mt-1 text-[10px] font-medium text-[#0f2044]">
               {permisos[rol.key]?.size || 0} permisos
             </div>
           </div>
@@ -405,7 +405,7 @@ export function PermisosModule() {
           <RefreshCw className="w-4 h-4 mr-2" />
           Restaurar defaults
         </Button>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#0f2040] hover:bg-[#1a3155]">
+        <Button onClick={handleSave} disabled={saving} className="bg-[#0f2044] hover:bg-[#1a3155]">
           {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
           Documentar cambios
         </Button>
@@ -416,7 +416,7 @@ export function PermisosModule() {
         <Card key={cat.key}>
           <CardHeader className="py-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#0f2040]" />
+              <CheckCircle2 className="w-4 h-4 text-[#0f2044]" />
               {cat.label}
               <Badge variant="secondary" className="ml-1">{cat.permisos.length} permisos</Badge>
             </CardTitle>

@@ -193,7 +193,7 @@ const calcularValorHora = (sueldoBase: number) => {
 }
 
 const tipoColors: Record<string, string> = {
-  'Correctivo': 'bg-orange-100 text-orange-700',
+  'Correctivo': 'bg-amber-100 text-amber-700',
   'Preventivo': 'bg-blue-100 text-blue-700',
   'Mejora': 'bg-purple-100 text-purple-700',
   'Emergencia': 'bg-red-100 text-red-700',
@@ -201,13 +201,13 @@ const tipoColors: Record<string, string> = {
 
 const prioridadColors: Record<string, string> = {
   'Urgente': 'bg-red-100 text-red-700',
-  'Alta': 'bg-orange-100 text-orange-700',
-  'Media': 'bg-yellow-100 text-yellow-700',
+  'Alta': 'bg-amber-100 text-amber-700',
+  'Media': 'bg-amber-100 text-amber-700',
   'Baja': 'bg-green-100 text-green-700',
 }
 
 const estadoColors: Record<string, string> = {
-  'Pendiente': 'bg-yellow-100 text-yellow-700',
+  'Pendiente': 'bg-amber-100 text-amber-700',
   'En Progreso': 'bg-blue-100 text-blue-700',
   'Completado': 'bg-green-100 text-green-700',
   'Cancelado': 'bg-red-100 text-red-700',
@@ -548,16 +548,16 @@ export function OrdenesTrabajoModule() {
   <style>
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; margin: 20px; color: #222; }
-    h1 { font-size: 18px; color: #0f2040; margin: 0 0 4px 0; }
+    h1 { font-size: 18px; color: #0f2044; margin: 0 0 4px 0; }
     h2 { font-size: 13px; color: #444; margin: 0 0 12px 0; font-weight: normal; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f2040; padding-bottom: 10px; margin-bottom: 15px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f2044; padding-bottom: 10px; margin-bottom: 15px; }
     .header-left { flex: 1; }
     .header-right { text-align: right; font-size: 11px; color: #555; }
     .info { font-size: 12px; margin-bottom: 12px; }
     .info span { display: inline-block; margin-right: 18px; }
-    .info b { color: #0f2040; }
+    .info b { color: #0f2044; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th { background: #0f2040; color: white; padding: 8px; font-size: 12px; text-align: center; border: 1px solid #0f2040; }
+    th { background: #0f2044; color: white; padding: 8px; font-size: 12px; text-align: center; border: 1px solid #0f2044; }
     th.desc { text-align: left; }
     td { border: 1px solid #ccc; padding: 6px 8px; font-size: 11px; vertical-align: middle; }
     td.num { text-align: center; width: 30px; color: #555; }
@@ -576,7 +576,7 @@ export function OrdenesTrabajoModule() {
       .no-print { display: none; }
     }
     .no-print { margin-bottom: 15px; }
-    .no-print button { padding: 6px 14px; font-size: 12px; cursor: pointer; background: #0f2040; color: white; border: none; border-radius: 4px; }
+    .no-print button { padding: 6px 14px; font-size: 12px; cursor: pointer; background: #0f2044; color: white; border: none; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -600,7 +600,7 @@ export function OrdenesTrabajoModule() {
     <span><b>Propiedad:</b> ${ot.propiedad?.nombre || '–'}</span>
   </div>
 
-  <h3 style="font-size:13px;color:#0f2040;margin:14px 0 4px 0;">LISTA DE VERIFICACIÓN DE TAREAS (LV - PMI)</h3>
+  <h3 style="font-size:13px;color:#0f2044;margin:14px 0 4px 0;">LISTA DE VERIFICACIÓN DE TAREAS (LV - PMI)</h3>
   <table>
     <thead>
       <tr>
@@ -925,13 +925,21 @@ export function OrdenesTrabajoModule() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-        {Object.entries(stats).map(([estado, count]) => (
-          <Card key={estado} className="p-3">
-            <div className="text-xs text-slate-500 font-semibold uppercase">{estado}</div>
-            <div className="text-xl font-bold text-[#0f2040]">{count}</div>
-          </Card>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {(() => {
+          const cards = [
+            { label: 'Pendiente', count: stats.Pendiente, gradient: 'from-amber-500 to-amber-600' },
+            { label: 'En Progreso', count: stats['En Progreso'], gradient: 'from-blue-500 to-blue-600' },
+            { label: 'Completado', count: stats.Completado, gradient: 'from-green-500 to-green-600' },
+            { label: 'Cancelado', count: stats.Cancelado, gradient: 'from-red-500 to-red-600' },
+          ]
+          return cards.map((c) => (
+            <div key={c.label} className={`rounded-md bg-gradient-to-br ${c.gradient} text-white p-3`}>
+              <p className="text-xs opacity-80 font-semibold uppercase">{c.label}</p>
+              <p className="text-xl font-bold">{c.count}</p>
+            </div>
+          ))
+        })()}
       </div>
 
       {/* Actions */}
@@ -998,7 +1006,7 @@ export function OrdenesTrabajoModule() {
                 ) : (
                   ordenes.map((ot) => (
                     <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
-                      <td className="p-3 font-mono text-xs font-bold text-[#0f2040]">
+                      <td className="p-3 font-mono text-xs font-bold text-[#0f2044]">
                         {ot.otNum}
                         {ot.esRecurrente && <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />}
                       </td>
@@ -1096,7 +1104,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Información Básica */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
                     Información Básica
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1120,7 +1128,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Clasificación */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">2</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">2</span>
                     Clasificación
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -1169,7 +1177,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Centro de Costo */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
                     <Building2 className="w-4 h-4" /> Centro de Costo e Imputación
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1224,7 +1232,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Fechas */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
                     <Calendar className="w-4 h-4" /> Fechas
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -1268,7 +1276,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Asignación */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">5</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">5</span>
                     <Users className="w-4 h-4" /> Asignación
                   </h4>
                   <div className="grid grid-cols-1 gap-3">
@@ -1304,7 +1312,7 @@ export function OrdenesTrabajoModule() {
                 {/* Sección: Control de Tiempo */}
                 <div className="space-y-3">
                   <h4 className="font-semibold text-sm text-slate-700 flex items-center gap-2">
-                    <span className="bg-[#0f2040] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">6</span>
+                    <span className="bg-[#0f2044] text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">6</span>
                     <Clock className="w-4 h-4" /> Control de Tiempo
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -1439,7 +1447,7 @@ export function OrdenesTrabajoModule() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="text-[#0f2040] border-[#0f2040]/30 hover:bg-[#0f2040]/5"
+                        className="text-[#0f2044] border-[#0f2044]/30 hover:bg-[#0f2044]/5"
                         onClick={() => setCrearSolicitudDialogOpen(true)}
                         title="Crea una solicitud de compra con estos materiales y envía email a administración"
                       >
@@ -1740,7 +1748,7 @@ export function OrdenesTrabajoModule() {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-sm flex items-center gap-2">
-                      <Camera className="w-4 h-4 text-orange-500" /> Fotos ANTES ({fotosAntes.length})
+                      <Camera className="w-4 h-4 text-amber-500" /> Fotos ANTES ({fotosAntes.length})
                     </h3>
                     <label className="cursor-pointer">
                       <input
@@ -1769,9 +1777,9 @@ export function OrdenesTrabajoModule() {
                   </div>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
                     {fotosAntes.map((foto, i) => (
-                      <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                      <div key={i} className="relative group aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-amber-200">
                         <img src={foto} alt={`Antes ${i+1}`} className="w-full h-full object-cover" />
-                        <div className="absolute top-1 left-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
+                        <div className="absolute top-1 left-1 bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
                           ANTES
                         </div>
                         <button
@@ -1875,7 +1883,7 @@ export function OrdenesTrabajoModule() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-lg min-w-0">
-                  <span className="font-mono text-xs font-bold text-[#0f2040] shrink-0">{selectedOT.otNum}</span>
+                  <span className="font-mono text-xs font-bold text-[#0f2044] shrink-0">{selectedOT.otNum}</span>
                   <span className="truncate">{selectedOT.titulo}</span>
                   <Badge className={`${estadoColors[selectedOT.estado]} shrink-0`}>{selectedOT.estado}</Badge>
                   {selectedOT.esRecurrente && (
@@ -1955,7 +1963,7 @@ export function OrdenesTrabajoModule() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-yellow-50">
+                      <tfoot className="bg-amber-50">
                         <tr>
                           <td colSpan={4} className="p-2 text-right font-semibold">Total Materiales:</td>
                           <td className="p-2 text-right font-bold text-red-600">
@@ -2004,7 +2012,7 @@ export function OrdenesTrabajoModule() {
                             <td className="p-2">{t.descripcion}</td>
                             <td className="p-2 text-center">{t.cantidad}</td>
                             <td className="p-2 text-center">
-                              <Badge className={t.estado === 'Completado' ? 'bg-green-100 text-green-700' : t.estado === 'En Progreso' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}>
+                              <Badge className={t.estado === 'Completado' ? 'bg-green-100 text-green-700' : t.estado === 'En Progreso' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}>
                                 {t.estado}
                               </Badge>
                             </td>
@@ -2059,7 +2067,7 @@ export function OrdenesTrabajoModule() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-yellow-50">
+                      <tfoot className="bg-amber-50">
                         <tr>
                           <td colSpan={5} className="p-2 text-right font-semibold">Total Mano de Obra:</td>
                           <td className="p-2 text-right font-bold text-red-600">
@@ -2081,10 +2089,10 @@ export function OrdenesTrabajoModule() {
                       {/* Fotos Antes */}
                       {selectedOT.fotosAntes && selectedOT.fotosAntes.length > 0 && (
                         <div>
-                          <p className="text-xs font-semibold text-orange-600 mb-2">ANTES ({selectedOT.fotosAntes.length})</p>
+                          <p className="text-xs font-semibold text-amber-600 mb-2">ANTES ({selectedOT.fotosAntes.length})</p>
                           <div className="grid grid-cols-2 gap-2">
                             {selectedOT.fotosAntes.map((foto, i) => (
-                              <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-orange-200">
+                              <div key={i} className="aspect-square bg-slate-100 rounded-lg overflow-hidden border-2 border-amber-200">
                                 <img src={foto} alt={`Antes ${i+1}`} className="w-full h-full object-cover" />
                               </div>
                             ))}
@@ -2156,7 +2164,7 @@ export function OrdenesTrabajoModule() {
               {/* OT Info - Read Only */}
               <div className="bg-slate-50 p-3 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-mono text-xs font-bold text-[#0f2040]">{progressOT.otNum}</span>
+                  <span className="font-mono text-xs font-bold text-[#0f2044]">{progressOT.otNum}</span>
                   <Badge className={estadoColors[progressOT.estado]}>{progressOT.estado}</Badge>
                 </div>
                 <h3 className="font-semibold">{progressOT.titulo}</h3>
@@ -2303,7 +2311,7 @@ export function OrdenesTrabajoModule() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-[#0f2040]" />
+              <ShoppingCart className="w-5 h-5 text-[#0f2044]" />
               Crear Solicitud de Compra
             </DialogTitle>
             <DialogDescription>

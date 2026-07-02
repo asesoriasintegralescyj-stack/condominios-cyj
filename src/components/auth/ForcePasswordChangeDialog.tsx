@@ -50,7 +50,7 @@ export function ForcePasswordChangeDialog({ open, email, onSuccess }: ForcePassw
     if (/[0-9]/.test(newPassword)) score++
     if (/[^A-Za-z0-9]/.test(newPassword)) score++
     const labels = ['', 'Muy débil', 'Débil', 'Aceptable', 'Buena', 'Fuerte']
-    const colors = ['', 'bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500']
+    const colors = ['', 'bg-red-500', 'bg-amber-500', 'bg-amber-500', 'bg-blue-500', 'bg-green-500']
     return { score, label: labels[score], color: colors[score] }
   })()
 
