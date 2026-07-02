@@ -197,18 +197,25 @@ export async function POST(request: Request) {
     const zip = archiver('zip', { zlib: { level: 6 } })
 
     const chunks: Buffer[] = []
-    let currentSize = 0
+    // Tamaño acumulado de lo AÑADIDO al zip (no de lo emitido por el stream,
+    // que se actualiza de forma asíncrona y no sirve para límites en tiempo real)
+    let addedSize = 0
     let fotosOmitidas = 0
     let docsOmitidos = 0
     const done = new Promise<void>((resolve, reject) => {
       zip.on('data', (c: Buffer) => {
         chunks.push(c)
-        currentSize += c.length
       })
       zip.on('warning', (err: any) => console.warn('[Backup Auto] zip warning:', err))
       zip.on('error', (err: any) => reject(err))
       zip.on('end', () => resolve())
     })
+
+    // Wrapper para trackear el tamaño añadido
+    const trackAppend = (buf: Buffer, opts: { name: string }) => {
+      addedSize += buf.length
+      zip.append(buf, opts)
+    }
 
     // Función helper para sanitizar nombres de carpeta/archivo
     const sanitize = (s: string): string =>
@@ -243,11 +250,11 @@ export async function POST(request: Request) {
         const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('png') ? 'png' : 'img'
         const buf = Buffer.from(b64, 'base64')
         // Si añadir esta foto excedería el tamaño objetivo, omitirla
-        if (currentSize + buf.length > TARGET_ZIP_BYTES) {
+        if (addedSize + buf.length > TARGET_ZIP_BYTES) {
           fotosOmitidas++
           return false
         }
-        zip.append(buf, { name: `${folder}/foto_${String(idx + 1).padStart(2, '0')}.${ext}` })
+        trackAppend(buf, { name: `${folder}/foto_${String(idx + 1).padStart(2, '0')}.${ext}` })
         return true
       } catch {
         return false
@@ -266,12 +273,12 @@ export async function POST(request: Request) {
           docsOmitidos++
           return false
         }
-        if (currentSize + buf.length > TARGET_ZIP_BYTES) {
+        if (addedSize + buf.length > TARGET_ZIP_BYTES) {
           docsOmitidos++
           return false
         }
         const ext = mime.includes('pdf') ? 'pdf' : mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'bin'
-        zip.append(buf, { name: `${folder}/${sanitize(nombre) || 'documento'}.${ext}` })
+        trackAppend(buf, { name: `${folder}/${sanitize(nombre) || 'documento'}.${ext}` })
         return true
       } catch {
         return false
@@ -328,8 +335,8 @@ export async function POST(request: Request) {
         }
         const otPdf = generateOrdenTrabajoPdfBuffer(otInput)
         // Solo añadir si no excede el tamaño objetivo
-        if (currentSize + otPdf.length <= TARGET_ZIP_BYTES) {
-          zip.append(otPdf, { name: `${folderName}/${ot.otNum}.pdf` })
+        if (addedSize + otPdf.length <= TARGET_ZIP_BYTES) {
+          trackAppend(otPdf, { name: `${folderName}/${ot.otNum}.pdf` })
         } else {
           console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de OT ${ot.otNum}. Se omite.`)
         }
@@ -358,7 +365,9 @@ export async function POST(request: Request) {
         for (const sc of scsAsoc) {
           try {
             const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
-            zip.append(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
+            if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
+              trackAppend(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
+            }
           } catch (e) {
             console.warn(`[Backup Auto] Error generando PDF de SC ${sc.codigo}:`, e)
           }
@@ -389,7 +398,9 @@ export async function POST(request: Request) {
             `Solicitudes de compra asociadas: ${scsAsoc.length}`,
           ],
         })
-        zip.append(resumenOtPdf, { name: `${folderName}/Resumen_Costos_${ot.otNum}.pdf` })
+        if (addedSize + resumenOtPdf.length <= TARGET_ZIP_BYTES) {
+          trackAppend(resumenOtPdf, { name: `${folderName}/Resumen_Costos_${ot.otNum}.pdf` })
+        }
 
         otCount++
       } catch (e) {
@@ -452,8 +463,8 @@ export async function POST(request: Request) {
           })),
         }
         const proyPdf = generateProyectoPdfBuffer(proyInput)
-        if (currentSize + proyPdf.length <= TARGET_ZIP_BYTES) {
-          zip.append(proyPdf, { name: `${folderName}/${codigo}.pdf` })
+        if (addedSize + proyPdf.length <= TARGET_ZIP_BYTES) {
+          trackAppend(proyPdf, { name: `${folderName}/${codigo}.pdf` })
         } else {
           console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de Proyecto ${codigo}. Se omite.`)
         }
@@ -480,7 +491,9 @@ export async function POST(request: Request) {
         for (const sc of scsAsoc) {
           try {
             const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
-            zip.append(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
+            if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
+              trackAppend(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
+            }
           } catch (e) {
             console.warn(`[Backup Auto] Error generando PDF de SC ${sc.codigo}:`, e)
           }
@@ -508,7 +521,9 @@ export async function POST(request: Request) {
             `Solicitudes de compra asociadas: ${scsAsoc.length}`,
           ],
         })
-        zip.append(resumenProyPdf, { name: `${folderName}/Resumen_Costos_${codigo}.pdf` })
+        if (addedSize + resumenProyPdf.length <= TARGET_ZIP_BYTES) {
+          trackAppend(resumenProyPdf, { name: `${folderName}/Resumen_Costos_${codigo}.pdf` })
+        }
 
         proyCount++
       } catch (e) {
@@ -522,7 +537,9 @@ export async function POST(request: Request) {
     for (const sc of scsNoAsociadas) {
       try {
         const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
-        zip.append(scPdf, { name: `03_Solicitudes_no_asociadas/${sc.codigo}.pdf` })
+        if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
+          trackAppend(scPdf, { name: `03_Solicitudes_no_asociadas/${sc.codigo}.pdf` })
+        }
         scCount++
       } catch (e) {
         console.warn(`[Backup Auto] Error generando PDF de SC ${sc.codigo}:`, e)
@@ -531,7 +548,7 @@ export async function POST(request: Request) {
 
     // Resumen de SCs no asociadas
     const resumenSCPdf = generarResumenSCsPdf(scsNoAsociadas, mesStr)
-    zip.append(resumenSCPdf, { name: `03_Solicitudes_no_asociadas/Resumen_SC_no_asociadas.pdf` })
+    trackAppend(resumenSCPdf, { name: `03_Solicitudes_no_asociadas/Resumen_SC_no_asociadas.pdf` })
 
     // ===== 3d. Rondas y Asistencia =====
     console.log('[Backup Auto] Generando PDFs de Rondas y Asistencia...')
@@ -541,7 +558,7 @@ export async function POST(request: Request) {
       orderBy: { createdAt: 'desc' },
     })
     const rondasPdf = generarRondasPdf(rondas, mesStr)
-    zip.append(rondasPdf, { name: `04_Rondas_${mesStr}.pdf` })
+    trackAppend(rondasPdf, { name: `04_Rondas_${mesStr}.pdf` })
 
     const inasistencias = await db.inasistenciaAtraso.findMany({
       where: { fecha: { gte: fechaDesde, lte: fechaHasta } },
@@ -549,10 +566,10 @@ export async function POST(request: Request) {
       orderBy: { fecha: 'desc' },
     })
     const asistPdf = generarAsistenciaPdf(inasistencias, mesStr)
-    zip.append(asistPdf, { name: `05_Asistencia_${mesStr}.pdf` })
+    trackAppend(asistPdf, { name: `05_Asistencia_${mesStr}.pdf` })
 
     // ===== 3e. Respaldo BD JSON =====
-    zip.append(Buffer.from(backupJson, 'utf-8'), { name: `Respaldo_BD_${mesStr}.json` })
+    trackAppend(Buffer.from(backupJson, 'utf-8'), { name: `Respaldo_BD_${mesStr}.json` })
 
     // ===== 3f. Finalizar ZIP =====
     console.log('[Backup Auto] Finalizando ZIP...')
