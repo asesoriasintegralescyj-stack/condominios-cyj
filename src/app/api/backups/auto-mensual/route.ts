@@ -237,7 +237,7 @@ export async function POST(request: Request) {
       return []
     }
 
-    // Función para añadir una foto al zip con control de tamaño
+    // Función para añadir una foto al zip con control de tamaño ESTRICTO
     const addFoto = (folder: string, idx: number, dataUrl: string): boolean => {
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
@@ -250,8 +250,10 @@ export async function POST(request: Request) {
         }
         const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('png') ? 'png' : 'img'
         const buf = Buffer.from(b64, 'base64')
-        // Si añadir esta foto excedería el tamaño objetivo, omitirla
-        if (addedSize + buf.length > TARGET_ZIP_BYTES) {
+        // LÍMITE ESTRICTO: si addedSize ya pasó 15 MB, omitir todas las fotos siguientes
+        // (deja 7 MB de margen para PDFs, SCs, resúmenes y el JSON de la BD)
+        const LIMITE_FOTOS = 15 * 1024 * 1024
+        if (addedSize > LIMITE_FOTOS) {
           fotosOmitidas++
           return false
         }
