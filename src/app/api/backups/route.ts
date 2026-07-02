@@ -16,23 +16,24 @@ import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
 // Modelos a respaldar (excluyendo Backup mismo para evitar recursión)
 const MODELOS_BACKUP = [
-  'condominio', 'propiedad', 'residente', 'personal', 'user',
+  'condominio', 'propiedad', 'personal', 'user',
   'activo', 'proveedor', 'ordenTrabajo', 'gasto', 'proyecto',
-  'inspeccion', 'reserva', 'gastoComun', 'notificacion',
+  'inspeccion', 'notificacion',
   'asistencia', 'centroCostoMaster', 'catHerramienta', 'catMaterial', 'catTarea',
-  'movimientoInventario', 'cajaChica', 'comite', 'sesionComite',
-  'configuracion', 'configMorosidad', 'configNotificacion',
-  'deuda', 'estadoCuenta', 'detalleEstadoCuenta', 'cartaCobranza',
-  'transaccionPago', 'integracion', 'accesoPortal', 'solicitudMantenimiento',
+  'movimientoInventario',
+  'configuracion',
   'categoriaCumplimiento', 'documentoCumplimiento', 'historialCumplimiento',
-  'resumenCumplimiento', 'ronda', 'registroRonda', 'auditoriaSistema',
-  'logAuditoria', 'cuentaContable', 'asientoContable', 'detalleAsiento',
-  'historialAprobacionOT', 'pagoGastoComun', 'detalleGastoComun',
-  'envioNotificacion', 'firmaDigital',
+  'resumenCumplimiento', 'ronda', 'registroRonda',
+  'logAuditoria',
+  'historialAprobacionOT',
   // Tablas relacionales de OT
   'oTMaterial', 'oTHerramienta', 'oTTarea', 'oTPersonal', 'oTDocumento',
   // Tablas relacionales de Proyecto
   'proyectoDocumento', 'proyectoHerramienta', 'proyectoMaterial', 'proyectoPersonal', 'proyectoTarea',
+  // Asistencia nueva
+  'horarioTrabajador', 'registroAsistenciaReloj', 'inasistenciaAtraso', 'justificacionAsistencia',
+  // Solicitudes de compra
+  'solicitudCompra', 'historialAprobacionSC',
 ] as const;
 
 // GET - Listar respaldos con estadísticas (requiere admin)

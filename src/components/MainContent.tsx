@@ -10,14 +10,12 @@ import { OrdenesTrabajoModule } from './ordenes-trabajo/OrdenesTrabajoModule'
 import { CentroCostoModule } from './centros-costo/CentroCostoModule'
 import { ProyectosModule } from './proyectos/ProyectosModule'
 import { InspeccionesModule } from './inspecciones/InspeccionesModule'
-import { CatalogosModule } from './catalogos/CatalogosModule'
 import { MaterialesModule } from './materiales/MaterialesModule'
 import { TareasModule } from './tareas/TareasModule'
 import { ReportesModule } from './reportes/ReportesModule'
 import { UsuariosModule } from './usuarios/UsuariosModule'
 import { InventarioModule } from './inventario/InventarioModule'
 import { HerramientasModule } from './herramientas/HerramientasModule'
-import { AprobacionesModule } from './aprobaciones/AprobacionesModule'
 import { AprobacionesOTModule } from './aprobaciones-ot/AprobacionesOTModule'
 import { NotificacionesModule } from './notificaciones/NotificacionesModule'
 import { BackupsModule } from './backups/BackupsModule'
@@ -26,6 +24,7 @@ import { RondasModule } from './rondas/RondasModule'
 import { SolicitudesComprasModule } from './solicitudes-compra/SolicitudesComprasModule'
 import { PermisosModule } from './permisos/PermisosModule'
 import { ManualesModule } from './manuales/ManualesModule'
+import { AuditorModule } from './auditor/AuditorModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -37,14 +36,12 @@ const moduleTitles: Record<string, string> = {
   activos: 'Activos',
   proveedores: 'Proveedores',
   centrocostos: 'Centro de Costos',
-  catalogos: 'Catálogos',
   materiales: 'Materiales',
   tareas: 'Tareas',
   reportes: 'Reportes',
   usuarios: 'Gestión de Usuarios',
   inventario: 'Inventario',
   herramientas: 'Herramientas',
-  aprobaciones: 'Seguimiento de Aprobaciones',
   aprobacionesot: 'Aprobaciones de Órdenes de Trabajo',
   notificaciones: 'Notificaciones',
   backups: 'Respaldos de Base de Datos',
@@ -53,6 +50,7 @@ const moduleTitles: Record<string, string> = {
   solicitudescompra: 'Solicitud de Compras',
   permisos: 'Permisos del Sistema',
   manuales: 'Manuales y Capacitaciones',
+  auditoria: 'Auditoría',
 }
 
 export function MainContent() {
@@ -78,8 +76,6 @@ export function MainContent() {
         return <ProyectosModule />
       case 'inspecciones':
         return <InspeccionesModule />
-      case 'catalogos':
-        return <CatalogosModule />
       case 'materiales':
         return <MaterialesModule />
       case 'tareas':
@@ -92,8 +88,6 @@ export function MainContent() {
         return <InventarioModule />
       case 'herramientas':
         return <HerramientasModule />
-      case 'aprobaciones':
-        return <AprobacionesModule />
       case 'aprobacionesot':
         return <AprobacionesOTModule />
       case 'notificaciones':
@@ -110,6 +104,8 @@ export function MainContent() {
         return <PermisosModule />
       case 'manuales':
         return <ManualesModule />
+      case 'auditoria':
+        return <AuditorModule />
       default:
         return <Dashboard />
     }

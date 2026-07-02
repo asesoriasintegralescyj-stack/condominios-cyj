@@ -51,7 +51,6 @@ import {
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
 import { useSession } from '@/hooks/use-session'
-import { RondaScanner } from './RondaScanner'
 
 interface Ronda {
   id: string
@@ -335,7 +334,7 @@ export function RondasModule() {
   /**
    * Maneja un QR detectado por la cámara (o ingresado manualmente).
    * Llama a /api/rondas/registrar y registra la ronda con fecha/hora actuales.
-   * El cooldown del mismo código lo maneja RondaScanner.
+   * El cooldown del mismo código lo maneja el escáner interno.
    */
   const handleCameraScan = async (text: string) => {
     setRegistering(true)
@@ -1214,7 +1213,7 @@ export function RondasModule() {
               Apunta la cámara al QR del posto. Se registrará automáticamente con fecha y hora actuales.
               Puedes escanear varios postos en secuencia sin cerrar esta ventana.
             </p>
-            <RondaScanner onScan={handleCameraScan} registering={registering} />
+            {/* El escáner de cámara está en la página dedicada del guardia /rondas-guardia */}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCameraScanOpen(false)}>
