@@ -58,7 +58,8 @@ import {
   Calendar,
   FileText,
   Archive,
-  Info
+  Info,
+  Mail
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -155,6 +156,7 @@ export function BackupsModule() {
   })
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [generandoMensual, setGenerandoMensual] = useState(false)
   const [restoreProgress, setRestoreProgress] = useState(0)
 
   // Filters
@@ -230,6 +232,30 @@ export function BackupsModule() {
       toast.error('Error al crear respaldo')
     } finally {
       setCreating(false)
+    }
+  }
+
+  const generarRespaldoMensual = async () => {
+    setGenerandoMensual(true)
+    try {
+      const res = await fetch('/api/backups/auto-mensual', {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || 'Respaldo mensual generado correctamente')
+        if (data.resumen) {
+          toast.info(`OT: ${data.resumen.ot} | SC: ${data.resumen.sc} | Proyectos: ${data.resumen.proyectos} | Rondas: ${data.resumen.rondas} | Email: ${data.resumen.emailEnviado ? 'Enviado' : 'No enviado'}`, { duration: 8000 })
+        }
+        fetchData()
+      } else {
+        toast.error(data.error || 'Error al generar respaldo mensual')
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      toast.error('Error de conexión')
+    } finally {
+      setGenerandoMensual(false)
     }
   }
 
@@ -470,6 +496,23 @@ export function BackupsModule() {
                   <>
                     <Plus className="w-4 h-4 mr-2" />
                     Crear Respaldo
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={generarRespaldoMensual}
+                disabled={generandoMensual || creating}
+                className="bg-green-700 hover:bg-green-800"
+              >
+                {generandoMensual ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4 mr-2" />
+                    Respaldo Mensual (Email + PDFs)
                   </>
                 )}
               </Button>
