@@ -31,10 +31,12 @@ import { useSession } from '@/hooks/use-session'
 import { formatCLP, HORAS_OPTIONS } from '@/lib/utils'
 import { filtrarPersonalAsignableOT } from '@/lib/personal-cargos'
 import { toast } from 'sonner'
-import { 
-  Plus, Pencil, Trash2, Search, Printer, Clock, Users, 
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import {
+  Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
-  Calendar, Lock, Download, Camera, Image, X, ShoppingCart
+  Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
+  AlertTriangle, CheckCircle
 } from 'lucide-react'
 
 // Interfaces
@@ -925,22 +927,14 @@ export function OrdenesTrabajoModule() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {(() => {
-          const cards = [
-            { label: 'Pendiente', count: stats.Pendiente, gradient: 'from-amber-500 to-amber-600' },
-            { label: 'En Progreso', count: stats['En Progreso'], gradient: 'from-blue-500 to-blue-600' },
-            { label: 'Completado', count: stats.Completado, gradient: 'from-green-500 to-green-600' },
-            { label: 'Cancelado', count: stats.Cancelado, gradient: 'from-red-500 to-red-600' },
-          ]
-          return cards.map((c) => (
-            <div key={c.label} className={`rounded-md bg-gradient-to-br ${c.gradient} text-white p-3`}>
-              <p className="text-xs opacity-80 font-semibold uppercase">{c.label}</p>
-              <p className="text-xl font-bold">{c.count}</p>
-            </div>
-          ))
-        })()}
-      </div>
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Pendiente', numero: stats.Pendiente, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'En Progreso', numero: stats['En Progreso'], icon: <Clock className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Completado', numero: stats.Completado, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Cancelado', numero: stats.Cancelado, icon: <X className="w-5 h-5" />, color: 'rojo' },
+        ]}
+      />
 
       {/* Actions */}
       <div className="flex items-center gap-3 flex-wrap">

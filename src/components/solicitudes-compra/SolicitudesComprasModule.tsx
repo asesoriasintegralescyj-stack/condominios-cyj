@@ -41,7 +41,10 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  AlertTriangle,
+  DollarSign,
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface MaterialSolicitud {
   nombre: string
@@ -451,29 +454,16 @@ export function SolicitudesComprasModule() {
   return (
     <div className="space-y-5">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="rounded-md bg-gradient-to-br from-[#0f2044] to-[#0a1628] text-white p-3">
-          <p className="text-xs opacity-80">Total</p>
-          <p className="text-xl font-bold">{stats.total}</p>
-          <p className="text-[10px] opacity-70 mt-1">{formatCLP(stats.montoTotal)}</p>
-        </div>
-        <div className="rounded-md bg-gradient-to-br from-amber-500 to-amber-600 text-white p-3">
-          <p className="text-xs opacity-80">Solicitadas</p>
-          <p className="text-xl font-bold">{stats.solicitadas}</p>
-        </div>
-        <div className="rounded-md bg-gradient-to-br from-blue-500 to-blue-600 text-white p-3">
-          <p className="text-xs opacity-80">En Proceso</p>
-          <p className="text-xl font-bold">{stats.enProceso}</p>
-        </div>
-        <div className="rounded-md bg-gradient-to-br from-green-500 to-green-600 text-white p-3">
-          <p className="text-xs opacity-80">Compradas</p>
-          <p className="text-xl font-bold">{stats.completadas}</p>
-        </div>
-        <div className="rounded-md bg-gradient-to-br from-slate-500 to-slate-600 text-white p-3">
-          <p className="text-xs opacity-80">Monto Total</p>
-          <p className="text-lg font-bold">{formatCLP(stats.montoTotal)}</p>
-        </div>
-      </div>
+      <TableroIndicadores
+        columnas={5}
+        cards={[
+          { titulo: 'Total', numero: stats.total, icon: <ShoppingCart className="w-5 h-5" />, color: 'primary', subtitulo: formatCLP(stats.montoTotal) },
+          { titulo: 'Solicitadas', numero: stats.solicitadas, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'En Proceso', numero: stats.enProceso, icon: <AlertTriangle className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Compradas', numero: stats.completadas, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Monto Total', numero: formatCLP(stats.montoTotal), icon: <DollarSign className="w-5 h-5" />, color: 'gris' },
+        ]}
+      />
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3">

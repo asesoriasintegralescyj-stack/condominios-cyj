@@ -48,8 +48,12 @@ import {
   Database,
   RefreshCw,
   Calendar,
-  BarChart3
+  BarChart3,
+  History,
+  CalendarDays,
+  Users
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Auditoria {
   id: string
@@ -358,8 +362,18 @@ export function AuditorModule() {
     )
   }
 
+  const usuariosActivosCount = new Set(auditorias.map(a => a.usuarioId).filter(Boolean)).size
+
   return (
     <div className="space-y-6">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Logs', numero: stats.total, icon: <History className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Hoy', numero: stats.accionesHoy, icon: <Calendar className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Esta Semana', numero: stats.accionesSemana, icon: <CalendarDays className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Usuarios Activos', numero: usuariosActivosCount, icon: <Users className="w-5 h-5" />, color: 'purpura' },
+        ]}
+      />
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

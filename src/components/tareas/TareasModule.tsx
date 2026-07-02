@@ -20,7 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Edit, Trash2, ClipboardList, Search } from 'lucide-react'
+import { Plus, Edit, Trash2, ClipboardList, Search, ListChecks, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Tarea {
   id: string
@@ -157,6 +158,14 @@ export function TareasModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Tareas', numero: tareas.length, icon: <ListChecks className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Pendientes', numero: tareas.filter(t => (t.prioridad || '').toLowerCase() === 'alta').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'En Progreso', numero: tareas.filter(t => (t.prioridad || '').toLowerCase() === 'media').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Completadas', numero: tareas.filter(t => (t.prioridad || '').toLowerCase() === 'baja').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+        ]}
+      />
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">

@@ -52,8 +52,10 @@ import {
   Eye,
   Send,
   CheckCircle,
-  XCircle
+  XCircle,
+  CheckCheck
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Notificacion {
   id: string
@@ -227,6 +229,14 @@ export function NotificacionesModule() {
 
   return (
     <div className="space-y-6">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total', numero: notificaciones.length, icon: <Bell className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'No Leídas', numero: notificaciones.filter(n => !n.leido).length, icon: <BellRing className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Leídas', numero: notificaciones.filter(n => n.leido).length, icon: <CheckCheck className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Importantes', numero: notificaciones.filter(n => n.tipo === 'Urgente' || n.tipo === 'Alerta').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja' },
+        ]}
+      />
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

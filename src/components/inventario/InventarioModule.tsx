@@ -25,8 +25,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { 
   Plus, Pencil, Search, AlertTriangle, Package, 
   TrendingDown, TrendingUp, Minus, History, Download,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Calendar
+  ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
+  FolderTree, Boxes
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Material {
   id: string
@@ -350,8 +352,20 @@ export function InventarioModule() {
 
   const totalPages = Math.ceil(movimientosTotal / 20)
 
+  const categoriasCount = new Set(materiales.map(m => m.categoria).filter(Boolean)).size
+  const stockBajoCount = materiales.filter(m => m.stockActual < m.stockMinimo).length
+  const stockTotal = materiales.reduce((sum, m) => sum + (m.stockActual || 0), 0)
+
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Items', numero: materiales.length, icon: <Package className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Categorías', numero: categoriasCount, icon: <FolderTree className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Stock Bajo', numero: stockBajoCount, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Stock Total', numero: stockTotal, icon: <Boxes className="w-5 h-5" />, color: 'gris' },
+        ]}
+      />
       <Tabs defaultValue="inventario" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="inventario" className="flex items-center gap-2">

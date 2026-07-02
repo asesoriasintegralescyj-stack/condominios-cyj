@@ -45,12 +45,15 @@ import {
   ExternalLink,
   Camera,
   Clock,
+  Footprints,
+  CalendarDays,
   Calendar,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
 import { useSession } from '@/hooks/use-session'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Ronda {
   id: string
@@ -640,8 +643,23 @@ export function RondasModule() {
   const activasCount = rondas.filter((r) => r.activo).length
   const etapasCount = groupedRondas.length
 
+  const hoyStr = new Date().toISOString().split('T')[0]
+  const hoyCount = registros.filter((r) => r.fecha === hoyStr).length
+  const inicioSemana = new Date()
+  inicioSemana.setDate(inicioSemana.getDate() - 6)
+  const inicioSemanaStr = inicioSemana.toISOString().split('T')[0]
+  const semanaCount = registros.filter((r) => r.fecha >= inicioSemanaStr).length
+
   return (
     <div className="space-y-6">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Registros', numero: totalRegistros, icon: <Footprints className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Rondas Activas', numero: activasCount, icon: <MapPin className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Hoy', numero: hoyCount, icon: <Calendar className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Esta Semana', numero: semanaCount, icon: <CalendarDays className="w-5 h-5" />, color: 'gris' },
+        ]}
+      />
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>

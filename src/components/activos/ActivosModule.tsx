@@ -32,7 +32,12 @@ import {
   ExternalLink,
   FileText,
   Settings,
+  Package,
+  CheckCircle,
+  XCircle,
+  DollarSign,
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Activo {
   id: string
@@ -529,9 +534,19 @@ export function ActivosModule() {
   }
 
   const totalValor = activos.reduce((sum, a) => sum + a.valorActual, 0)
+  const activosActivosCount = activos.filter(a => a.estado === 'Activo').length
+  const activosInactivosCount = activos.filter(a => a.estado === 'Inactivo').length
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Activos', numero: activos.length, icon: <Package className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Activos', numero: activosActivosCount, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Inactivos', numero: activosInactivosCount, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Valor Total', numero: formatCLP(totalValor), icon: <DollarSign className="w-5 h-5" />, color: 'gris' },
+        ]}
+      />
       {/* Actions */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">

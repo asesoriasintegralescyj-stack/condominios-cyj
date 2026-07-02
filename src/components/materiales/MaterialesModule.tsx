@@ -14,9 +14,10 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { Plus, Edit, Trash2, Package, Search, Upload, Download, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Plus, Edit, Trash2, Package, Search, Upload, Download, AlertCircle, CheckCircle2, FolderTree, AlertTriangle, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Material {
   id: string
@@ -269,6 +270,14 @@ export function MaterialesModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Materiales', numero: materiales.length, icon: <Package className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Categorías', numero: new Set(materiales.map(m => m.categoria).filter(Boolean)).size, icon: <FolderTree className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Stock Bajo', numero: materiales.filter(m => m.stockActual < m.stockMin).length, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'En Stock', numero: materiales.filter(m => m.stockActual > 0).length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+        ]}
+      />
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">

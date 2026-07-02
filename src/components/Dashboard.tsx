@@ -17,6 +17,7 @@ import {
   FileText,
   FileWarning,
 } from 'lucide-react'
+import { TableroIndicadores, type IndicadorCard } from '@/components/ui/tablero-indicadores'
 
 interface DashboardStats {
   totalPersonal: number
@@ -92,40 +93,6 @@ const PRIORIDAD_BADGES: Record<string, string> = {
   Baja: 'bg-slate-100 text-slate-700',
 }
 
-interface CardConfig {
-  titulo: string
-  numero: number | string
-  icon: React.ReactNode
-  gradient: string // ej: 'from-blue-500 to-blue-600'
-  subtitulo?: string
-  onClick?: () => void
-}
-
-function MetricCard({ titulo, numero, icon, gradient, subtitulo, onClick }: CardConfig) {
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-md bg-gradient-to-br ${gradient} text-white p-3 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group relative overflow-hidden`}
-    >
-      <div className="flex items-center gap-2">
-        <span className="opacity-80 shrink-0">{icon}</span>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs opacity-80 truncate">{titulo}</p>
-          <p className="text-xl font-bold truncate leading-tight">{numero}</p>
-        </div>
-      </div>
-      {subtitulo && (
-        <p className="text-[10px] opacity-70 mt-1 truncate">{subtitulo}</p>
-      )}
-      {onClick && (
-        <div className="flex items-center gap-1 mt-1 text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-          Ver detalles <ArrowRight className="w-2.5 h-2.5" />
-        </div>
-      )}
-    </div>
-  )
-}
-
 function ProgressBar({ completadas, total, label, color = 'bg-slate-500' }: { completadas: number; total: number; label: string; color?: string }) {
   const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
   return (
@@ -198,118 +165,40 @@ export function Dashboard() {
       {/* Fila 1: Órdenes de Trabajo */}
       <div>
         <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Órdenes de Trabajo</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard
-            titulo="Total OT"
-            numero={totalOT}
-            icon={<Wrench className="w-5 h-5" />}
-            gradient="from-slate-500 to-slate-600"
-            subtitulo="Todas las órdenes"
-            onClick={() => setCurrentModule('ot')}
-          />
-          <MetricCard
-            titulo="Pendientes"
-            numero={stats.otPendientes}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            gradient="from-amber-500 to-amber-600"
-            subtitulo={`${stats.otPendientesAprobacion} por aprobar`}
-            onClick={() => setCurrentModule('ot')}
-          />
-          <MetricCard
-            titulo="En Progreso"
-            numero={stats.otEnProgreso}
-            icon={<Clock className="w-5 h-5" />}
-            gradient="from-blue-500 to-blue-600"
-            subtitulo="En ejecución"
-            onClick={() => setCurrentModule('ot')}
-          />
-          <MetricCard
-            titulo="Completadas"
-            numero={stats.otCompletadas}
-            icon={<CheckCircle className="w-5 h-5" />}
-            gradient="from-green-500 to-green-600"
-            subtitulo="Terminadas"
-            onClick={() => setCurrentModule('ot')}
-          />
-        </div>
+        <TableroIndicadores
+          cards={[
+            { titulo: 'Total OT', numero: totalOT, icon: <Wrench className="w-5 h-5" />, color: 'gris', subtitulo: 'Todas las órdenes', onClick: () => setCurrentModule('ot') },
+            { titulo: 'Pendientes', numero: stats.otPendientes, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja', subtitulo: `${stats.otPendientesAprobacion} por aprobar`, onClick: () => setCurrentModule('ot') },
+            { titulo: 'En Progreso', numero: stats.otEnProgreso, icon: <Clock className="w-5 h-5" />, color: 'azul', subtitulo: 'En ejecución', onClick: () => setCurrentModule('ot') },
+            { titulo: 'Completadas', numero: stats.otCompletadas, icon: <CheckCircle className="w-5 h-5" />, color: 'verde', subtitulo: 'Terminadas', onClick: () => setCurrentModule('ot') },
+          ]}
+        />
       </div>
 
       {/* Fila 2: Solicitudes de Compra */}
       <div>
         <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Solicitudes de Compra</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard
-            titulo="Total Solicitudes"
-            numero={stats.scTotal}
-            icon={<ShoppingCart className="w-5 h-5" />}
-            gradient="from-slate-500 to-slate-600"
-            subtitulo={`Monto: ${formatCLP(stats.scMontoTotal)}`}
-            onClick={() => setCurrentModule('solicitudescompra')}
-          />
-          <MetricCard
-            titulo="Solicitadas"
-            numero={stats.scSolicitadas}
-            icon={<Clock className="w-5 h-5" />}
-            gradient="from-amber-500 to-amber-600"
-            subtitulo={`${Math.round(stats.scSolicitadas / totalSC * 100)}% del total`}
-            onClick={() => setCurrentModule('solicitudescompra')}
-          />
-          <MetricCard
-            titulo="En Proceso"
-            numero={stats.scEnProceso}
-            icon={<AlertTriangle className="w-5 h-5" />}
-            gradient="from-blue-500 to-blue-600"
-            subtitulo={`${Math.round(stats.scEnProceso / totalSC * 100)}% del total`}
-            onClick={() => setCurrentModule('solicitudescompra')}
-          />
-          <MetricCard
-            titulo="Compradas"
-            numero={stats.scCompradas}
-            icon={<CheckCircle className="w-5 h-5" />}
-            gradient="from-green-500 to-green-600"
-            subtitulo={`${Math.round(stats.scCompradas / totalSC * 100)}% del total`}
-            onClick={() => setCurrentModule('solicitudescompra')}
-          />
-        </div>
+        <TableroIndicadores
+          cards={[
+            { titulo: 'Total Solicitudes', numero: stats.scTotal, icon: <ShoppingCart className="w-5 h-5" />, color: 'gris', subtitulo: `Monto: ${formatCLP(stats.scMontoTotal)}`, onClick: () => setCurrentModule('solicitudescompra') },
+            { titulo: 'Solicitadas', numero: stats.scSolicitadas, icon: <Clock className="w-5 h-5" />, color: 'naranja', subtitulo: `${Math.round(stats.scSolicitadas / totalSC * 100)}% del total`, onClick: () => setCurrentModule('solicitudescompra') },
+            { titulo: 'En Proceso', numero: stats.scEnProceso, icon: <AlertTriangle className="w-5 h-5" />, color: 'azul', subtitulo: `${Math.round(stats.scEnProceso / totalSC * 100)}% del total`, onClick: () => setCurrentModule('solicitudescompra') },
+            { titulo: 'Compradas', numero: stats.scCompradas, icon: <CheckCircle className="w-5 h-5" />, color: 'verde', subtitulo: `${Math.round(stats.scCompradas / totalSC * 100)}% del total`, onClick: () => setCurrentModule('solicitudescompra') },
+          ]}
+        />
       </div>
 
       {/* Fila 3: Recursos y Cumplimiento */}
       <div>
         <h2 className="text-xs font-semibold mb-1.5 uppercase tracking-wide text-slate-600">Recursos y Cumplimiento</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MetricCard
-            titulo="Personal Activo"
-            numero={stats.totalPersonal}
-            icon={<Users className="w-5 h-5" />}
-            gradient="from-blue-500 to-blue-600"
-            subtitulo="Empleados"
-            onClick={() => setCurrentModule('personal')}
-          />
-          <MetricCard
-            titulo="Activos"
-            numero={stats.totalActivos}
-            icon={<Package className="w-5 h-5" />}
-            gradient="from-slate-500 to-slate-600"
-            subtitulo={`Valor: ${formatCLP(stats.valorActivos)}`}
-            onClick={() => setCurrentModule('activos')}
-          />
-          <MetricCard
-            titulo="Cumplimiento Legal"
-            numero={`${cumplimientoStats.porcentajeGeneral}%`}
-            icon={<Shield className="w-5 h-5" />}
-            gradient={cumplimientoStats.porcentajeGeneral >= 80 ? 'from-green-500 to-green-600' : 'from-amber-500 to-amber-600'}
-            subtitulo={`${cumplimientoStats.completados} de ${cumplimientoStats.total} documentos`}
-            onClick={() => setCurrentModule('cumplimiento')}
-          />
-          <MetricCard
-            titulo="Caja Chica"
-            numero={formatCLP(stats.saldoCaja)}
-            icon={<DollarSign className="w-5 h-5" />}
-            gradient="from-green-500 to-green-600"
-            subtitulo="Saldo disponible"
-            onClick={() => setCurrentModule('centrocostos')}
-          />
-        </div>
+        <TableroIndicadores
+          cards={[
+            { titulo: 'Personal Activo', numero: stats.totalPersonal, icon: <Users className="w-5 h-5" />, color: 'azul', subtitulo: 'Empleados', onClick: () => setCurrentModule('personal') },
+            { titulo: 'Activos', numero: stats.totalActivos, icon: <Package className="w-5 h-5" />, color: 'gris', subtitulo: `Valor: ${formatCLP(stats.valorActivos)}`, onClick: () => setCurrentModule('activos') },
+            { titulo: 'Cumplimiento Legal', numero: `${cumplimientoStats.porcentajeGeneral}%`, icon: <Shield className="w-5 h-5" />, color: cumplimientoStats.porcentajeGeneral >= 80 ? 'verde' : 'naranja', subtitulo: `${cumplimientoStats.completados} de ${cumplimientoStats.total} documentos`, onClick: () => setCurrentModule('cumplimiento') },
+            { titulo: 'Caja Chica', numero: formatCLP(stats.saldoCaja), icon: <DollarSign className="w-5 h-5" />, color: 'verde', subtitulo: 'Saldo disponible', onClick: () => setCurrentModule('centrocostos') },
+          ]}
+        />
       </div>
 
       {/* Barras de progreso */}

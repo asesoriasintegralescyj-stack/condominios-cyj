@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Pencil, Trash2, Search, Eye, Camera, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Eye, Camera, X, ClipboardCheck, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Inspeccion {
   id: string
@@ -222,6 +223,14 @@ export function InspeccionesModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Inspecciones', numero: inspecciones.length, icon: <ClipboardCheck className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Planificadas', numero: inspecciones.filter(i => i.estado === 'Planificado').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'En Progreso', numero: inspecciones.filter(i => i.estado === 'En Progreso').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Completadas', numero: inspecciones.filter(i => i.estado === 'Completado').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+        ]}
+      />
       {/* Actions */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">

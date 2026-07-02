@@ -28,9 +28,10 @@ import {
   Plus, Pencil, Trash2, Search, Download, Package, Wrench,
   CheckSquare, Users, FileText, Upload, Eye, X, Paperclip,
   FileSpreadsheet, FileDown, Camera, Image as ImageIcon,
-  ShoppingCart, Link2,
+  ShoppingCart, Link2, FolderKanban, HardHat, CheckCircle, XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 // ============================================
 // Interfaces
@@ -1729,6 +1730,14 @@ export function ProyectosModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Proyectos', numero: proyectos.length, icon: <FolderKanban className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'En Ejecución', numero: proyectos.filter(p => p.estado === 'En Ejecución').length, icon: <HardHat className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Completados', numero: proyectos.filter(p => p.estado === 'Completado').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Cancelados', numero: proyectos.filter(p => p.estado === 'Cancelado').length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+        ]}
+      />
       {/* Pestañas de vista: Activos / Completados / Todos */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">

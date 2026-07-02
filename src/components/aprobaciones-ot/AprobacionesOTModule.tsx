@@ -28,8 +28,9 @@ import { useSession } from '@/hooks/use-session'
 import { 
   Search, CheckCircle, XCircle, Clock, Eye, History,
   Wrench, Package, Users, Building2, Calendar,
-  FileText, AlertTriangle
+  FileText, AlertTriangle, FileCheck
 } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 // Interfaces
 interface OTMaterial {
@@ -305,6 +306,14 @@ export function AprobacionesOTModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total', numero: ordenes.length, icon: <FileCheck className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Pendientes', numero: ordenes.filter(o => (o.estadoAprobacion || 'Pendiente') === 'Pendiente').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'Aprobadas', numero: ordenes.filter(o => o.estadoAprobacion === 'Aprobada').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Rechazadas', numero: ordenes.filter(o => o.estadoAprobacion === 'Rechazada').length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+        ]}
+      />
       {/* Estadísticas */}
       <div className="grid grid-cols-3 gap-4">
         <Card 

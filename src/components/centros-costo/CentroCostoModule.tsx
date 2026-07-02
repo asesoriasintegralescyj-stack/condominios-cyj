@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
-import { Plus, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wallet, DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface CentroCosto {
   id: string
@@ -140,9 +141,20 @@ export function CentroCostoModule() {
 
   const totalPresupuesto = centros.reduce((sum, c) => sum + c.presupuesto, 0)
   const totalGastado = gastos.reduce((sum, g) => sum + g.monto, 0)
+  const saldoTotal = totalPresupuesto - totalGastado
+  const conSaldoCount = centros.filter(c => c.presupuesto - getGastado(c.nombre) > 0).length
+  const sinSaldoCount = centros.filter(c => c.presupuesto - getGastado(c.nombre) <= 0).length
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Centros', numero: centros.length, icon: <Wallet className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Saldo Total', numero: formatCLP(saldoTotal), icon: <DollarSign className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Con Saldo', numero: conSaldoCount, icon: <TrendingUp className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Sin Saldo', numero: sinSaldoCount, icon: <TrendingDown className="w-5 h-5" />, color: 'rojo' },
+        ]}
+      />
       {/* Actions */}
       <div className="flex items-center gap-3">
         <Button onClick={() => openDialog()}>

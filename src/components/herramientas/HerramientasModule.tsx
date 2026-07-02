@@ -25,7 +25,7 @@ import {
   Plus, Pencil, Trash2, Search, Wrench, 
   CheckCircle, AlertCircle, XCircle, Settings,
   Upload, Download, FileSpreadsheet, QrCode, ExternalLink,
-  FileText,
+  FileText, Clock, AlertTriangle,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useSession } from '@/hooks/use-session'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface CentroCosto {
   id: string
@@ -533,6 +534,14 @@ export function HerramientasModule() {
 
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Herramientas', numero: herramientas.length, icon: <Wrench className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Disponibles', numero: herramientas.filter(h => h.estado === 'Bueno').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'En Uso', numero: herramientas.filter(h => h.estado === 'Regular').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'Mantención', numero: herramientas.filter(h => h.estado === 'En reparación' || h.estado === 'Malo').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
+        ]}
+      />
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Card className="p-3">

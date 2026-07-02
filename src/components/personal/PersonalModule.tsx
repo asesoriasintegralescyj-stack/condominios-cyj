@@ -23,9 +23,10 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Pencil, Trash2, Search, DollarSign, Upload, Download, FileSpreadsheet, Camera, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, DollarSign, Upload, Download, FileSpreadsheet, Camera, X, Users, CheckCircle, XCircle, Briefcase } from 'lucide-react'
 import { useSession } from '@/hooks/use-session'
 import { formatCLP } from '@/lib/utils'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Personal {
   id: string
@@ -332,8 +333,20 @@ export function PersonalModule() {
     URL.revokeObjectURL(url)
   }
 
+  const activosCount = personal.filter(p => p.estado === 'Activo').length
+  const inactivosCount = personal.filter(p => p.estado === 'Inactivo').length
+  const cargosDiferentes = new Set(personal.map(p => p.cargo).filter(Boolean)).size
+
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Personal', numero: personal.length, icon: <Users className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Activos', numero: activosCount, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Inactivos', numero: inactivosCount, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Cargos Diferentes', numero: cargosDiferentes, icon: <Briefcase className="w-5 h-5" />, color: 'azul' },
+        ]}
+      />
       {/* Actions */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">

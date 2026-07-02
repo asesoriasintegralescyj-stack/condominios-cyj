@@ -62,6 +62,7 @@ import {
   Mail
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Backup {
   id: string
@@ -417,6 +418,14 @@ export function BackupsModule() {
 
   return (
     <div className="space-y-6">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Respaldos', numero: backups.length, icon: <Database className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Completados', numero: backups.filter(b => b.estado === 'Completado').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Fallidos', numero: backups.filter(b => b.estado === 'Fallido' || b.estado === 'Error').length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Automáticos', numero: backups.filter(b => b.tipo === 'Automatico' || b.tipo === 'Automático').length, icon: <RefreshCw className="w-5 h-5" />, color: 'azul' },
+        ]}
+      />
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>

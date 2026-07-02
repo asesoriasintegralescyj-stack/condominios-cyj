@@ -58,8 +58,11 @@ import {
   Loader2,
   Lock,
   Eye,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores';
 
 // Definición de categorías de permisos
 const CATEGORIAS_PERMISOS = {
@@ -675,6 +678,14 @@ export function UsuariosModule() {
 
   return (
     <div className="space-y-6">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Usuarios', numero: usuarios.length, icon: <Users className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Activos', numero: usuarios.filter(u => u.activo).length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Inactivos', numero: usuarios.filter(u => !u.activo).length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Administradores', numero: usuarios.filter(u => u.rol === 'admin' || u.rol === 'Administrador').length, icon: <Shield className="w-5 h-5" />, color: 'azul' },
+        ]}
+      />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

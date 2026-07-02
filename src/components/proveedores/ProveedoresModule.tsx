@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Pencil, Trash2, Search, Download } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Download, Package, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
 interface Proveedor {
   id: string
@@ -196,8 +197,20 @@ export function ProveedoresModule() {
     URL.revokeObjectURL(link.href)
   }
 
+  const activosCount = proveedores.filter(p => p.estado === 'Activo').length
+  const inactivosCount = proveedores.filter(p => p.estado === 'Inactivo').length
+  const enRevisionCount = proveedores.filter(p => p.estado === 'En revisión').length
+
   return (
     <div className="space-y-5">
+      <TableroIndicadores
+        cards={[
+          { titulo: 'Total Proveedores', numero: proveedores.length, icon: <Package className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Activos', numero: activosCount, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'Inactivos', numero: inactivosCount, icon: <XCircle className="w-5 h-5" />, color: 'gris' },
+          { titulo: 'En Revisión', numero: enRevisionCount, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja' },
+        ]}
+      />
       {/* Actions */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
