@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     const fechaHasta = mesAnteriorFin.toISOString().split('T')[0]
 
     console.log(`[Backup Auto] Generando respaldo jerárquico para ${mesStr}...`)
+    console.log(`[Backup Auto] CODE_VERSION=873110b-debug | TARGET_ZIP_BYTES=${TARGET_ZIP_BYTES} | MAX_FOTO_BYTES=${MAX_FOTO_BYTES} | MAX_DOC_BYTES=${MAX_DOC_BYTES} | MAX_FOTOS_POR_ITEM=${MAX_FOTOS_POR_ITEM}`)
 
     // ============================================================
     // 1. RESPALDO COMPLETO BD (JSON)
@@ -335,10 +336,11 @@ export async function POST(request: Request) {
         }
         const otPdf = generateOrdenTrabajoPdfBuffer(otInput)
         // Solo añadir si no excede el tamaño objetivo
-        if (addedSize + otPdf.length <= TARGET_ZIP_BYTES) {
+        const corteA = addedSize + otPdf.length
+        if (corteA <= TARGET_ZIP_BYTES) {
           trackAppend(otPdf, { name: `${folderName}/${ot.otNum}.pdf` })
         } else {
-          console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de OT ${ot.otNum}. Se omite.`)
+          console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de OT ${ot.otNum}. addedSize=${(addedSize/1024/1024).toFixed(2)}MB + pdf=${(otPdf.length/1024).toFixed(0)}KB = ${(corteA/1024/1024).toFixed(2)}MB > ${TARGET_ZIP_BYTES/1024/1024}MB. Se omite.`)
         }
 
         // Fotos antes (máximo MAX_FOTOS_POR_ITEM)
