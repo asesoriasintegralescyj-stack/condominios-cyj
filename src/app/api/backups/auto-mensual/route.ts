@@ -624,20 +624,31 @@ export async function POST(request: Request) {
         const parteNum = i + 1
         const parteMB = (partes[i].length / 1024 / 1024).toFixed(2)
         console.log(`[Backup Auto] Enviando parte ${parteNum}/${totalPartes} (${parteMB} MB)...`)
-        const ok = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
-          ots: otCount,
-          proyectos: proyCount,
-          scsNoAsociadas: scCount,
-          rondas: rondas.length,
-          inasistencias: inasistencias.length,
-          zipMB: zipMB.toFixed(2),
-          fotosOmitidas,
-          docsOmitidos,
-        })
+
+        // Reintentar hasta 3 veces por parte
+        let ok = false
+        for (let intento = 1; intento <= 3 && !ok; intento++) {
+          console.log(`[Backup Auto] Parte ${parteNum} — intento ${intento}/3`)
+          ok = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
+            ots: otCount,
+            proyectos: proyCount,
+            scsNoAsociadas: scCount,
+            rondas: rondas.length,
+            inasistencias: inasistencias.length,
+            zipMB: zipMB.toFixed(2),
+            fotosOmitidas,
+            docsOmitidos,
+          })
+          if (!ok && intento < 3) {
+            // Esperar 2 segundos antes de reintentar
+            await new Promise((r) => setTimeout(r, 2000))
+          }
+        }
+
         if (ok) {
           partesEnviadas++
         } else {
-          console.error(`[Backup Auto] Falló el envío de la parte ${parteNum}/${totalPartes}`)
+          console.error(`[Backup Auto] Falló el envío de la parte ${parteNum}/${totalPartes} después de 3 intentos`)
         }
       }
       emailOk = partesEnviadas === totalPartes
@@ -659,7 +670,8 @@ export async function POST(request: Request) {
             (fotosOmitidas > 0 || docsOmitidos > 0
               ? `${fotosOmitidas} fotos y ${docsOmitidos} docs omitidos por limite de tamano. `
               : '') +
-            `Email: ${emailOk ? `${partesEnviadas}/${totalPartes} partes enviadas.` : 'no enviado.'}`,
+            `Email: ${partesEnviadas}/${totalPartes} ${totalPartes > 1 ? 'partes' : 'email'} enviad${totalPartes > 1 ? 'as' : 'o'} a asesoriasintegralescyj@gmail.com.` +
+            (partesEnviadas < totalPartes ? ' Reintentar desde el modulo Respaldos.' : ''),
           tipo: 'Info',
           categoria: 'Seguridad',
           destino: 'Usuario especifico',
@@ -671,8 +683,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'} (${partesEnviadas}/${totalPartes} partes)`,
-      codeVersion: '89c0682-split-emails',
+      message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${partesEnviadas}/${totalPartes} ${totalPartes > 1 ? 'partes' : 'email'} enviad${totalPartes > 1 ? 'as' : 'o'}`,
+      codeVersion: '87301b9-retry-parts',
       resumen: {
         ot: otCount,
         proyectos: proyCount,
