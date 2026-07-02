@@ -239,6 +239,9 @@ export async function POST(request: Request) {
 
     // Función para añadir una foto al zip con control de tamaño ESTRICTO
     const addFoto = (folder: string, idx: number, dataUrl: string): boolean => {
+      // PRUEBA: desactivar TODAS las fotos para verificar el impacto en el tamaño
+      fotosOmitidas++
+      return false
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
         if (!match) return false
@@ -632,7 +635,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'}`,
-      codeVersion: 'cd00d05-strict-limit',
+      codeVersion: '142eb9b-no-fotos-test',
       resumen: {
         ot: otCount,
         proyectos: proyCount,
