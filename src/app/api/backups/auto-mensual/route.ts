@@ -237,11 +237,8 @@ export async function POST(request: Request) {
       return []
     }
 
-    // Función para añadir una foto al zip con control de tamaño ESTRICTO
+    // Función para añadir una foto al zip con control de tamaño
     const addFoto = (folder: string, idx: number, dataUrl: string): boolean => {
-      // PRUEBA: desactivar TODAS las fotos para verificar el impacto en el tamaño
-      fotosOmitidas++
-      return false
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
         if (!match) return false
@@ -254,7 +251,6 @@ export async function POST(request: Request) {
         const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('png') ? 'png' : 'img'
         const buf = Buffer.from(b64, 'base64')
         // LÍMITE ESTRICTO: si addedSize ya pasó 15 MB, omitir todas las fotos siguientes
-        // (deja 7 MB de margen para PDFs, SCs, resúmenes y el JSON de la BD)
         const LIMITE_FOTOS = 15 * 1024 * 1024
         if (addedSize > LIMITE_FOTOS) {
           fotosOmitidas++
@@ -269,9 +265,6 @@ export async function POST(request: Request) {
 
     // Función para añadir un documento al zip con control de tamaño
     const addDoc = (folder: string, nombre: string, dataUrl: string): boolean => {
-      // PRUEBA: desactivar TODOS los documentos para verificar el impacto en el tamaño
-      docsOmitidos++
-      return false
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
         if (!match) return false
@@ -597,18 +590,58 @@ export async function POST(request: Request) {
     console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize trackeado: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotosProcesadas: ${fotosProcesadas} | fotosAceptadas: ${fotosAceptadas} | fotosOmitidas: ${fotosOmitidas} | docsOmitidos: ${docsOmitidos}`)
 
     // ============================================================
-    // 4. ENVIAR EMAIL
+    // 4. ENVIAR EMAIL (con división en partes si el ZIP es grande)
     // ============================================================
-    const emailOk = await enviarEmail(zipBuffer, mesStr, {
-      ots: otCount,
-      proyectos: proyCount,
-      scsNoAsociadas: scCount,
-      rondas: rondas.length,
-      inasistencias: inasistencias.length,
-      zipMB: zipMB.toFixed(2),
-      fotosOmitidas,
-      docsOmitidos,
-    })
+    const TAMANO_MAX_EMAIL = 22 * 1024 * 1024 // 22 MB por email (límite Gmail ~25 MB)
+    let emailOk = false
+    let partesEnviadas = 0
+    let totalPartes = 1
+
+    if (zipBuffer.length <= TAMANO_MAX_EMAIL) {
+      // Caso simple: un solo email
+      emailOk = await enviarEmail(zipBuffer, mesStr, {
+        ots: otCount,
+        proyectos: proyCount,
+        scsNoAsociadas: scCount,
+        rondas: rondas.length,
+        inasistencias: inasistencias.length,
+        zipMB: zipMB.toFixed(2),
+        fotosOmitidas,
+        docsOmitidos,
+      })
+      partesEnviadas = emailOk ? 1 : 0
+    } else {
+      // Caso dividido: partir el ZIP en chunks de 20 MB y enviar múltiples emails
+      const TAMANO_CHUNK = 20 * 1024 * 1024 // 20 MB por parte (deja margen)
+      const partes: Buffer[] = []
+      for (let i = 0; i < zipBuffer.length; i += TAMANO_CHUNK) {
+        partes.push(zipBuffer.subarray(i, i + TAMANO_CHUNK))
+      }
+      totalPartes = partes.length
+      console.log(`[Backup Auto] ZIP ${zipMB.toFixed(2)} MB dividido en ${totalPartes} partes de ~20 MB`)
+
+      for (let i = 0; i < partes.length; i++) {
+        const parteNum = i + 1
+        const parteMB = (partes[i].length / 1024 / 1024).toFixed(2)
+        console.log(`[Backup Auto] Enviando parte ${parteNum}/${totalPartes} (${parteMB} MB)...`)
+        const ok = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
+          ots: otCount,
+          proyectos: proyCount,
+          scsNoAsociadas: scCount,
+          rondas: rondas.length,
+          inasistencias: inasistencias.length,
+          zipMB: zipMB.toFixed(2),
+          fotosOmitidas,
+          docsOmitidos,
+        })
+        if (ok) {
+          partesEnviadas++
+        } else {
+          console.error(`[Backup Auto] Falló el envío de la parte ${parteNum}/${totalPartes}`)
+        }
+      }
+      emailOk = partesEnviadas === totalPartes
+    }
 
     // ============================================================
     // 5. NOTIFICACIÓN EN EL SISTEMA
@@ -621,11 +654,12 @@ export async function POST(request: Request) {
           mensaje:
             `Respaldo jerarquico ${mesStr}: ${otCount} OTs, ${proyCount} proyectos, ` +
             `${scCount} SCs no asociadas, ${rondas.length} rondas, ${inasistencias.length} incidencias. ` +
-            `ZIP ${zipMB.toFixed(2)} MB. ` +
+            `ZIP ${zipMB.toFixed(2)} MB ` +
+            (totalPartes > 1 ? `dividido en ${totalPartes} partes. ` : '. ') +
             (fotosOmitidas > 0 || docsOmitidos > 0
               ? `${fotosOmitidas} fotos y ${docsOmitidos} docs omitidos por limite de tamano. `
               : '') +
-            `${emailOk ? 'Enviado por email.' : 'Email no enviado (verificar SMTP o tamano del ZIP).'}`,
+            `Email: ${emailOk ? `${partesEnviadas}/${totalPartes} partes enviadas.` : 'no enviado.'}`,
           tipo: 'Info',
           categoria: 'Seguridad',
           destino: 'Usuario especifico',
@@ -637,8 +671,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'}`,
-      codeVersion: 'a0a7e4c-no-fotos-no-docs-test',
+      message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'} (${partesEnviadas}/${totalPartes} partes)`,
+      codeVersion: '89c0682-split-emails',
       resumen: {
         ot: otCount,
         proyectos: proyCount,
@@ -651,6 +685,8 @@ export async function POST(request: Request) {
         fotosAceptadas,
         fotosOmitidas,
         docsOmitidos,
+        totalPartes,
+        partesEnviadas,
         emailEnviado: emailOk,
       },
     })
@@ -997,6 +1033,94 @@ function generarAsistenciaPdf(inasistencias: any[], mesStr: string): Buffer {
 // ============================================================
 // EMAIL
 // ============================================================
+
+async function enviarEmailParte(
+  parteBuffer: Buffer,
+  mesStr: string,
+  parteNum: number,
+  totalPartes: number,
+  resumen: {
+    ots: number
+    proyectos: number
+    scsNoAsociadas: number
+    rondas: number
+    inasistencias: number
+    zipMB: string
+    fotosOmitidas: number
+    docsOmitidos: number
+  }
+): Promise<boolean> {
+  try {
+    const nodemailerMod = await import('nodemailer').catch(() => null)
+    if (!nodemailerMod) return false
+    const nodemailer: any = (nodemailerMod as any).default || nodemailerMod
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) return false
+
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: parseInt(SMTP_PORT || '587'),
+      secure: false,
+      auth: { user: SMTP_USER, pass: SMTP_PASSWORD },
+    })
+
+    const parteMB = (parteBuffer.length / 1024 / 1024).toFixed(2)
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;padding:20px;color:#333">
+        <h2 style="color:#0A1172;margin:0 0 8px">Respaldo Mensual — Parte ${parteNum} de ${totalPartes}</h2>
+        <p style="margin:0 0 16px"><strong>Condominio Laguna Norte</strong> · Asesorías Integrales CyJ</p>
+        <p>Periodo: <strong>${mesStr}</strong></p>
+        <div style="background:#dbeafe;border:1px solid #3b82f6;padding:12px;border-radius:4px;margin:16px 0">
+          <p style="margin:0;font-size:14px"><strong>Instrucciones para reconstruir el ZIP:</strong></p>
+          <ol style="margin:8px 0 0 16px;font-size:13px">
+            <li>Descarga las ${totalPartes} partes (este es la parte ${parteNum})</li>
+            <li>Guarda todas las partes en la misma carpeta</li>
+            <li>En Windows: abre CMD y ejecuta: <code>copy /b Respaldo_CyJ_${mesStr}.part1+Respaldo_CyJ_${mesStr}.part2+... Respaldo_CyJ_${mesStr}.zip</code></li>
+            <li>En Mac/Linux: <code>cat Respaldo_CyJ_${mesStr}.part* &gt; Respaldo_CyJ_${mesStr}.zip</code></li>
+            <li>Abre el archivo ZIP resultante con cualquier descompresor</li>
+          </ol>
+        </div>
+        <p>Tamaño de esta parte: <strong>${parteMB} MB</strong> (ZIP total: ${resumen.zipMB} MB)</p>
+        <p>Contenido del ZIP completo:</p>
+        <ul style="font-size:13px">
+          <li>01_OT_Generales/ — ${resumen.ots} OTs (PDF + fotos + SC + resumen de costos)</li>
+          <li>02_Proyectos/ — ${resumen.proyectos} proyectos</li>
+          <li>03_Solicitudes_no_asociadas/ — ${resumen.scsNoAsociadas} SCs</li>
+          <li>04_Rondas.pdf — ${resumen.rondas} registros</li>
+          <li>05_Asistencia.pdf — ${resumen.inasistencias} incidencias</li>
+          <li>Respaldo_BD.json — base de datos completa</li>
+        </ul>
+        ${(resumen.fotosOmitidas > 0 || resumen.docsOmitidos > 0) ? `
+        <p style="font-size:12px;color:#b45309">
+          ${resumen.fotosOmitidas > 0 ? `${resumen.fotosOmitidas} fotos omitidas por tamaño. ` : ''}
+          ${resumen.docsOmitidos > 0 ? `${resumen.docsOmitidos} documentos omitidos por tamaño.` : ''}
+        </p>
+        ` : ''}
+        <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+        <p style="font-size:12px;color:#999">Email generado automáticamente. No responder.</p>
+      </div>
+    `
+
+    await transporter.sendMail({
+      from: `"Sistema Condominios CyJ" <${SMTP_USER}>`,
+      to: SMTP_USER,
+      subject: `Respaldo Mensual ${mesStr} — Parte ${parteNum}/${totalPartes} — Laguna Norte`,
+      html,
+      attachments: [
+        {
+          filename: `Respaldo_CyJ_${mesStr}.part${parteNum}`,
+          content: parteBuffer,
+          contentType: 'application/octet-stream',
+        },
+      ],
+    })
+    console.log(`[Backup Auto] Parte ${parteNum}/${totalPartes} enviada OK`)
+    return true
+  } catch (e) {
+    console.error(`[Backup Auto] Error enviando parte ${parteNum}/${totalPartes}:`, e)
+    return false
+  }
+}
 
 async function enviarEmail(
   zipBuffer: Buffer,

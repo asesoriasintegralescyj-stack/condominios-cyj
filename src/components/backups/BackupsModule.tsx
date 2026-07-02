@@ -247,6 +247,9 @@ export function BackupsModule() {
         toast.success(data.message || 'Respaldo mensual generado correctamente')
         if (data.resumen) {
           const r = data.resumen
+          const partesInfo = r.totalPartes > 1
+            ? `• Email: ${r.partesEnviadas}/${r.totalPartes} partes enviadas a asesoriasintegralescyj@gmail.com\n`
+            : `• Email: ${r.emailEnviado ? 'Enviado a asesoriasintegralescyj@gmail.com' : 'No enviado'}\n`
           toast.info(
             `Estructura del ZIP:\n` +
             `• 01_OT_Generales/ — ${r.ot} OTs (cada una con PDF + fotos + SC asociadas + resumen de costos)\n` +
@@ -254,11 +257,11 @@ export function BackupsModule() {
             `• 03_Solicitudes_no_asociadas/ — ${r.scNoAsociadas} SCs + resumen\n` +
             `• 04_Rondas.pdf — ${r.rondas} registros\n` +
             `• 05_Asistencia.pdf — ${r.inasistencias} incidencias\n` +
-            `• Tamaño ZIP: ${r.zipMB} MB\n` +
+            `• Tamaño ZIP: ${r.zipMB} MB` + (r.totalPartes > 1 ? ` (${r.totalPartes} partes)` : '') + `\n` +
             (r.fotosOmitidas > 0 || r.docsOmitidos > 0
               ? `• ${r.fotosOmitidas || 0} fotos y ${r.docsOmitidos || 0} docs omitidos por límite de tamaño\n`
               : '') +
-            `• Email: ${r.emailEnviado ? 'Enviado a asesoriasintegralescyj@gmail.com' : 'No enviado (verificar SMTP o tamaño ZIP > 25MB)'}`,
+            partesInfo,
             { duration: 12000 }
           )
         }
