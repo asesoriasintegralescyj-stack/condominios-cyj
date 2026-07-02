@@ -237,6 +237,7 @@ export function BackupsModule() {
 
   const generarRespaldoMensual = async () => {
     setGenerandoMensual(true)
+    toast.info('Generando respaldo jerárquico (ZIP con OTs, Proyectos, SCs, Rondas y Asistencia)... esto puede tardar 1-2 minutos.', { duration: 8000 })
     try {
       const res = await fetch('/api/backups/auto-mensual', {
         method: 'POST',
@@ -245,7 +246,18 @@ export function BackupsModule() {
       if (res.ok) {
         toast.success(data.message || 'Respaldo mensual generado correctamente')
         if (data.resumen) {
-          toast.info(`OT: ${data.resumen.ot} | SC: ${data.resumen.sc} | Proyectos: ${data.resumen.proyectos} | Rondas: ${data.resumen.rondas} | Email: ${data.resumen.emailEnviado ? 'Enviado' : 'No enviado'}`, { duration: 8000 })
+          const r = data.resumen
+          toast.info(
+            `Estructura del ZIP:\n` +
+            `• 01_OT_Generales/ — ${r.ot} OTs (cada una con PDF + fotos + SC asociadas + resumen de costos)\n` +
+            `• 02_Proyectos/ — ${r.proyectos} proyectos (misma estructura)\n` +
+            `• 03_Solicitudes_no_asociadas/ — ${r.scNoAsociadas} SCs + resumen\n` +
+            `• 04_Rondas.pdf — ${r.rondas} registros\n` +
+            `• 05_Asistencia.pdf — ${r.inasistencias} incidencias\n` +
+            `• Tamaño ZIP: ${r.zipMB} MB\n` +
+            `• Email: ${r.emailEnviado ? 'Enviado a asesoriasintegralescyj@gmail.com' : 'No enviado (revisar credenciales SMTP)'}`,
+            { duration: 12000 }
+          )
         }
         fetchData()
       } else {
@@ -253,7 +265,7 @@ export function BackupsModule() {
       }
     } catch (error) {
       console.error('Error:', error)
-      toast.error('Error de conexión')
+      toast.error('Error de conexión. Si tardó más de 60s, el servidor pudo haber agotado el tiempo. Revisa el email en unos minutos.')
     } finally {
       setGenerandoMensual(false)
     }
@@ -470,6 +482,9 @@ export function BackupsModule() {
                 <p className="text-xs text-slate-500">
                   {config.activo ? `${config.frecuencia} a las ${config.hora} • Retención: ${config.retencionDias} días` : 'Activar en configuración'}
                 </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  El <strong>Respaldo Mensual Jerárquico</strong> genera un ZIP con: 01_OT_Generales/ (cada OT con su PDF, fotos, documentos, SC asociadas y resumen de costos), 02_Proyectos/ (misma estructura), 03_Solicitudes_no_asociadas/, 04_Rondas, 05_Asistencia y Respaldo_BD. Se envía por email a asesoriasintegralescyj@gmail.com.
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -507,12 +522,12 @@ export function BackupsModule() {
                 {generandoMensual ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Generando...
+                    Generando ZIP...
                   </>
                 ) : (
                   <>
                     <Mail className="w-4 h-4 mr-2" />
-                    Respaldo Mensual (Email + PDFs)
+                    Respaldo Mensual Jerárquico (ZIP)
                   </>
                 )}
               </Button>
