@@ -612,16 +612,17 @@ export async function POST(request: Request) {
       })
       partesEnviadas = emailOk ? 1 : 0
     } else {
-      // Caso dividido: partir el ZIP en chunks de 18 MB y enviar múltiples emails.
+      // Caso dividido: partir el ZIP en chunks de 10 MB y enviar múltiples emails.
       // Cada chunk se comprime INDIVIDUALMENTE como un ZIP para evitar que Gmail
       // lo bloquee por "contenido sospechoso" (error 552-5.7.0).
-      const TAMANO_CHUNK = 18 * 1024 * 1024 // 18 MB por parte (comprimido será menor)
+      // Tamaño pequeño (10 MB) reduce la probabilidad de detección de patrones.
+      const TAMANO_CHUNK = 10 * 1024 * 1024 // 10 MB por parte
       const partes: Buffer[] = []
       for (let i = 0; i < zipBuffer.length; i += TAMANO_CHUNK) {
         partes.push(zipBuffer.subarray(i, i + TAMANO_CHUNK))
       }
       totalPartes = partes.length
-      console.log(`[Backup Auto] ZIP ${zipMB.toFixed(2)} MB dividido en ${totalPartes} partes de ~18 MB`)
+      console.log(`[Backup Auto] ZIP ${zipMB.toFixed(2)} MB dividido en ${totalPartes} partes de ~10 MB`)
 
       const erroresPartesLocal: string[] = []
       for (let i = 0; i < partes.length; i++) {
@@ -705,7 +706,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${partesEnviadas}/${totalPartes} ${totalPartes > 1 ? 'partes' : 'email'} enviad${totalPartes > 1 ? 'as' : 'o'}`,
-      codeVersion: '2caea13-zip-parts',
+      codeVersion: 'efcc764-10mb-chunks',
       erroresPartes: erroresPartes.length > 0 ? erroresPartes : undefined,
       resumen: {
         ot: otCount,
@@ -1107,12 +1108,12 @@ async function enviarEmailParte(
         <div style="background:#dbeafe;border:1px solid #3b82f6;padding:12px;border-radius:4px;margin:16px 0">
           <p style="margin:0;font-size:14px"><strong>Instrucciones para reconstruir el ZIP:</strong></p>
           <ol style="margin:8px 0 0 16px;font-size:13px">
-            <li>Descarga las ${totalPartes} partes (este es la parte ${parteNum})</li>
-            <li>Guarda todas las partes en la misma carpeta</li>
-            <li>Descomprime cada <code>Respaldo_CyJ_${mesStr}_parteN.zip</code> — obtendrás archivos <code>Respaldo_CyJ_${mesStr}.partN</code></li>
-            <li>En Windows CMD: <code>copy /b Respaldo_CyJ_${mesStr}.part1+Respaldo_CyJ_${mesStr}.part2+Respaldo_CyJ_${mesStr}.part3 Respaldo_CyJ_${mesStr}.zip</code></li>
+            <li>Descarga los ${totalPartes} emails (este es el ${parteNum} de ${totalPartes})</li>
+            <li>Guarda todos los adjuntos <code>RespaldoCyJ_${mesStr}_NNde${String(totalPartes).padStart(2, '0')}.zip</code> en la misma carpeta</li>
+            <li>Descomprime cada ZIP — obtendrás archivos <code>Respaldo_CyJ_${mesStr}.partN</code></li>
+            <li>En Windows CMD: <code>copy /b Respaldo_CyJ_${mesStr}.part1+Respaldo_CyJ_${mesStr}.part2+... Respaldo_CyJ_${mesStr}.zip</code></li>
             <li>En Mac/Linux: <code>cat Respaldo_CyJ_${mesStr}.part* &gt; Respaldo_CyJ_${mesStr}.zip</code></li>
-            <li>Abre <code>Respaldo_CyJ_${mesStr}.zip</code> con cualquier descompresor</li>
+            <li>Abre <code>Respaldo_CyJ_${mesStr}.zip</code> con cualquier descompresor (WinRAR, 7-Zip, etc.)</li>
           </ol>
         </div>
         <p>Tamaño de esta parte: <strong>${parteMB} MB</strong> (ZIP total: ${resumen.zipMB} MB)</p>
@@ -1143,7 +1144,7 @@ async function enviarEmailParte(
       html,
       attachments: [
         {
-          filename: `Respaldo_CyJ_${mesStr}_parte${parteNum}.zip`,
+          filename: `RespaldoCyJ_${mesStr}_${String(parteNum).padStart(2, '0')}de${String(totalPartes).padStart(2, '0')}.zip`,
           content: parteBuffer,
           contentType: 'application/zip',
         },
