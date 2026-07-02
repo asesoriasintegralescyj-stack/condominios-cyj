@@ -89,7 +89,6 @@ export async function POST(request: Request) {
     const fechaHasta = mesAnteriorFin.toISOString().split('T')[0]
 
     console.log(`[Backup Auto] Generando respaldo jerárquico para ${mesStr}...`)
-    console.log(`[Backup Auto] CODE_VERSION=873110b-debug | TARGET_ZIP_BYTES=${TARGET_ZIP_BYTES} | MAX_FOTO_BYTES=${MAX_FOTO_BYTES} | MAX_DOC_BYTES=${MAX_DOC_BYTES} | MAX_FOTOS_POR_ITEM=${MAX_FOTOS_POR_ITEM}`)
 
     // ============================================================
     // 1. RESPALDO COMPLETO BD (JSON)
@@ -587,7 +586,7 @@ export async function POST(request: Request) {
 
     const zipBuffer = Buffer.concat(chunks)
     const zipMB = zipBuffer.length / (1024 * 1024)
-    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize trackeado: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotosProcesadas: ${fotosProcesadas} | fotosAceptadas: ${fotosAceptadas} | fotosOmitidas: ${fotosOmitidas} | docsOmitidos: ${docsOmitidos}`)
+    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotos: ${fotosAceptadas}/${fotosProcesadas} aceptadas, ${fotosOmitidas} omitidas | docs omitidos: ${docsOmitidos}`)
 
     // ============================================================
     // 4. ENVIAR EMAIL (con división en partes si el ZIP es grande)
@@ -706,7 +705,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${partesEnviadas}/${totalPartes} ${totalPartes > 1 ? 'partes' : 'email'} enviad${totalPartes > 1 ? 'as' : 'o'}`,
-      codeVersion: 'efcc764-10mb-chunks',
       erroresPartes: erroresPartes.length > 0 ? erroresPartes : undefined,
       resumen: {
         ot: otCount,
@@ -715,9 +713,6 @@ export async function POST(request: Request) {
         rondas: rondas.length,
         inasistencias: inasistencias.length,
         zipMB: parseFloat(zipMB.toFixed(2)),
-        addedSizeMB: parseFloat((addedSize / 1024 / 1024).toFixed(2)),
-        fotosProcesadas,
-        fotosAceptadas,
         fotosOmitidas,
         docsOmitidos,
         totalPartes,
