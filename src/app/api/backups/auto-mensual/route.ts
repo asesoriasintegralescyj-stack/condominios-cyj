@@ -269,6 +269,9 @@ export async function POST(request: Request) {
 
     // Función para añadir un documento al zip con control de tamaño
     const addDoc = (folder: string, nombre: string, dataUrl: string): boolean => {
+      // PRUEBA: desactivar TODOS los documentos para verificar el impacto en el tamaño
+      docsOmitidos++
+      return false
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
         if (!match) return false
@@ -635,7 +638,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${emailOk ? 'enviado' : 'no enviado'}`,
-      codeVersion: '142eb9b-no-fotos-test',
+      codeVersion: 'a0a7e4c-no-fotos-no-docs-test',
       resumen: {
         ot: otCount,
         proyectos: proyCount,
