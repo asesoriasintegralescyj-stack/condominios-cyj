@@ -578,7 +578,7 @@ export async function POST(request: Request) {
 
     const zipBuffer = Buffer.concat(chunks)
     const zipMB = zipBuffer.length / (1024 * 1024)
-    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB`)
+    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize trackeado: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotosOmitidas: ${fotosOmitidas} | docsOmitidos: ${docsOmitidos}`)
 
     // ============================================================
     // 4. ENVIAR EMAIL
@@ -629,6 +629,7 @@ export async function POST(request: Request) {
         rondas: rondas.length,
         inasistencias: inasistencias.length,
         zipMB: parseFloat(zipMB.toFixed(2)),
+        addedSizeMB: parseFloat((addedSize / 1024 / 1024).toFixed(2)),
         fotosOmitidas,
         docsOmitidos,
         emailEnviado: emailOk,
