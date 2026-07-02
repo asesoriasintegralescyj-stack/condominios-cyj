@@ -63,6 +63,10 @@ const MODELOS_BACKUP = [
 const MAX_FOTO_BYTES = 1_500_000
 // Tamaño máximo de un documento adjunto individual (5 MB)
 const MAX_DOC_BYTES = 5_000_000
+// Tamaño objetivo del ZIP final (22 MB — deja margen para codificación MIME en email)
+const TARGET_ZIP_BYTES = 22 * 1024 * 1024
+// Máximo de fotos por OT/Proyecto (las primeras N)
+const MAX_FOTOS_POR_ITEM = 10
 
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
@@ -193,8 +197,14 @@ export async function POST(request: Request) {
     const zip = archiver('zip', { zlib: { level: 6 } })
 
     const chunks: Buffer[] = []
+    let currentSize = 0
+    let fotosOmitidas = 0
+    let docsOmitidos = 0
     const done = new Promise<void>((resolve, reject) => {
-      zip.on('data', (c: Buffer) => chunks.push(c))
+      zip.on('data', (c: Buffer) => {
+        chunks.push(c)
+        currentSize += c.length
+      })
       zip.on('warning', (err: any) => console.warn('[Backup Auto] zip warning:', err))
       zip.on('error', (err: any) => reject(err))
       zip.on('end', () => resolve())
@@ -219,7 +229,7 @@ export async function POST(request: Request) {
       return []
     }
 
-    // Función para añadir una foto al zip
+    // Función para añadir una foto al zip con control de tamaño
     const addFoto = (folder: string, idx: number, dataUrl: string): boolean => {
       try {
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
@@ -227,12 +237,41 @@ export async function POST(request: Request) {
         const mime = match[1]
         const b64 = match[2]
         if (b64.length > MAX_FOTO_BYTES) {
-          console.log(`[Backup Auto] Foto skip (muy grande: ${Math.round(b64.length / 1024)} KB) en ${folder}`)
+          fotosOmitidas++
           return false
         }
         const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : mime.includes('png') ? 'png' : 'img'
         const buf = Buffer.from(b64, 'base64')
+        // Si añadir esta foto excedería el tamaño objetivo, omitirla
+        if (currentSize + buf.length > TARGET_ZIP_BYTES) {
+          fotosOmitidas++
+          return false
+        }
         zip.append(buf, { name: `${folder}/foto_${String(idx + 1).padStart(2, '0')}.${ext}` })
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    // Función para añadir un documento al zip con control de tamaño
+    const addDoc = (folder: string, nombre: string, dataUrl: string): boolean => {
+      try {
+        const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
+        if (!match) return false
+        const mime = match[1]
+        const b64 = match[2]
+        const buf = Buffer.from(b64, 'base64')
+        if (buf.length > MAX_DOC_BYTES) {
+          docsOmitidos++
+          return false
+        }
+        if (currentSize + buf.length > TARGET_ZIP_BYTES) {
+          docsOmitidos++
+          return false
+        }
+        const ext = mime.includes('pdf') ? 'pdf' : mime.includes('png') ? 'png' : mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'bin'
+        zip.append(buf, { name: `${folder}/${sanitize(nombre) || 'documento'}.${ext}` })
         return true
       } catch {
         return false
@@ -288,16 +327,21 @@ export async function POST(request: Request) {
           })),
         }
         const otPdf = generateOrdenTrabajoPdfBuffer(otInput)
-        zip.append(otPdf, { name: `${folderName}/${ot.otNum}.pdf` })
+        // Solo añadir si no excede el tamaño objetivo
+        if (currentSize + otPdf.length <= TARGET_ZIP_BYTES) {
+          zip.append(otPdf, { name: `${folderName}/${ot.otNum}.pdf` })
+        } else {
+          console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de OT ${ot.otNum}. Se omite.`)
+        }
 
-        // Fotos antes
-        const fotosAntes = parseFotos(ot.fotosAntes)
+        // Fotos antes (máximo MAX_FOTOS_POR_ITEM)
+        const fotosAntes = parseFotos(ot.fotosAntes).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosAntes.length > 0) {
           fotosAntes.forEach((f, i) => addFoto(`${folderName}/fotos_antes`, i, f))
         }
 
-        // Fotos después
-        const fotosDespues = parseFotos(ot.fotosDespues)
+        // Fotos después (máximo MAX_FOTOS_POR_ITEM)
+        const fotosDespues = parseFotos(ot.fotosDespues).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosDespues.length > 0) {
           fotosDespues.forEach((f, i) => addFoto(`${folderName}/fotos_despues`, i, f))
         }
@@ -305,16 +349,7 @@ export async function POST(request: Request) {
         // Documentos adjuntos de la OT
         if (ot.documentos && ot.documentos.length > 0) {
           ot.documentos.forEach((doc, i) => {
-            try {
-              const match = (doc.archivo || '').match(/^data:([^;]+);base64,(.+)$/)
-              if (match) {
-                const ext = match[1].includes('pdf') ? 'pdf' : match[1].includes('png') ? 'png' : match[1].includes('jpeg') || match[1].includes('jpg') ? 'jpg' : 'bin'
-                const buf = Buffer.from(match[2], 'base64')
-                if (buf.length < MAX_DOC_BYTES) {
-                  zip.append(buf, { name: `${folderName}/documentos/${sanitize(doc.nombre) || `doc_${i + 1}`}.${ext}` })
-                }
-              }
-            } catch {}
+            addDoc(`${folderName}/documentos`, doc.nombre || `doc_${i + 1}`, doc.archivo || '')
           })
         }
 
@@ -417,14 +452,18 @@ export async function POST(request: Request) {
           })),
         }
         const proyPdf = generateProyectoPdfBuffer(proyInput)
-        zip.append(proyPdf, { name: `${folderName}/${codigo}.pdf` })
+        if (currentSize + proyPdf.length <= TARGET_ZIP_BYTES) {
+          zip.append(proyPdf, { name: `${folderName}/${codigo}.pdf` })
+        } else {
+          console.warn(`[Backup Auto] ZIP excedería tamaño objetivo al añadir PDF de Proyecto ${codigo}. Se omite.`)
+        }
 
-        // Fotos antes / después
-        const fotosAntes = parseFotos(proy.fotosAntes)
+        // Fotos antes / después (máximo MAX_FOTOS_POR_ITEM)
+        const fotosAntes = parseFotos(proy.fotosAntes).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosAntes.length > 0) {
           fotosAntes.forEach((f, i) => addFoto(`${folderName}/fotos_antes`, i, f))
         }
-        const fotosDespues = parseFotos(proy.fotosDespues)
+        const fotosDespues = parseFotos(proy.fotosDespues).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosDespues.length > 0) {
           fotosDespues.forEach((f, i) => addFoto(`${folderName}/fotos_despues`, i, f))
         }
@@ -432,16 +471,7 @@ export async function POST(request: Request) {
         // Documentos adjuntos del proyecto
         if (proy.documentos && proy.documentos.length > 0) {
           proy.documentos.forEach((doc, i) => {
-            try {
-              const match = (doc.archivo || '').match(/^data:([^;]+);base64,(.+)$/)
-              if (match) {
-                const ext = match[1].includes('pdf') ? 'pdf' : match[1].includes('png') ? 'png' : match[1].includes('jpeg') || match[1].includes('jpg') ? 'jpg' : 'bin'
-                const buf = Buffer.from(match[2], 'base64')
-                if (buf.length < MAX_DOC_BYTES) {
-                  zip.append(buf, { name: `${folderName}/documentos/${sanitize(doc.nombre) || `doc_${i + 1}`}.${ext}` })
-                }
-              }
-            } catch {}
+            addDoc(`${folderName}/documentos`, doc.nombre || `doc_${i + 1}`, doc.archivo || '')
           })
         }
 
@@ -543,6 +573,8 @@ export async function POST(request: Request) {
       rondas: rondas.length,
       inasistencias: inasistencias.length,
       zipMB: zipMB.toFixed(2),
+      fotosOmitidas,
+      docsOmitidos,
     })
 
     // ============================================================
@@ -556,7 +588,11 @@ export async function POST(request: Request) {
           mensaje:
             `Respaldo jerarquico ${mesStr}: ${otCount} OTs, ${proyCount} proyectos, ` +
             `${scCount} SCs no asociadas, ${rondas.length} rondas, ${inasistencias.length} incidencias. ` +
-            `ZIP ${zipMB.toFixed(2)} MB. ${emailOk ? 'Enviado por email.' : 'Email no enviado.'}`,
+            `ZIP ${zipMB.toFixed(2)} MB. ` +
+            (fotosOmitidas > 0 || docsOmitidos > 0
+              ? `${fotosOmitidas} fotos y ${docsOmitidos} docs omitidos por limite de tamano. `
+              : '') +
+            `${emailOk ? 'Enviado por email.' : 'Email no enviado (verificar SMTP o tamano del ZIP).'}`,
           tipo: 'Info',
           categoria: 'Seguridad',
           destino: 'Usuario especifico',
@@ -576,6 +612,8 @@ export async function POST(request: Request) {
         rondas: rondas.length,
         inasistencias: inasistencias.length,
         zipMB: parseFloat(zipMB.toFixed(2)),
+        fotosOmitidas,
+        docsOmitidos,
         emailEnviado: emailOk,
       },
     })
@@ -933,6 +971,8 @@ async function enviarEmail(
     rondas: number
     inasistencias: number
     zipMB: string
+    fotosOmitidas: number
+    docsOmitidos: number
   }
 ): Promise<boolean> {
   try {
@@ -970,6 +1010,13 @@ async function enviarEmail(
           <tr><td style="padding:8px;border:1px solid #e2e8f0">Respaldo_BD_${mesStr}.json</td><td style="padding:8px;border:1px solid #e2e8f0">Respaldo completo de la base de datos</td></tr>
         </table>
         <p style="margin-top:16px">Tamaño del ZIP: <strong>${resumen.zipMB} MB</strong></p>
+        ${(resumen.fotosOmitidas > 0 || resumen.docsOmitidos > 0) ? `
+        <div style="background:#fef3c7;border:1px solid #f59e0b;padding:10px;margin-top:12px;border-radius:4px;font-size:13px">
+          <strong>Notas:</strong>
+          ${resumen.fotosOmitidas > 0 ? `<br>• ${resumen.fotosOmitidas} fotos omitidas por exceder el tamaño máximo individual o por límite de tamaño del ZIP (se conservan todos los PDFs y datos).` : ''}
+          ${resumen.docsOmitidos > 0 ? `<br>• ${resumen.docsOmitidos} documentos adjuntos omitidos por tamaño.` : ''}
+        </div>
+        ` : ''}
         <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
         <p style="font-size:12px;color:#999">Email generado automáticamente. No responder.</p>
       </div>
