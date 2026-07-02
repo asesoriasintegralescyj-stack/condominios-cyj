@@ -596,6 +596,7 @@ export async function POST(request: Request) {
     let emailOk = false
     let partesEnviadas = 0
     let totalPartes = 1
+    let erroresPartes: string[] = []
 
     if (zipBuffer.length <= TAMANO_MAX_EMAIL) {
       // Caso simple: un solo email
@@ -620,16 +621,17 @@ export async function POST(request: Request) {
       totalPartes = partes.length
       console.log(`[Backup Auto] ZIP ${zipMB.toFixed(2)} MB dividido en ${totalPartes} partes de ~20 MB`)
 
+      const erroresPartesLocal: string[] = []
       for (let i = 0; i < partes.length; i++) {
         const parteNum = i + 1
         const parteMB = (partes[i].length / 1024 / 1024).toFixed(2)
         console.log(`[Backup Auto] Enviando parte ${parteNum}/${totalPartes} (${parteMB} MB)...`)
 
         // Reintentar hasta 3 veces por parte
-        let ok = false
-        for (let intento = 1; intento <= 3 && !ok; intento++) {
+        let resultado = { ok: false, error: '' }
+        for (let intento = 1; intento <= 3 && !resultado.ok; intento++) {
           console.log(`[Backup Auto] Parte ${parteNum} — intento ${intento}/3`)
-          ok = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
+          resultado = await enviarEmailParte(partes[i], mesStr, parteNum, totalPartes, {
             ots: otCount,
             proyectos: proyCount,
             scsNoAsociadas: scCount,
@@ -639,18 +641,19 @@ export async function POST(request: Request) {
             fotosOmitidas,
             docsOmitidos,
           })
-          if (!ok && intento < 3) {
-            // Esperar 2 segundos antes de reintentar
+          if (!resultado.ok && intento < 3) {
             await new Promise((r) => setTimeout(r, 2000))
           }
         }
 
-        if (ok) {
+        if (resultado.ok) {
           partesEnviadas++
         } else {
-          console.error(`[Backup Auto] Falló el envío de la parte ${parteNum}/${totalPartes} después de 3 intentos`)
+          console.error(`[Backup Auto] Falló parte ${parteNum}/${totalPartes} después de 3 intentos: ${resultado.error}`)
+          erroresPartesLocal.push(`Parte ${parteNum}: ${resultado.error}`)
         }
       }
+      erroresPartes = erroresPartesLocal
       emailOk = partesEnviadas === totalPartes
     }
 
@@ -684,7 +687,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: `Respaldo ${mesStr} generado. ZIP ${zipMB.toFixed(2)} MB. Email: ${partesEnviadas}/${totalPartes} ${totalPartes > 1 ? 'partes' : 'email'} enviad${totalPartes > 1 ? 'as' : 'o'}`,
-      codeVersion: '87301b9-retry-parts',
+      codeVersion: '49f472c-error-capture',
+      erroresPartes: erroresPartes.length > 0 ? erroresPartes : undefined,
       resumen: {
         ot: otCount,
         proyectos: proyCount,
@@ -1061,13 +1065,13 @@ async function enviarEmailParte(
     fotosOmitidas: number
     docsOmitidos: number
   }
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const nodemailerMod = await import('nodemailer').catch(() => null)
-    if (!nodemailerMod) return false
+    if (!nodemailerMod) return { ok: false, error: 'nodemailer no disponible' }
     const nodemailer: any = (nodemailerMod as any).default || nodemailerMod
     const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD } = process.env
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) return false
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASSWORD) return { ok: false, error: 'Credenciales SMTP faltantes' }
 
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST,
@@ -1113,7 +1117,7 @@ async function enviarEmailParte(
       </div>
     `
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"Sistema Condominios CyJ" <${SMTP_USER}>`,
       to: SMTP_USER,
       subject: `Respaldo Mensual ${mesStr} — Parte ${parteNum}/${totalPartes} — Laguna Norte`,
@@ -1126,11 +1130,11 @@ async function enviarEmailParte(
         },
       ],
     })
-    console.log(`[Backup Auto] Parte ${parteNum}/${totalPartes} enviada OK`)
-    return true
-  } catch (e) {
-    console.error(`[Backup Auto] Error enviando parte ${parteNum}/${totalPartes}:`, e)
-    return false
+    console.log(`[Backup Auto] Parte ${parteNum}/${totalPartes} enviada OK — messageId: ${info.messageId}`)
+    return { ok: true }
+  } catch (e: any) {
+    console.error(`[Backup Auto] Error enviando parte ${parteNum}/${totalPartes}:`, e.message)
+    return { ok: false, error: e.message }
   }
 }
 
