@@ -289,6 +289,8 @@ export async function POST(request: Request) {
     // ===== 3a. OT_Generales =====
     console.log('[Backup Auto] Generando PDFs de OTs...')
     let otCount = 0
+    let fotosProcesadas = 0
+    let fotosAceptadas = 0
     for (const ot of ots) {
       const folderName = `01_OT_Generales/${ot.otNum}_${sanitize(ot.titulo)}`
       try {
@@ -346,13 +348,15 @@ export async function POST(request: Request) {
         // Fotos antes (máximo MAX_FOTOS_POR_ITEM)
         const fotosAntes = parseFotos(ot.fotosAntes).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosAntes.length > 0) {
-          fotosAntes.forEach((f, i) => addFoto(`${folderName}/fotos_antes`, i, f))
+          fotosProcesadas += fotosAntes.length
+          fotosAceptadas += fotosAntes.filter((f, i) => addFoto(`${folderName}/fotos_antes`, i, f)).length
         }
 
         // Fotos después (máximo MAX_FOTOS_POR_ITEM)
         const fotosDespues = parseFotos(ot.fotosDespues).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosDespues.length > 0) {
-          fotosDespues.forEach((f, i) => addFoto(`${folderName}/fotos_despues`, i, f))
+          fotosProcesadas += fotosDespues.length
+          fotosAceptadas += fotosDespues.filter((f, i) => addFoto(`${folderName}/fotos_despues`, i, f)).length
         }
 
         // Documentos adjuntos de la OT
@@ -474,11 +478,13 @@ export async function POST(request: Request) {
         // Fotos antes / después (máximo MAX_FOTOS_POR_ITEM)
         const fotosAntes = parseFotos(proy.fotosAntes).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosAntes.length > 0) {
-          fotosAntes.forEach((f, i) => addFoto(`${folderName}/fotos_antes`, i, f))
+          fotosProcesadas += fotosAntes.length
+          fotosAceptadas += fotosAntes.filter((f, i) => addFoto(`${folderName}/fotos_antes`, i, f)).length
         }
         const fotosDespues = parseFotos(proy.fotosDespues).slice(0, MAX_FOTOS_POR_ITEM)
         if (fotosDespues.length > 0) {
-          fotosDespues.forEach((f, i) => addFoto(`${folderName}/fotos_despues`, i, f))
+          fotosProcesadas += fotosDespues.length
+          fotosAceptadas += fotosDespues.filter((f, i) => addFoto(`${folderName}/fotos_despues`, i, f)).length
         }
 
         // Documentos adjuntos del proyecto
@@ -580,7 +586,7 @@ export async function POST(request: Request) {
 
     const zipBuffer = Buffer.concat(chunks)
     const zipMB = zipBuffer.length / (1024 * 1024)
-    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize trackeado: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotosOmitidas: ${fotosOmitidas} | docsOmitidos: ${docsOmitidos}`)
+    console.log(`[Backup Auto] ZIP generado: ${zipMB.toFixed(2)} MB | addedSize trackeado: ${(addedSize / 1024 / 1024).toFixed(2)} MB | fotosProcesadas: ${fotosProcesadas} | fotosAceptadas: ${fotosAceptadas} | fotosOmitidas: ${fotosOmitidas} | docsOmitidos: ${docsOmitidos}`)
 
     // ============================================================
     // 4. ENVIAR EMAIL
@@ -632,6 +638,8 @@ export async function POST(request: Request) {
         inasistencias: inasistencias.length,
         zipMB: parseFloat(zipMB.toFixed(2)),
         addedSizeMB: parseFloat((addedSize / 1024 / 1024).toFixed(2)),
+        fotosProcesadas,
+        fotosAceptadas,
         fotosOmitidas,
         docsOmitidos,
         emailEnviado: emailOk,
