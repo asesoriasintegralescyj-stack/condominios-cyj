@@ -85,6 +85,7 @@ export async function PUT(
     await db.proyecto.update({
       where: { id },
       data: {
+        codigo: proyectoData.codigo === undefined ? undefined : (proyectoData.codigo || null),
         nombre: proyectoData.nombre === undefined ? undefined : proyectoData.nombre,
         categoria: proyectoData.categoria === undefined ? undefined : proyectoData.categoria,
         estado: proyectoData.estado === undefined ? undefined : proyectoData.estado,
