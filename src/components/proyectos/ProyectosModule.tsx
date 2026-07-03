@@ -133,6 +133,13 @@ interface Proyecto {
   fotosAntesCount?: number
   fotosDespuesCount?: number
   cotizacionesCount?: number
+  _count?: {
+    materiales?: number
+    herramientas?: number
+    tareas?: number
+    personal?: number
+    documentos?: number
+  }
 }
 
 // ============================================
@@ -921,8 +928,18 @@ export function ProyectosModule() {
     setDialogOpen(true)
   }
 
-  const openDetailDialog = (proy: Proyecto) => {
-    setSelectedProy(proy)
+  const openDetailDialog = async (proy: Proyecto) => {
+    // Cargar detalle completo (con documentos, materiales, etc.)
+    try {
+      const res = await fetch(`/api/proyectos/${proy.id}`)
+      if (res.ok) {
+        setSelectedProy(await res.json())
+      } else {
+        setSelectedProy(proy)
+      }
+    } catch (e) {
+      setSelectedProy(proy)
+    }
     setDetailDialogOpen(true)
   }
 
@@ -1923,7 +1940,7 @@ export function ProyectosModule() {
                     const responsable = proy.responsable || '–'
                     const te = proy.tiempoEstimado || '–'
                     const monto = proy.monto || proy.presProg || 0
-                    const totalAdj = (proy.tieneFotosAntes ? 1 : 0) + (proy.tieneFotosDespues ? 1 : 0) + (proy.tieneCotizaciones ? 1 : 0) + (proy.documentos?.length || 0)
+                    const totalAdj = (proy.tieneFotosAntes ? 1 : 0) + (proy.tieneFotosDespues ? 1 : 0) + (proy.tieneCotizaciones ? 1 : 0) + (proy._count?.documentos || 0)
                     return (
                       <tr key={proy.id} className={`border-b last:border-0 hover:bg-blue-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`} onClick={() => openDetailDialog(proy)}>
                         <td className="text-center p-2 font-bold text-[#0f2044]">{extraerNumProyecto(proy.nombre)}</td>
@@ -2078,22 +2095,22 @@ export function ProyectosModule() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div className="bg-slate-50 p-3 rounded min-w-0">
                   <Package className="w-5 h-5 mx-auto mb-1 text-slate-500" />
-                  <div className="text-lg font-bold">{selectedProy.materiales?.length || 0}</div>
+                  <div className="text-lg font-bold">{selectedProy.materiales?.length || selectedProy._count?.materiales || 0}</div>
                   <div className="text-xs text-slate-500">Materiales</div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded min-w-0">
                   <Wrench className="w-5 h-5 mx-auto mb-1 text-slate-500" />
-                  <div className="text-lg font-bold">{selectedProy.herramientas?.length || 0}</div>
+                  <div className="text-lg font-bold">{selectedProy.herramientas?.length || selectedProy._count?.herramientas || 0}</div>
                   <div className="text-xs text-slate-500">Herramientas</div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded min-w-0">
                   <CheckSquare className="w-5 h-5 mx-auto mb-1 text-slate-500" />
-                  <div className="text-lg font-bold">{selectedProy.tareas?.length || 0}</div>
+                  <div className="text-lg font-bold">{selectedProy.tareas?.length || selectedProy._count?.tareas || 0}</div>
                   <div className="text-xs text-slate-500">Tareas</div>
                 </div>
                 <div className="bg-slate-50 p-3 rounded min-w-0">
                   <FileText className="w-5 h-5 mx-auto mb-1 text-slate-500" />
-                  <div className="text-lg font-bold">{selectedProy.documentos?.length || 0}</div>
+                  <div className="text-lg font-bold">{selectedProy.documentos?.length || selectedProy._count?.documentos || 0}</div>
                   <div className="text-xs text-slate-500">Documentos</div>
                 </div>
               </div>

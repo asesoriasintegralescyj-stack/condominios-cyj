@@ -101,7 +101,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Modo listado: NO incluir relaciones pesadas (optimización transferencia BD)
-    // Solo traer campos principales + counts de relaciones
+    // Pero SÍ incluir fotosAntes/fotosDespues/cotizaciones (son JSON strings livianos)
+    // para que stripBase64 pueda contar los adjuntos
     const proyectosRaw = await db.proyecto.findMany({
       where,
       select: {
@@ -134,7 +135,11 @@ export async function GET(request: NextRequest) {
         comentarios: true,
         centroCostoId: true,
         centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        // Counts en lugar de datos completos
+        // Campos de adjuntos (JSON strings, no tan pesados)
+        fotosAntes: true,
+        fotosDespues: true,
+        cotizaciones: true,
+        // Counts en lugar de datos completos de relaciones
         _count: {
           select: {
             materiales: true,
