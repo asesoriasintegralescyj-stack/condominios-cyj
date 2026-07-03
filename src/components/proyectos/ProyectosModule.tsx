@@ -475,20 +475,21 @@ export function ProyectosModule() {
     return { activos, completados, todos }
   }, [proyectos])
 
-  // Lista de proyectos completados para el informe de costos (con filtros aplicados)
+  // Lista de TODOS los proyectos para el informe de costos (con filtros aplicados)
+  // Indistinto del estado de avance (Completado, En Ejecución, Planificado, etc.)
   const proyectosInforme = useMemo(() => {
-    let lista = proyectos.filter((p) => p.estado === 'Completado')
+    let lista = [...proyectos]
 
-    // Filtro por fecha (fechaFinReal o fechaFin)
+    // Filtro por fecha (fechaInicio, fechaFin o fechaFinReal)
     if (informeFilters.fechaDesde) {
       lista = lista.filter((p) => {
-        const fecha = p.fechaFinReal || p.fechaFin || ''
+        const fecha = p.fechaFinReal || p.fechaFin || p.fechaInicio || ''
         return fecha >= informeFilters.fechaDesde
       })
     }
     if (informeFilters.fechaHasta) {
       lista = lista.filter((p) => {
-        const fecha = p.fechaFinReal || p.fechaFin || ''
+        const fecha = p.fechaFinReal || p.fechaFin || p.fechaInicio || ''
         return fecha <= informeFilters.fechaHasta
       })
     }
