@@ -90,21 +90,53 @@ const PUBLIC_HERRAMIENTA_BASE = 'https://condominios-cyj.vercel.app'
 const formatCLP = (n: number) => 
   '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
 
+// ============================================
+// NORMALIZACIÓN DE ESTADOS
+// Unifica todos los variantes de estados a 6 categorías estándar
+// ============================================
+const ESTADOS_NORMALIZADOS = {
+  'Operativo': 'Operativo',
+  'Operativa': 'Operativo',
+  'Operativos': 'Operativo',
+  'Operativas': 'Operativo',
+  'Operativa (sin uso)': 'Operativo',
+  'Buen estado': 'Bueno',
+  'Bueno': 'Bueno',
+  'Nuevo': 'Bueno',
+  'Nueva': 'Bueno',
+  'Regular': 'Regular',
+  'Mal estado': 'Malo',
+  'Malo': 'Malo',
+  'Mala': 'Malo',
+  'Falta Mantención': 'Falta Mantención',
+  'Falta mantención': 'Falta Mantención',
+  'Nueva - Falta perno': 'Falta Mantención',
+  'En reparación': 'En reparación',
+} as const
+
+function normalizarEstado(estado: string): string {
+  return ESTADOS_NORMALIZADOS[estado as keyof typeof ESTADOS_NORMALIZADOS] || estado
+}
+
 const estadoColors: Record<string, string> = {
-  'Bueno': 'bg-green-100 text-green-700',
-  'Regular': 'bg-amber-100 text-amber-700',
-  'Malo': 'bg-red-100 text-red-700',
-  'En reparación': 'bg-blue-100 text-blue-700',
+  'Operativo': 'bg-green-100 text-green-700 border-green-200',
+  'Bueno': 'bg-green-100 text-green-700 border-green-200',
+  'Regular': 'bg-amber-100 text-amber-700 border-amber-200',
+  'Malo': 'bg-red-100 text-red-700 border-red-200',
+  'Falta Mantención': 'bg-orange-100 text-orange-700 border-orange-200',
+  'En reparación': 'bg-blue-100 text-blue-700 border-blue-200',
 }
 
 const estadoIcons: Record<string, React.ReactNode> = {
+  'Operativo': <CheckCircle className="w-3 h-3 mr-1" />,
   'Bueno': <CheckCircle className="w-3 h-3 mr-1" />,
   'Regular': <AlertCircle className="w-3 h-3 mr-1" />,
   'Malo': <XCircle className="w-3 h-3 mr-1" />,
+  'Falta Mantención': <AlertCircle className="w-3 h-3 mr-1" />,
   'En reparación': <Settings className="w-3 h-3 mr-1" />,
 }
 
-const estadosOptions = ['Bueno', 'Regular', 'Malo', 'En reparación']
+const estadosOptions = ['Operativo', 'Bueno', 'Regular', 'Malo', 'Falta Mantención', 'En reparación']
 
 const emptyManual: ManualState = {
   base64: null,
@@ -181,7 +213,7 @@ export function HerramientasModule() {
     })()
   }, [])
 
-  // Filtrar herramientas
+  // Filtrar herramientas (usando estado normalizado)
   const filteredHerramientas = herramientas.filter(h => {
     const matchSearch = !search || 
       h.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -189,12 +221,23 @@ export function HerramientasModule() {
       (h.marca && h.marca.toLowerCase().includes(search.toLowerCase())) ||
       (h.modelo && h.modelo.toLowerCase().includes(search.toLowerCase()))
     
-    const matchEstado = filterEstado === 'todos' || h.estado === filterEstado
+    const estadoNorm = normalizarEstado(h.estado)
+    const matchEstado = filterEstado === 'todos' || estadoNorm === filterEstado
     
     return matchSearch && matchEstado
   })
 
-  // Estadísticas cubiertas por <TableroIndicadores> al inicio del módulo.
+  // Estadísticas (usando estado normalizado)
+  const stats = {
+    total: herramientas.length,
+    operativo: herramientas.filter(h => normalizarEstado(h.estado) === 'Operativo').length,
+    bueno: herramientas.filter(h => normalizarEstado(h.estado) === 'Bueno').length,
+    regular: herramientas.filter(h => normalizarEstado(h.estado) === 'Regular').length,
+    malo: herramientas.filter(h => normalizarEstado(h.estado) === 'Malo').length,
+    faltaMantencion: herramientas.filter(h => normalizarEstado(h.estado) === 'Falta Mantención').length,
+    enReparacion: herramientas.filter(h => normalizarEstado(h.estado) === 'En reparación').length,
+    valorTotal: herramientas.reduce((sum, h) => sum + (h.cantidad * h.valorReposicion), 0),
+  }
 
   const openCreateDialog = () => {
     setIsEditing(false)
@@ -528,10 +571,12 @@ export function HerramientasModule() {
     <div className="space-y-5">
       <TableroIndicadores
         cards={[
-          { titulo: 'Total Herramientas', numero: herramientas.length, icon: <Wrench className="w-5 h-5" />, color: 'primary' },
-          { titulo: 'Disponibles', numero: herramientas.filter(h => h.estado === 'Bueno').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
-          { titulo: 'En Uso', numero: herramientas.filter(h => h.estado === 'Regular').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
-          { titulo: 'Mantención', numero: herramientas.filter(h => h.estado === 'En reparación' || h.estado === 'Malo').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Total Herramientas', numero: stats.total, icon: <Wrench className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Operativas', numero: stats.operativo + stats.bueno, icon: <CheckCircle className="w-5 h-5" />, color: 'verde', subtitulo: 'Listas para usar' },
+          { titulo: 'Regular', numero: stats.regular, icon: <AlertCircle className="w-5 h-5" />, color: 'naranja', subtitulo: 'Funciona con observaciones' },
+          { titulo: 'Falta Mantención', numero: stats.faltaMantencion, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja', subtitulo: 'Requiere atención' },
+          { titulo: 'Mal estado', numero: stats.malo, icon: <XCircle className="w-5 h-5" />, color: 'rojo', subtitulo: 'No operativo' },
+          { titulo: 'En Reparación', numero: stats.enReparacion, icon: <Settings className="w-5 h-5" />, color: 'azul', subtitulo: 'En taller' },
         ]}
       />
       {/* Filters */}
@@ -620,10 +665,15 @@ export function HerramientasModule() {
                       <td className="p-3 text-center font-semibold">{herr.cantidad}</td>
                       <td className="p-3 text-xs">{herr.ubicacion || '–'}</td>
                       <td className="p-3 text-center">
-                        <Badge className={estadoColors[herr.estado] || estadoColors['Bueno']}>
-                          {estadoIcons[herr.estado]}
-                          {herr.estado}
-                        </Badge>
+                        {(() => {
+                          const estadoNorm = normalizarEstado(herr.estado)
+                          return (
+                            <Badge className={estadoColors[estadoNorm] || 'bg-slate-100 text-slate-700 border-slate-200'}>
+                              {estadoIcons[estadoNorm] || <AlertCircle className="w-3 h-3 mr-1" />}
+                              {estadoNorm}
+                            </Badge>
+                          )
+                        })()}
                       </td>
                       <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(herr.valorReposicion)}</td>
                       <td className="p-3 text-center text-xs whitespace-nowrap">
