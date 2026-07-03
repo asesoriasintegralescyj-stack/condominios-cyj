@@ -1,7 +1,8 @@
 // ============================================
 // PMI - PLAN DE MANTENIMIENTO INTEGRAL
-// 20 Listas de Verificación (LV-01 a LV-20)
-// Basado en PDF: LV_Mantenimiento_LagunaNorte_CyJ_2026.pdf
+// 22 Listas de Verificación (LV-01 a LV-22)
+// LV-01 a LV-20: Basado en PDF: LV_Mantenimiento_LagunaNorte_CyJ_2026.pdf
+// LV-21 y LV-22: Verificación de Herramientas (Antes y Después de Uso)
 // ============================================
 
 export interface LVSeccion {
@@ -1031,6 +1032,121 @@ export const LV_DATA: LVData[] = [
         items: [
           'Plan PMI del próximo año revisado',
           'Plan PMI del próximo año aprobado',
+        ],
+      },
+    ]),
+  },
+
+  // ============================================
+  // LV-21: VERIFICACIÓN DE HERRAMIENTAS — ANTES DE USO
+  // ============================================
+  {
+    codigo: 'LV-21',
+    nombre: 'Verificación de Herramientas — Antes de Uso',
+    sector: 'Bodega de Herramientas / Todos los sectores',
+    frecuencia: 'Diaria',
+    responsable: 'Personal de Mantención (cada operario)',
+    personalRequerido: 'Operario que utilizará la herramienta',
+    descripcion: 'Lista de verificación obligatoria antes de usar cualquier herramienta. Escanear el QR de la herramienta para acceder a la LV específica.',
+    items: JSON.stringify([
+      {
+        seccion: 'A',
+        titulo: 'Inspección visual de la herramienta',
+        items: [
+          'Herramienta sin daños visibles, grietas o deformaciones',
+          'Todos los accesorios y protecciones instalados correctamente',
+          'Cable de alimentación (si aplica) en buen estado, sin cortes ni empalmes',
+          'Interruptor de encendido/apagado funciona correctamente (no queda pegado)',
+          'Partes móviles (discos, brocas, cuchillas) firmemente fijadas',
+          'Nivel de aceite o lubricante correcto (si aplica)',
+          'Filtro de aire limpio (si aplica)',
+        ],
+      },
+      {
+        seccion: 'B',
+        titulo: 'Verificación de EPP del operario',
+        items: [
+          'Guantes de seguridad asignados y en buen estado',
+          'Antiparras de protección colocadas',
+          'Protector auditivo colocado (si la herramienta genera ruido)',
+          'Mascarilla colocada (si genera polvo o partículas)',
+          'Chaleco reflectante visible (si trabaja en áreas exteriores)',
+          'Botas de seguridad con punta reforzada',
+        ],
+      },
+      {
+        seccion: 'C',
+        titulo: 'Verificación del área de trabajo',
+        items: [
+          'Área limpia, iluminada y libre de obstáculos',
+          'No hay personas no autorizadas en el área',
+          'Superficie de trabajo estable y nivelada',
+          'Señalización de seguridad colocada (si aplica)',
+          'Extintor cercano y accesible (si aplica)',
+        ],
+      },
+      {
+        seccion: 'D',
+        titulo: 'Registro y firma',
+        items: [
+          'Operario escaneó el QR de la herramienta',
+          'Operario completó la LV "Antes de Uso" en el sistema',
+          'Supervisor notificado del inicio de trabajo',
+        ],
+      },
+    ]),
+  },
+
+  // ============================================
+  // LV-22: VERIFICACIÓN DE HERRAMIENTAS — DESPUÉS DE USO
+  // ============================================
+  {
+    codigo: 'LV-22',
+    nombre: 'Verificación de Herramientas — Después de Uso',
+    sector: 'Bodega de Herramientas / Todos los sectores',
+    frecuencia: 'Diaria',
+    responsable: 'Personal de Mantención (cada operario)',
+    personalRequerido: 'Operario que utilizó la herramienta',
+    descripcion: 'Lista de verificación obligatoria al terminar de usar cualquier herramienta. Escanear el QR de la herramienta para acceder a la LV específica.',
+    items: JSON.stringify([
+      {
+        seccion: 'A',
+        titulo: 'Apagado seguro',
+        items: [
+          'Herramienta apagada y desconectada de la fuente de energía',
+          'Partes móviles detenidas completamente',
+          'Herramienta enfriada (sin sobrecalentamiento anormal)',
+        ],
+      },
+      {
+        seccion: 'B',
+        titulo: 'Limpieza y devolución',
+        items: [
+          'Herramienta limpiada: sin polvo, residuos ni material acumulado',
+          'Accesorios (discos, brocas, cuchillas) retirados y guardados',
+          'Cable de alimentación enrollado correctamente (sin dobleces)',
+          'Herramienta devuelta a su ubicación asignada en bodega',
+        ],
+      },
+      {
+        seccion: 'C',
+        titulo: 'Inspección post-uso',
+        items: [
+          'Inspección visual: sin daños nuevos durante el uso',
+          'Sin piezas flojas o faltantes',
+          'Sin olores a quemado o sonidos anormales',
+          'Estado de la herramienta registrado en el sistema',
+        ],
+      },
+      {
+        seccion: 'D',
+        titulo: 'Registro y reporte',
+        items: [
+          'Operario escaneó el QR de la herramienta',
+          'Operario completó la LV "Después de Uso" en el sistema',
+          'Anomalías detectadas registradas (si las hay)',
+          'Supervisor notificado si la herramienta requiere mantención',
+          'OT de mantención creada si se detectó un problema',
         ],
       },
     ]),

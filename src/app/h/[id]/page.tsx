@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Wrench, MapPin, Package, Calendar, DollarSign, FileText, Settings, Hash, Tag, ArrowLeft, Download } from 'lucide-react'
+import { Wrench, MapPin, Package, Calendar, DollarSign, FileText, Settings, Hash, Tag, ArrowLeft, Download, ClipboardCheck, CheckCircle, AlertCircle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,12 +18,59 @@ const formatDate = (dateStr: string | null) => {
   }
 }
 
+// Normalización de estados (igual que en HerramientasModule)
+const ESTADOS_NORMALIZADOS: Record<string, string> = {
+  'Operativo': 'Operativo', 'Operativa': 'Operativo', 'Operativos': 'Operativo',
+  'Operativas': 'Operativo', 'Operativa (sin uso)': 'Operativo',
+  'Buen estado': 'Bueno', 'Bueno': 'Bueno', 'Nuevo': 'Bueno', 'Nueva': 'Bueno',
+  'Regular': 'Regular',
+  'Mal estado': 'Malo', 'Malo': 'Malo', 'Mala': 'Malo',
+  'Falta Mantención': 'Falta Mantención', 'Falta mantención': 'Falta Mantención',
+  'Nueva - Falta perno': 'Falta Mantención',
+  'En reparación': 'En reparación',
+}
+
+function normalizarEstado(estado: string): string {
+  return ESTADOS_NORMALIZADOS[estado] || estado
+}
+
 const estadoColors: Record<string, string> = {
+  'Operativo': 'bg-green-100 text-green-700 border-green-200',
   'Bueno': 'bg-green-100 text-green-700 border-green-200',
-  'Regular': 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  'Regular': 'bg-amber-100 text-amber-700 border-amber-200',
   'Malo': 'bg-red-100 text-red-700 border-red-200',
+  'Falta Mantención': 'bg-orange-100 text-orange-700 border-orange-200',
   'En reparación': 'bg-blue-100 text-blue-700 border-blue-200',
 }
+
+// ============================================
+// LISTAS DE VERIFICACIÓN - ANTES Y DESPUÉS DE USO
+// ============================================
+const LV_ANTES_USO = [
+  'Inspeccionar visualmente la herramienta: sin daños visibles, grietas o deformaciones',
+  'Verificar que todos los accesorios y protecciones estén instalados correctamente',
+  'Comprobar que el cable de alimentación (si aplica) esté en buen estado, sin cortes ni empalmes',
+  'Revisar que el interruptor de encendido/apagado funcione correctamente (no quede pegado)',
+  'Verificar que las partes móviles (discos, brocas, cuchillas) estén firmemente fijadas',
+  'Comprobar el nivel de aceite o lubricante (si aplica)',
+  'Verificar que el filtro de aire (si aplica) esté limpio',
+  'Inspeccionar el EPP requerido: guantes, antiparras, protector auditivo, mascarilla',
+  'Confirmar que el área de trabajo esté limpia, iluminada y libre de obstáculos',
+  'Verificar que no haya personas no autorizadas en el área de trabajo',
+]
+
+const LV_DESPUES_USO = [
+  'Apagar y desconectar la herramienta de la fuente de energía',
+  'Esperar a que las partes móviles se detengan completamente',
+  'Limpiar la herramienta: retirar polvo, residuos y material acumulado',
+  'Inspeccionar visualmente si hubo daños durante el uso',
+  'Verificar que no haya sobrecalentamiento anormal',
+  'Retirar y guardar accesorios (discos, brocas, cuchillas) en su lugar correspondiente',
+  'Enrollar y guardar el cable de alimentación correctamente (sin dobleces)',
+  'Devolver la herramienta a su ubicación asignada en bodega',
+  'Registrar cualquier anomalía o daño detectado durante el uso',
+  'Reportar a supervisor si la herramienta requiere mantención',
+]
 
 interface HerramientaPageProps {
   params: Promise<{ id: string }>
@@ -97,11 +144,11 @@ export default async function HerramientaPage({ params }: HerramientaPageProps) 
               </div>
               <span
                 className={`inline-flex items-center gap-1 text-xs font-semibold border rounded-full px-3 py-1 self-start ${
-                  estadoColors[herramienta.estado] || estadoColors['Bueno']
+                  estadoColors[normalizarEstado(herramienta.estado)] || estadoColors['Bueno']
                 }`}
               >
                 <Settings className="w-3 h-3" />
-                {herramienta.estado}
+                {normalizarEstado(herramienta.estado)}
               </span>
             </div>
           </div>
@@ -244,6 +291,80 @@ export default async function HerramientaPage({ params }: HerramientaPageProps) 
               </p>
             </div>
           )}
+        </div>
+
+        {/* Lista de Verificación - ANTES DE USO */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-amber-50 border-b border-amber-200 px-5 sm:px-6 py-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-amber-100 text-amber-700 rounded-lg flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wider">
+                  Lista de Verificación — Antes de Usar
+                </h3>
+                <p className="text-xs text-amber-700">Verificar antes de cada uso de la herramienta</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
+            <div className="space-y-2">
+              {LV_ANTES_USO.map((item, i) => (
+                <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                  <div className="w-5 h-5 rounded border-2 border-slate-300 shrink-0 mt-0.5 flex items-center justify-center">
+                  </div>
+                  <span className="text-sm text-slate-700 leading-relaxed flex-1">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de Verificación - DESPUÉS DE USO */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-blue-50 border-b border-blue-200 px-5 sm:px-6 py-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-lg flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider">
+                  Lista de Verificación — Después de Usar
+                </h3>
+                <p className="text-xs text-blue-700">Verificar al terminar de usar la herramienta</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
+            <div className="space-y-2">
+              {LV_DESPUES_USO.map((item, i) => (
+                <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                  <div className="w-5 h-5 rounded border-2 border-slate-300 shrink-0 mt-0.5 flex items-center justify-center">
+                  </div>
+                  <span className="text-sm text-slate-700 leading-relaxed flex-1">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Advertencia de seguridad */}
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-orange-900 mb-1">
+                Importante
+              </p>
+              <p className="text-xs text-orange-800 leading-relaxed">
+                El uso de esta herramienta está sujeto a las Listas de Verificación (LV) del PMI.
+                Antes de usarla, complete la LV "Antes de Usar". Al terminar, complete la LV
+                "Después de Usar" y registre cualquier anomalía. Si detecta un problema,
+                reporte inmediatamente a su supervisor y NO utilice la herramienta.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
