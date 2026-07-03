@@ -824,18 +824,21 @@ export function ProyectosModule() {
   // ============================================
   // Dialog openers
   // ============================================
-  const openDialog = async (proy?: Proyecto) => {
-    if (proy) {
-      setEditingProy(proy)
-      // Si el proyecto tiene fotos/cotizaciones en base64, las cargamos
+  const openDialog = async (proyParam?: Proyecto) => {
+    if (proyParam) {
+      setEditingProy(proyParam)
+      // Cargar el detalle completo del proyecto (con materiales, tareas, etc.)
+      // El listado ya no incluye estas relaciones (optimización BD)
       let fotosAntesData: string[] = []
       let fotosDespuesData: string[] = []
       let cotizacionesData: Cotizacion[] = []
+      let proy: Proyecto = proyParam
 
       try {
-        const res = await fetch(`/api/proyectos/${proy.id}`)
+        const res = await fetch(`/api/proyectos/${proyParam.id}`)
         if (res.ok) {
           const detail = await res.json()
+          proy = detail
           fotosAntesData = parseJsonArray<string>(detail.fotosAntes)
           fotosDespuesData = parseJsonArray<string>(detail.fotosDespues)
           cotizacionesData = parseJsonArray<Cotizacion>(detail.cotizaciones)
@@ -945,10 +948,11 @@ export function ProyectosModule() {
       tareas: tareas.map(({ id, ...rest }) => rest),
       personal: personal.map(({ id, ...rest }) => rest),
       documentos: documentos.map(({ id, ...rest }) => rest),
-      // Solo enviar fotos/cotizaciones si hay datos (evita sobreescribir con null si no se cargaron)
-      ...(fotosAntes.length > 0 ? { fotosAntes } : { fotosAntes: [] }),
-      ...(fotosDespues.length > 0 ? { fotosDespues } : { fotosDespues: [] }),
-      ...(cotizaciones.length > 0 ? { cotizaciones } : { cotizaciones: [] }),
+      // Solo enviar fotos/cotizaciones si hay datos nuevos
+      // (evita sobreescribir fotos existentes con array vacío)
+      ...(fotosAntes.length > 0 ? { fotosAntes } : {}),
+      ...(fotosDespues.length > 0 ? { fotosDespues } : {}),
+      ...(cotizaciones.length > 0 ? { cotizaciones } : {}),
     }
 
     try {

@@ -81,20 +81,21 @@ export async function PUT(
     } = data
 
     // Update proyecto basic data + nuevos campos
+    // Usar patrón: solo actualizar si el campo viene en el request (undefined = no tocar)
     await db.proyecto.update({
       where: { id },
       data: {
-        nombre: proyectoData.nombre,
-        categoria: proyectoData.categoria,
-        estado: proyectoData.estado,
-        ubicacion: proyectoData.ubicacion || null,
-        fechaInicio: proyectoData.fechaInicio || null,
-        fechaFin: proyectoData.fechaFin || null,
-        presProg: parseFloat(proyectoData.presProg) || 0,
-        presUsado: parseFloat(proyectoData.presUsado) || 0,
-        avance: parseInt(proyectoData.avance) || 0,
-        descripcion: proyectoData.descripcion || null,
-        notas: proyectoData.notas || null,
+        nombre: proyectoData.nombre === undefined ? undefined : proyectoData.nombre,
+        categoria: proyectoData.categoria === undefined ? undefined : proyectoData.categoria,
+        estado: proyectoData.estado === undefined ? undefined : proyectoData.estado,
+        ubicacion: proyectoData.ubicacion === undefined ? undefined : (proyectoData.ubicacion || null),
+        fechaInicio: proyectoData.fechaInicio === undefined ? undefined : (proyectoData.fechaInicio || null),
+        fechaFin: proyectoData.fechaFin === undefined ? undefined : (proyectoData.fechaFin || null),
+        presProg: proyectoData.presProg === undefined ? undefined : (parseFloat(proyectoData.presProg) || 0),
+        presUsado: proyectoData.presUsado === undefined ? undefined : (parseFloat(proyectoData.presUsado) || 0),
+        avance: proyectoData.avance === undefined ? undefined : (parseInt(proyectoData.avance) || 0),
+        descripcion: proyectoData.descripcion === undefined ? undefined : (proyectoData.descripcion || null),
+        notas: proyectoData.notas === undefined ? undefined : (proyectoData.notas || null),
 
         // Nuevos campos
         sector: proyectoData.sector === undefined ? undefined : (proyectoData.sector || null),
@@ -105,7 +106,7 @@ export async function PUT(
         responsable: proyectoData.responsable === undefined ? undefined : (proyectoData.responsable || null),
         responsableExterno: proyectoData.responsableExterno === undefined ? undefined : (proyectoData.responsableExterno || null),
         tiempoEstimado: proyectoData.tiempoEstimado === undefined ? undefined : (proyectoData.tiempoEstimado || null),
-        monto: proyectoData.monto !== undefined ? (parseFloat(proyectoData.monto) || 0) : undefined,
+        monto: proyectoData.monto === undefined ? undefined : (parseFloat(proyectoData.monto) || 0),
         fechaInicioReal: proyectoData.fechaInicioReal === undefined ? undefined : (proyectoData.fechaInicioReal || null),
         fechaFinReal: proyectoData.fechaFinReal === undefined ? undefined : (proyectoData.fechaFinReal || null),
         comentarios: proyectoData.comentarios === undefined ? undefined : (proyectoData.comentarios || null),
