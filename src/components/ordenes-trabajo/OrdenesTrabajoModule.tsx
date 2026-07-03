@@ -329,7 +329,7 @@ export function OrdenesTrabajoModule() {
     // Auto-refresh cada 60 segundos
     const interval = setInterval(() => {
       fetchOrdenes(search)
-    }, 60000)
+    }, 300000) // 5 min (optimizado BD)
     return () => clearInterval(interval)
   }, [])
 
@@ -338,8 +338,19 @@ export function OrdenesTrabajoModule() {
     return () => clearTimeout(timeout)
   }, [search])
 
-  const openDialog = (ot?: OrdenTrabajo) => {
-    if (ot) {
+  const openDialog = async (otParam?: OrdenTrabajo) => {
+    if (otParam) {
+      // Cargar el detalle completo de la OT (con materiales, tareas, etc.)
+      // Esto reduce la transferencia del listado (no incluye relaciones pesadas)
+      let ot: OrdenTrabajo = otParam
+      try {
+        const res = await fetch(`/api/ordenes-trabajo/${otParam.id}`)
+        if (res.ok) {
+          ot = await res.json()
+        }
+      } catch (e) {
+        console.error('Error cargando detalle OT:', e)
+      }
       setEditingOT(ot)
       setFormData({
         titulo: ot.titulo,
@@ -405,18 +416,38 @@ export function OrdenesTrabajoModule() {
     setDialogOpen(true)
   }
 
-  const openDetailDialog = (ot: OrdenTrabajo) => {
-    setSelectedOT(ot)
+  const openDetailDialog = async (ot: OrdenTrabajo) => {
+    // Cargar detalle completo (con relaciones) para mostrar en el dialog
+    try {
+      const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
+      if (res.ok) {
+        setSelectedOT(await res.json())
+      } else {
+        setSelectedOT(ot)
+      }
+    } catch (e) {
+      setSelectedOT(ot)
+    }
     setDetailDialogOpen(true)
   }
 
-  const openProgressDialog = (ot: OrdenTrabajo) => {
-    setProgressOT(ot)
+  const openProgressDialog = async (ot: OrdenTrabajo) => {
+    // Cargar detalle completo si no tiene tareas cargadas (optimización BD)
+    let otFull = ot
+    if (!ot.tareas || ot.tareas.length === 0) {
+      try {
+        const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
+        if (res.ok) otFull = await res.json()
+      } catch (e) {
+        console.error('Error cargando detalle OT para progreso:', e)
+      }
+    }
+    setProgressOT(otFull)
     setProgressFormData({
-      progreso: ot.progreso,
-      tiempoReal: ot.tiempoReal,
-      estado: ot.estado,
-      tareas: ot.tareas.map(t => ({
+      progreso: otFull.progreso,
+      tiempoReal: otFull.tiempoReal,
+      estado: otFull.estado,
+      tareas: (otFull.tareas || []).map(t => ({
         id: t.id,
         descripcion: t.descripcion,
         estado: t.estado,

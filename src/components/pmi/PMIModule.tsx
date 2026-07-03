@@ -194,7 +194,7 @@ export function PMIModule() {
     const id = setInterval(() => {
       cargarLvs()
       cargarCalendario()
-    }, 60_000)
+    }, 300000) // 5 min (optimizado BD)
     return () => clearInterval(id)
   }, [cargarLvs, cargarCalendario])
 

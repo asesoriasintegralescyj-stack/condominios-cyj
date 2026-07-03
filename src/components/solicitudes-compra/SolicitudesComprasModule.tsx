@@ -224,7 +224,7 @@ export function SolicitudesComprasModule() {
     // Auto-refresh cada 60 segundos
     const interval = setInterval(() => {
       void fetchSolicitudes()
-    }, 60000)
+    }, 300000) // 5 min (optimizado BD)
     return () => clearInterval(interval)
   }, [])
 

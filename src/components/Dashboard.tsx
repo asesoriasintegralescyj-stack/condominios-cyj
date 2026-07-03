@@ -126,7 +126,7 @@ export function Dashboard() {
         .catch(() => setLoading(false))
     }
     fetchData()
-    const interval = setInterval(fetchData, 120000)
+    const interval = setInterval(fetchData, 300000) // 5 min (optimizado BD)
     return () => clearInterval(interval)
   }, [])
 

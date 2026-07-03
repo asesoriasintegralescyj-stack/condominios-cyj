@@ -83,21 +83,70 @@ export async function GET(request: NextRequest) {
       ]
     }
 
+    if (detail) {
+      // Modo detalle: incluir todas las relaciones (para vista de detalle)
+      const proyectosRaw = await db.proyecto.findMany({
+        where,
+        include: {
+          materiales: true,
+          herramientas: true,
+          tareas: true,
+          personal: true,
+          documentos: true,
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      return NextResponse.json(proyectosRaw)
+    }
+
+    // Modo listado: NO incluir relaciones pesadas (optimización transferencia BD)
+    // Solo traer campos principales + counts de relaciones
     const proyectosRaw = await db.proyecto.findMany({
       where,
-      include: {
-        materiales: true,
-        herramientas: true,
-        tareas: true,
-        personal: true,
-        documentos: true,
+      select: {
+        id: true,
+        nombre: true,
+        categoria: true,
+        estado: true,
+        ubicacion: true,
+        fechaInicio: true,
+        fechaFin: true,
+        presProg: true,
+        presUsado: true,
+        avance: true,
+        descripcion: true,
+        notas: true,
+        createdAt: true,
+        updatedAt: true,
+        // Campos PMI
+        sector: true,
+        tipoReparacion: true,
+        tipoTrabajo: true,
+        prioridad: true,
+        estadoAprobacion: true,
+        responsable: true,
+        responsableExterno: true,
+        tiempoEstimado: true,
+        monto: true,
+        fechaInicioReal: true,
+        fechaFinReal: true,
+        comentarios: true,
+        centroCostoId: true,
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+        // Counts en lugar de datos completos
+        _count: {
+          select: {
+            materiales: true,
+            herramientas: true,
+            tareas: true,
+            personal: true,
+            documentos: true,
+          }
+        }
       },
       orderBy: { createdAt: 'desc' },
     })
-
-    if (detail) {
-      return NextResponse.json(proyectosRaw)
-    }
 
     // En la vista de lista, ocultamos base64 pesados
     const proyectos = proyectosRaw.map((p) => stripBase64(p))

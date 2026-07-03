@@ -235,7 +235,7 @@ export function RondasModule() {
     // con las lecturas del guardia en tiempo real
     const interval = setInterval(() => {
       fetchRondas()
-    }, 30000)
+    }, 120000) // 2 min (optimizado BD)
     return () => clearInterval(interval)
   }, [])
 
@@ -323,7 +323,7 @@ export function RondasModule() {
     if (registrosDialogOpen && selectedRonda) {
       const interval = setInterval(() => {
         fetchRegistros(selectedRonda.id)
-      }, 15000)
+      }, 60000) // 1 min (optimizado BD)
       return () => clearInterval(interval)
     }
   }, [registrosDialogOpen, selectedRonda])

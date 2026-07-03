@@ -62,26 +62,52 @@ export async function GET(request: NextRequest) {
 
     const ordenes = await db.ordenTrabajo.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
-      include: {
-        propiedad: true,
-        asignado: true,
-        activo: true,
-        centroCosto: true,
-        materiales: true,
-        herramientas: true,
-        tareas: true,
-        personalOT: true,
+      select: {
+        id: true,
+        otNum: true,
+        titulo: true,
+        tipo: true,
+        prioridad: true,
+        estado: true,
+        ubicacion: true,
+        fechaInicio: true,
+        fechaLimite: true,
+        fechaInicioReal: true,
+        fechaFinReal: true,
+        costoEstimado: true,
+        costoReal: true,
+        progreso: true,
+        descripcion: true,
+        tiempoEst: true,
+        tiempoReal: true,
+        estadoAprobacion: true,
+        formaPago: true,
+        createdAt: true,
+        // Relaciones pero con select mínimo para reducir transferencia
+        propiedad: { select: { id: true, nombre: true } },
+        asignado: { select: { id: true, nombre: true, cargo: true } },
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+        // NO incluir materiales, herramientas, tareas, personalOT en el listado
+        // (se cargan individualmente al abrir el detalle)
+        _count: {
+          select: {
+            materiales: true,
+            herramientas: true,
+            tareas: true,
+            personalOT: true,
+            documentos: true,
+          }
+        }
       },
       orderBy: { createdAt: 'desc' }
     })
 
     // Transform centroCosto to include codigo in the response for display
-    // Parse photos from JSON strings to arrays
     const ordenesWithCC = ordenes.map(ot => ({
       ...ot,
       centroCosto: ot.centroCosto ? `${ot.centroCosto.codigo} - ${ot.centroCosto.nombre}` : ot.centroCosto,
-      fotosAntes: ot.fotosAntes ? JSON.parse(ot.fotosAntes) : [],
-      fotosDespues: ot.fotosDespues ? JSON.parse(ot.fotosDespues) : [],
+      fotosAntes: [],
+      fotosDespues: [],
     }))
 
     return NextResponse.json(ordenesWithCC)
