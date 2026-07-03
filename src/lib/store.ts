@@ -28,6 +28,7 @@ export type Module =
   | 'solicitudescompra'
   | 'permisos'
   | 'manuales'
+  | 'pmi'
 
 interface CondominioInfo {
   id: string

@@ -1899,3 +1899,46 @@ model ListaDesplegable {
 
   @@index([tipo, activo])
 }
+
+// ============================================
+// PMI — PLAN DE MANTENIMIENTO INTEGRAL
+// Listas de Verificación (LV-01 a LV-20) y sus registros de ejecución
+// ============================================
+model ListaVerificacion {
+  id                String   @id @default(cuid())
+  codigo            String   @unique // LV-01, LV-02, etc.
+  nombre            String
+  sector            String
+  frecuencia        String   // Diaria, Semanal, Quincenal, Mensual, Trimestral, Semestral, Anual
+  responsable       String
+  personalRequerido String?
+  descripcion       String?
+  items             String   @default("[]") // JSON array de {seccion, titulo, items: string[]}
+  activa            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  registros RegistroLV[]
+
+  @@index([frecuencia])
+  @@index([activa])
+}
+
+model RegistroLV {
+  id                   String   @id @default(cuid())
+  lvId                 String
+  lv                   ListaVerificacion @relation(fields: [lvId], references: [id], onDelete: Cascade)
+  fecha                String   // YYYY-MM-DD
+  hora                 String?
+  responsableEjecucion String?
+  estado               String   @default("Pendiente") // Pendiente, En Progreso, Completado
+  observaciones        String?
+  itemsCompletados     String?  // JSON array de índices de items completados
+  firmaUrl             String?
+  fotoUrl              String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([lvId, fecha])
+  @@index([fecha])
+}

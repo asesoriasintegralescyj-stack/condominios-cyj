@@ -26,6 +26,7 @@ import {
   Menu,
   X,
   BookOpen,
+  ClipboardCheck,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'proyectos', label: 'Proyectos', icon: <DraftingCompass className="w-4 h-4" /> },
       { id: 'inspecciones', label: 'Inspecciones', icon: <Search className="w-4 h-4" /> },
       { id: 'rondas', label: 'Rondas', icon: <QrCode className="w-4 h-4" /> },
+      { id: 'pmi', label: 'PMI', icon: <ClipboardCheck className="w-4 h-4" /> },
       { id: 'personal', label: 'Personal', icon: <User className="w-4 h-4" /> },
       { id: 'asistencia', label: 'Control Asistencia', icon: <Calendar className="w-4 h-4" /> },
       { id: 'activos', label: 'Activos', icon: <Package className="w-4 h-4" /> },

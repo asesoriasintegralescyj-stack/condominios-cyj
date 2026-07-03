@@ -25,6 +25,7 @@ import { SolicitudesComprasModule } from './solicitudes-compra/SolicitudesCompra
 import { PermisosModule } from './permisos/PermisosModule'
 import { ManualesModule } from './manuales/ManualesModule'
 import { AuditorModule } from './auditor/AuditorModule'
+import { PMIModule } from './pmi/PMIModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -51,6 +52,7 @@ const moduleTitles: Record<string, string> = {
   permisos: 'Permisos del Sistema',
   manuales: 'Manuales y Capacitaciones',
   auditoria: 'Auditoría',
+  pmi: 'Plan de Mantenimiento Integral (PMI)',
 }
 
 export function MainContent() {
@@ -106,6 +108,8 @@ export function MainContent() {
         return <ManualesModule />
       case 'auditoria':
         return <AuditorModule />
+      case 'pmi':
+        return <PMIModule />
       default:
         return <Dashboard />
     }
