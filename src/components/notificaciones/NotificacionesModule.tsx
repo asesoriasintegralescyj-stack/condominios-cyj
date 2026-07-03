@@ -230,69 +230,15 @@ export function NotificacionesModule() {
   return (
     <div className="space-y-6">
       <TableroIndicadores
+        columnas={5}
         cards={[
           { titulo: 'Total', numero: notificaciones.length, icon: <Bell className="w-5 h-5" />, color: 'primary' },
           { titulo: 'No Leídas', numero: notificaciones.filter(n => !n.leido).length, icon: <BellRing className="w-5 h-5" />, color: 'rojo' },
           { titulo: 'Leídas', numero: notificaciones.filter(n => n.leido).length, icon: <CheckCheck className="w-5 h-5" />, color: 'verde' },
           { titulo: 'Importantes', numero: notificaciones.filter(n => n.tipo === 'Urgente' || n.tipo === 'Alerta').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'Enviadas', numero: stats.enviadas, icon: <Send className="w-5 h-5" />, color: 'azul' },
         ]}
       />
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Bell className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Total</p>
-                <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <BellRing className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">No Leídas</p>
-                <p className="text-2xl font-bold text-amber-600">{stats.noLeidas}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Urgentes</p>
-                <p className="text-2xl font-bold text-red-600">{stats.urgentes}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Send className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Enviadas</p>
-                <p className="text-2xl font-bold text-green-600">{stats.enviadas}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-bold text-slate-800">Centro de Notificaciones</h2>

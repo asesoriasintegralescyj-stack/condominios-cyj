@@ -309,65 +309,29 @@ export function AprobacionesOTModule() {
       <TableroIndicadores
         cards={[
           { titulo: 'Total', numero: ordenes.length, icon: <FileCheck className="w-5 h-5" />, color: 'primary' },
-          { titulo: 'Pendientes', numero: ordenes.filter(o => (o.estadoAprobacion || 'Pendiente') === 'Pendiente').length, icon: <Clock className="w-5 h-5" />, color: 'naranja' },
-          { titulo: 'Aprobadas', numero: ordenes.filter(o => o.estadoAprobacion === 'Aprobada').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
-          { titulo: 'Rechazadas', numero: ordenes.filter(o => o.estadoAprobacion === 'Rechazada').length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          {
+            titulo: 'Pendientes',
+            numero: ordenes.filter(o => (o.estadoAprobacion || 'Pendiente') === 'Pendiente').length,
+            icon: <Clock className="w-5 h-5" />,
+            color: 'naranja',
+            onClick: () => setFiltroEstado(filtroEstado === 'Pendiente' ? 'all' : 'Pendiente'),
+          },
+          {
+            titulo: 'Aprobadas',
+            numero: ordenes.filter(o => o.estadoAprobacion === 'Aprobada').length,
+            icon: <CheckCircle className="w-5 h-5" />,
+            color: 'verde',
+            onClick: () => setFiltroEstado(filtroEstado === 'Aprobada' ? 'all' : 'Aprobada'),
+          },
+          {
+            titulo: 'Rechazadas',
+            numero: ordenes.filter(o => o.estadoAprobacion === 'Rechazada').length,
+            icon: <XCircle className="w-5 h-5" />,
+            color: 'rojo',
+            onClick: () => setFiltroEstado(filtroEstado === 'Rechazada' ? 'all' : 'Rechazada'),
+          },
         ]}
       />
-      {/* Estadísticas */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card 
-          className={`cursor-pointer transition-all hover:shadow-md ${filtroEstado === 'Pendiente' ? 'ring-2 ring-amber-400' : ''}`}
-          onClick={() => setFiltroEstado(filtroEstado === 'Pendiente' ? 'all' : 'Pendiente')}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-amber-100">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-amber-700">{estadisticas.Pendiente}</div>
-                <div className="text-xs text-slate-500 font-medium">Pendientes</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card 
-          className={`cursor-pointer transition-all hover:shadow-md ${filtroEstado === 'Aprobada' ? 'ring-2 ring-green-400' : ''}`}
-          onClick={() => setFiltroEstado(filtroEstado === 'Aprobada' ? 'all' : 'Aprobada')}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-100">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-green-700">{estadisticas.Aprobada}</div>
-                <div className="text-xs text-slate-500 font-medium">Aprobadas</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card 
-          className={`cursor-pointer transition-all hover:shadow-md ${filtroEstado === 'Rechazada' ? 'ring-2 ring-red-400' : ''}`}
-          onClick={() => setFiltroEstado(filtroEstado === 'Rechazada' ? 'all' : 'Rechazada')}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-100">
-                <XCircle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-red-700">{estadisticas.Rechazada}</div>
-                <div className="text-xs text-slate-500 font-medium">Rechazadas</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">

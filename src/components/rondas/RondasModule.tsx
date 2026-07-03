@@ -39,7 +39,6 @@ import {
   Trash2,
   Eye,
   CheckCircle,
-  Scan,
   Layers,
   FileDown,
   ExternalLink,
@@ -653,69 +652,16 @@ export function RondasModule() {
   return (
     <div className="space-y-6">
       <TableroIndicadores
+        columnas={6}
         cards={[
-          { titulo: 'Total Registros', numero: totalRegistros, icon: <Footprints className="w-5 h-5" />, color: 'primary' },
+          { titulo: 'Total Rondas', numero: rondas.length, icon: <QrCode className="w-5 h-5" />, color: 'purpura' },
           { titulo: 'Rondas Activas', numero: activasCount, icon: <MapPin className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Total Registros', numero: totalRegistros, icon: <Footprints className="w-5 h-5" />, color: 'primary' },
           { titulo: 'Hoy', numero: hoyCount, icon: <Calendar className="w-5 h-5" />, color: 'verde' },
-          { titulo: 'Esta Semana', numero: semanaCount, icon: <CalendarDays className="w-5 h-5" />, color: 'gris' },
+          { titulo: 'Esta Semana', numero: semanaCount, icon: <CalendarDays className="w-5 h-5" />, color: 'cyan' },
+          { titulo: 'Etapas', numero: etapasCount, icon: <Layers className="w-5 h-5" />, color: 'naranja' },
         ]}
       />
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
-                <QrCode className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{rondas.length}</p>
-                <p className="text-sm text-gray-500">Total Rondas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{activasCount}</p>
-                <p className="text-sm text-gray-500">Activas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
-                <Scan className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalRegistros}</p>
-                <p className="text-sm text-gray-500">Registros Totales</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-                <Layers className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{etapasCount}</p>
-                <p className="text-sm text-gray-500">Etapas</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Banner para guardia */}
       {isGuardia && (
         <Card className="border-amber-300 bg-amber-50">

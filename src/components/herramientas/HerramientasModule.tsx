@@ -194,15 +194,7 @@ export function HerramientasModule() {
     return matchSearch && matchEstado
   })
 
-  // Estadísticas
-  const stats = {
-    total: herramientas.length,
-    bueno: herramientas.filter(h => h.estado === 'Bueno').length,
-    regular: herramientas.filter(h => h.estado === 'Regular').length,
-    malo: herramientas.filter(h => h.estado === 'Malo').length,
-    enReparacion: herramientas.filter(h => h.estado === 'En reparación').length,
-    valorTotal: herramientas.reduce((sum, h) => sum + (h.cantidad * h.valorReposicion), 0),
-  }
+  // Estadísticas cubiertas por <TableroIndicadores> al inicio del módulo.
 
   const openCreateDialog = () => {
     setIsEditing(false)
@@ -542,55 +534,6 @@ export function HerramientasModule() {
           { titulo: 'Mantención', numero: herramientas.filter(h => h.estado === 'En reparación' || h.estado === 'Malo').length, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
         ]}
       />
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card className="p-3">
-          <div className="flex items-center gap-2">
-            <Wrench className="w-5 h-5 text-slate-500" />
-            <div>
-              <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Herramientas</div>
-              <div className="text-xl font-bold text-[#0f2044]">{stats.total}</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-3 border-green-200 bg-green-50">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <div>
-              <div className="text-[10px] text-green-600 font-semibold uppercase">Bueno</div>
-              <div className="text-xl font-bold text-green-600">{stats.bueno}</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-3 border-amber-200 bg-amber-50">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-amber-500" />
-            <div>
-              <div className="text-[10px] text-amber-600 font-semibold uppercase">Regular</div>
-              <div className="text-xl font-bold text-amber-600">{stats.regular}</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-3 border-red-200 bg-red-50">
-          <div className="flex items-center gap-2">
-            <XCircle className="w-5 h-5 text-red-500" />
-            <div>
-              <div className="text-[10px] text-red-600 font-semibold uppercase">Malo</div>
-              <div className="text-xl font-bold text-red-600">{stats.malo}</div>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-3 border-blue-200 bg-blue-50">
-          <div className="flex items-center gap-2">
-            <Settings className="w-5 h-5 text-blue-500" />
-            <div>
-              <div className="text-[10px] text-blue-600 font-semibold uppercase">En Reparación</div>
-              <div className="text-xl font-bold text-blue-600">{stats.enReparacion}</div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 max-w-xs">

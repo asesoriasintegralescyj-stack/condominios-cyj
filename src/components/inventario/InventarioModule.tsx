@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { 
   Plus, Pencil, Search, AlertTriangle, Package, 
-  TrendingDown, TrendingUp, Minus, History, Download,
+  Minus, History, Download,
   ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
   FolderTree, Boxes
 } from 'lucide-react'
@@ -225,13 +225,7 @@ export function InventarioModule() {
     return matchSearch && matchCategoria && matchStock
   })
 
-  // Estadísticas de materiales
-  const stats = {
-    total: materiales.length,
-    stockBajo: materiales.filter(m => m.stockActual <= m.stockMinimo).length,
-    stockNormal: materiales.filter(m => m.stockActual > m.stockMinimo).length,
-    valorTotal: materiales.reduce((sum, m) => sum + (m.stockActual * m.precioUnit), 0),
-  }
+  // Estadísticas de materiales cubiertas por <TableroIndicadores> al inicio del módulo.
 
   const openDialog = (material: Material) => {
     setSelectedMaterial(material)
@@ -380,46 +374,6 @@ export function InventarioModule() {
 
         {/* INVENTARIO TAB */}
         <TabsContent value="inventario" className="space-y-5 mt-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-slate-500" />
-                <div>
-                  <div className="text-[10px] text-slate-500 font-semibold uppercase">Total Items</div>
-                  <div className="text-xl font-bold text-[#0f2044]">{stats.total}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3 border-red-200 bg-red-50">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
-                <div>
-                  <div className="text-[10px] text-red-600 font-semibold uppercase">Stock Bajo</div>
-                  <div className="text-xl font-bold text-red-600">{stats.stockBajo}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3 border-green-200 bg-green-50">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-green-500" />
-                <div>
-                  <div className="text-[10px] text-green-600 font-semibold uppercase">Stock Normal</div>
-                  <div className="text-xl font-bold text-green-600">{stats.stockNormal}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <TrendingDown className="w-5 h-5 text-blue-500" />
-                <div>
-                  <div className="text-[10px] text-slate-500 font-semibold uppercase">Valor Total</div>
-                  <div className="text-lg font-bold text-[#0f2044]">{formatCLP(stats.valorTotal)}</div>
-                </div>
-              </div>
-            </Card>
-          </div>
-
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 max-w-xs">
@@ -580,45 +534,14 @@ export function InventarioModule() {
 
         {/* MOVIMIENTOS TAB */}
         <TabsContent value="movimientos" className="space-y-5 mt-4">
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-slate-500" />
-                <div>
-                  <div className="text-[10px] text-slate-500 font-semibold uppercase">Movimientos Hoy</div>
-                  <div className="text-xl font-bold text-[#0f2044]">{movimientosStats.movimientosHoy}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3 border-green-200 bg-green-50">
-              <div className="flex items-center gap-2">
-                <ArrowUpRight className="w-5 h-5 text-green-500" />
-                <div>
-                  <div className="text-[10px] text-green-600 font-semibold uppercase">Entradas del Mes</div>
-                  <div className="text-xl font-bold text-green-600">{movimientosStats.entradasMes}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3 border-red-200 bg-red-50">
-              <div className="flex items-center gap-2">
-                <ArrowDownRight className="w-5 h-5 text-red-500" />
-                <div>
-                  <div className="text-[10px] text-red-600 font-semibold uppercase">Salidas del Mes</div>
-                  <div className="text-xl font-bold text-red-600">{movimientosStats.salidasMes}</div>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3 border-amber-200 bg-amber-50">
-              <div className="flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-amber-500" />
-                <div>
-                  <div className="text-[10px] text-amber-600 font-semibold uppercase">Ajustes del Mes</div>
-                  <div className="text-xl font-bold text-amber-600">{movimientosStats.ajustesMes}</div>
-                </div>
-              </div>
-            </Card>
-          </div>
+          <TableroIndicadores
+            cards={[
+              { titulo: 'Movimientos Hoy', numero: movimientosStats.movimientosHoy, icon: <Calendar className="w-5 h-5" />, color: 'primary' },
+              { titulo: 'Entradas del Mes', numero: movimientosStats.entradasMes, icon: <ArrowUpRight className="w-5 h-5" />, color: 'verde' },
+              { titulo: 'Salidas del Mes', numero: movimientosStats.salidasMes, icon: <ArrowDownRight className="w-5 h-5" />, color: 'rojo' },
+              { titulo: 'Ajustes del Mes', numero: movimientosStats.ajustesMes, icon: <RefreshCw className="w-5 h-5" />, color: 'naranja' },
+            ]}
+          />
 
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">

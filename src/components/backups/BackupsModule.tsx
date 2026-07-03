@@ -57,7 +57,6 @@ import {
   RotateCcw,
   Calendar,
   FileText,
-  Archive,
   Info,
   Mail
 } from 'lucide-react'
@@ -419,71 +418,16 @@ export function BackupsModule() {
   return (
     <div className="space-y-6">
       <TableroIndicadores
+        columnas={6}
         cards={[
           { titulo: 'Total Respaldos', numero: backups.length, icon: <Database className="w-5 h-5" />, color: 'primary' },
           { titulo: 'Completados', numero: backups.filter(b => b.estado === 'Completado').length, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
           { titulo: 'Fallidos', numero: backups.filter(b => b.estado === 'Fallido' || b.estado === 'Error').length, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
           { titulo: 'Automáticos', numero: backups.filter(b => b.tipo === 'Automatico' || b.tipo === 'Automático').length, icon: <RefreshCw className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Este Mes', numero: stats.backupsEsteMes, icon: <Calendar className="w-5 h-5" />, color: 'cyan', subtitulo: stats.ultimoBackup ? `Último: ${formatDate(stats.ultimoBackup)}` : 'Sin respaldos' },
+          { titulo: 'Tamaño Total', numero: formatSize(stats.tamanoTotal), icon: <HardDrive className="w-5 h-5" />, color: 'purpura' },
         ]}
       />
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Archive className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Total Respaldos</p>
-                <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Este Mes</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.backupsEsteMes}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Último Respaldo</p>
-                <p className="text-sm font-bold text-green-600">
-                  {stats.ultimoBackup ? formatDate(stats.ultimoBackup) : 'Sin respaldos'}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                <HardDrive className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Tamaño Total</p>
-                <p className="text-2xl font-bold text-amber-600">{formatSize(stats.tamanoTotal)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Auto Backup Status & Quick Actions */}
       <Card>
         <CardContent className="p-4">

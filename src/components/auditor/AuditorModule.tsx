@@ -32,7 +32,6 @@ import {
   Shield, 
   Activity, 
   AlertTriangle, 
-  FileSearch, 
   Download,
   FileText,
   Eye,
@@ -367,69 +366,15 @@ export function AuditorModule() {
   return (
     <div className="space-y-6">
       <TableroIndicadores
+        columnas={5}
         cards={[
           { titulo: 'Total Logs', numero: stats.total, icon: <History className="w-5 h-5" />, color: 'primary' },
           { titulo: 'Hoy', numero: stats.accionesHoy, icon: <Calendar className="w-5 h-5" />, color: 'azul' },
           { titulo: 'Esta Semana', numero: stats.accionesSemana, icon: <CalendarDays className="w-5 h-5" />, color: 'verde' },
           { titulo: 'Usuarios Activos', numero: usuariosActivosCount, icon: <Users className="w-5 h-5" />, color: 'purpura' },
+          { titulo: 'Errores Recientes', numero: stats.erroresRecientes.length, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
         ]}
       />
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Acciones Hoy</p>
-                <p className="text-2xl font-bold text-slate-800">{stats.accionesHoy}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <Calendar className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Esta Semana</p>
-                <p className="text-2xl font-bold text-green-600">{stats.accionesSemana}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <FileSearch className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Total Registros</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.total}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-500 font-semibold uppercase">Errores Recientes</p>
-                <p className="text-2xl font-bold text-red-600">{stats.erroresRecientes.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Acciones por Módulo Chart */}
       {stats.accionesPorModulo.length > 0 && (
         <Card>
