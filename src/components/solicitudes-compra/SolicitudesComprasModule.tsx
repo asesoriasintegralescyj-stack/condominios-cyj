@@ -106,7 +106,23 @@ const etapaColors: Record<string, string> = {
   'Aprobada Admin': 'bg-green-100 text-green-800 border-green-200',
   'Rechazada Supervisor': 'bg-red-100 text-red-800 border-red-200',
   'Rechazada Admin': 'bg-red-200 text-red-900 border-red-300',
+  // Nuevas etapas
+  'Sin etapa': 'bg-slate-100 text-slate-600 border-slate-200',
+  'Presupuesto': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Coordinación con Proveedor': 'bg-purple-100 text-purple-700 border-purple-200',
+  'Estudio de Materiales': 'bg-amber-100 text-amber-700 border-amber-200',
+  'Preparación de Compra': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+  'Completado': 'bg-green-100 text-green-700 border-green-200',
 }
+
+const ETAPAS_SELECT = [
+  'Sin etapa',
+  'Presupuesto',
+  'Coordinación con Proveedor',
+  'Estudio de Materiales',
+  'Preparación de Compra',
+  'Completado',
+]
 
 const prioridadColors: Record<string, string> = {
   Baja: 'bg-green-100 text-green-700',
@@ -530,7 +546,7 @@ export function SolicitudesComprasModule() {
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Título</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
-                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Etapa Aprob.</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Etapa</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Total</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fecha</th>
@@ -569,9 +585,40 @@ export function SolicitudesComprasModule() {
                         </Badge>
                       </td>
                       <td className="p-3">
-                        <Badge className={etapaColors[s.etapaAprobacion || 'Pendiente Supervisor'] || 'bg-slate-100'} variant="outline">
-                          {s.etapaAprobacion || 'Pendiente Supervisor'}
-                        </Badge>
+                        <select
+                          value={(() => {
+                            const etapa = s.etapaAprobacion || 'Sin etapa'
+                            // Mapear etapas viejas a nuevas
+                            if (etapa === 'Pendiente Supervisor') return 'Presupuesto'
+                            if (etapa === 'Aprobada Supervisor') return 'Coordinación con Proveedor'
+                            if (etapa === 'Aprobada Admin') return 'Completado'
+                            if (etapa && etapa.startsWith('Rechazada')) return 'Sin etapa'
+                            return ETAPAS_SELECT.includes(etapa) ? etapa : 'Sin etapa'
+                          })()}
+                          onChange={async (e) => {
+                            const nuevaEtapa = e.target.value
+                            try {
+                              const res = await fetch(`/api/solicitudes-compra/${s.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ etapaAprobacion: nuevaEtapa }),
+                              })
+                              if (res.ok) {
+                                toast.success(`Etapa cambiada a: ${nuevaEtapa}`)
+                                fetchSolicitudes()
+                              } else {
+                                toast.error('Error al cambiar etapa')
+                              }
+                            } catch (err) {
+                              toast.error('Error de conexión')
+                            }
+                          }}
+                          className={`text-[10px] font-medium rounded-md border px-1.5 py-1 cursor-pointer ${etapaColors[s.etapaAprobacion || ''] || etapaColors['Sin etapa']}`}
+                        >
+                          {ETAPAS_SELECT.map(etapa => (
+                            <option key={etapa} value={etapa}>{etapa}</option>
+                          ))}
+                        </select>
                       </td>
                       <td className="p-3">
                         <Badge className={prioridadColors[s.prioridad] || 'bg-slate-100'}>

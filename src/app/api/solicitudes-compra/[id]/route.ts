@@ -109,6 +109,7 @@ export async function PUT(request: NextRequest, { params }: Context) {
         : null
     }
     if (totalEstimado !== undefined) data.totalEstimado = totalEstimado
+    if (body.etapaAprobacion !== undefined) data.etapaAprobacion = body.etapaAprobacion || null
 
     const updated = await db.solicitudCompra.update({ where: { id }, data })
 
