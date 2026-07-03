@@ -432,134 +432,229 @@ export function PMIModule() {
     }
   }
 
-  // ===== Imprimir LV individual (formato checklist) =====
+  // ===== Imprimir LV individual (formato checklist con logo) =====
   const imprimirLV = async (lv: LV) => {
     try {
       const { default: jsPDF } = await import('jspdf')
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      // Orientación landscape para tener más ancho y caber en una hoja
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
       const pageWidth = doc.internal.pageSize.getWidth()
       const pageHeight = doc.internal.pageSize.getHeight()
-      let y = 15
+      let y = 8
 
-      // Header corporativo
+      // ===== Cargar logo desde /logo.png =====
+      let logoDataUrl: string | null = null
+      try {
+        const logoRes = await fetch('/logo.png')
+        if (logoRes.ok) {
+          const blob = await logoRes.blob()
+          logoDataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+        }
+      } catch {}
+
+      // ===== Header corporativo =====
       doc.setFillColor(15, 32, 68)
-      doc.rect(0, 0, pageWidth, 22, 'F')
+      doc.rect(0, 0, pageWidth, 18, 'F')
+
+      // Logo en esquina superior derecha (dentro del header azul)
+      if (logoDataUrl) {
+        try {
+          // Logo blanco sobre fondo azul: usar formato PNG con fondo transparente/blanco
+          // Tamaño: 30mm de ancho, proporcional
+          const logoW = 30
+          const logoH = 12
+          doc.addImage(logoDataUrl, 'PNG', pageWidth - logoW - 5, 3, logoW, logoH)
+        } catch (e) {
+          console.warn('No se pudo agregar el logo:', e)
+        }
+      }
+
       doc.setTextColor(255, 255, 255)
-      doc.setFontSize(13)
-      doc.setFont('helvetica', 'bold')
-      doc.text('ASESORÍAS INTEGRALES CyJ', 10, 9)
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'normal')
-      doc.text('Condominio Laguna Norte | Lampa, Santiago', 10, 15)
       doc.setFontSize(11)
       doc.setFont('helvetica', 'bold')
-      doc.text(lv.codigo, pageWidth - 10, 9, { align: 'right' })
-      doc.setFontSize(8)
+      doc.text('ASESORÍAS INTEGRALES CyJ', 8, 7)
+      doc.setFontSize(7)
       doc.setFont('helvetica', 'normal')
-      doc.text(`Versión 1.0 | ${new Date().getFullYear()}`, pageWidth - 10, 15, { align: 'right' })
-      doc.setTextColor(0, 0, 0)
-      y += 14
-
-      // Título de la LV
-      doc.setFontSize(12)
-      doc.setFont('helvetica', 'bold')
-      doc.text(lv.nombre, pageWidth / 2, y, { align: 'center' })
-      y += 6
-
-      // Info sector / frecuencia / responsable
+      doc.text('Condominio Laguna Norte · Lampa, Santiago · Gestión Profesional de Condominios', 8, 12)
       doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text(lv.codigo, pageWidth / 2, 7, { align: 'center' })
+      doc.setFontSize(6)
       doc.setFont('helvetica', 'normal')
-      doc.text(`Sector: ${lv.sector}`, 10, y)
-      doc.text(`Frecuencia: ${lv.frecuencia}`, 10, y + 4)
-      doc.text(`Responsable: ${lv.responsable}`, 10, y + 8)
-      doc.text(`Fecha: ${formatFechaLarga(fechaSeleccionada)}`, pageWidth - 10, y, { align: 'right' })
-      doc.text(`Turno: ____________`, pageWidth - 10, y + 4, { align: 'right' })
-      doc.text(`Hora: ____________`, pageWidth - 10, y + 8, { align: 'right' })
-      y += 14
+      doc.text(`Versión 1.0 | ${new Date().getFullYear()}`, pageWidth / 2, 12, { align: 'center' })
+      doc.setTextColor(0, 0, 0)
+      y = 22
+
+      // ===== Título de la LV (en dos líneas si es necesario) =====
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 32, 68)
+      const tituloLines = doc.splitTextToSize(lv.nombre, pageWidth - 20)
+      doc.text(tituloLines, pageWidth / 2, y, { align: 'center' })
+      y += tituloLines.length * 4 + 1
+      doc.setTextColor(0, 0, 0)
+
+      // ===== Info en una sola línea compacta =====
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'normal')
+      const fechaCorta = fechaSeleccionada.split('-').reverse().join('/')
+      const infoLine = `Sector: ${lv.sector}   |   Frecuencia: ${lv.frecuencia}   |   Responsable: ${lv.responsable}   |   Fecha: ${fechaCorta}   |   Turno: __________   |   Hora: __________`
+      const infoLines = doc.splitTextToSize(infoLine, pageWidth - 20)
+      doc.text(infoLines, pageWidth / 2, y, { align: 'center' })
+      y += infoLines.length * 3.5 + 2
 
       // Línea separadora
       doc.setDrawColor(15, 32, 68)
-      doc.setLineWidth(0.5)
-      doc.line(10, y, pageWidth - 10, y)
-      y += 5
-
-      // Secciones e items
-      for (const seccion of lv.items) {
-        if (y > pageHeight - 30) {
-          doc.addPage()
-          y = 15
-        }
-        // Título de sección
-        doc.setFillColor(241, 245, 249)
-        doc.rect(10, y - 3, pageWidth - 20, 6, 'F')
-        doc.setFontSize(9)
-        doc.setFont('helvetica', 'bold')
-        doc.setTextColor(15, 32, 68)
-        doc.text(`${seccion.seccion}. ${seccion.titulo}`, 12, y + 1)
-        doc.setTextColor(0, 0, 0)
-        y += 6
-
-        // Items con checkboxes
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(9)
-        for (const item of seccion.items) {
-          if (y > pageHeight - 20) {
-            doc.addPage()
-            y = 15
-          }
-          // Checkbox ☐
-          doc.setDrawColor(100, 100, 100)
-          doc.setLineWidth(0.3)
-          doc.rect(12, y - 3, 4, 4)
-          // Texto del item
-          const lines = doc.splitTextToSize(item, pageWidth - 35)
-          doc.text(lines, 18, y)
-          y += Math.max(5, lines.length * 4 + 1)
-        }
-        y += 3
-      }
-
-      // Observaciones
-      if (y > pageHeight - 40) {
-        doc.addPage()
-        y = 15
-      }
+      doc.setLineWidth(0.4)
+      doc.line(8, y, pageWidth - 8, y)
       y += 3
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'bold')
-      doc.text('Observaciones / Acciones Correctivas:', 10, y)
-      y += 5
-      doc.setDrawColor(150, 150, 150)
-      doc.setLineWidth(0.2)
-      for (let i = 0; i < 4; i++) {
-        doc.line(10, y, pageWidth - 10, y)
+
+      // ===== Calcular dimensiones para tabla de checklist =====
+      // Columnas: Ítem (ancho grande) | OK | NO OK | N/A | Observación
+      const colItemX = 8
+      const colItemW = pageWidth * 0.55 // 55% del ancho para el ítem
+      const colOkX = colItemX + colItemW
+      const colOkW = 15
+      const colNoOkX = colOkX + colOkW
+      const colNoOkW = 15
+      const colNaX = colNoOkX + colNoOkW
+      const colNaW = 12
+      const colObsX = colNaX + colNaW
+      const colObsW = pageWidth - colObsX - 8
+
+      // Función para dibujar header de columnas
+      const drawColHeader = () => {
+        doc.setFillColor(15, 32, 68)
+        doc.rect(colItemX, y - 3, colItemW, 5, 'F')
+        doc.rect(colOkX, y - 3, colOkW, 5, 'F')
+        doc.rect(colNoOkX, y - 3, colNoOkW, 5, 'F')
+        doc.rect(colNaX, y - 3, colNaW, 5, 'F')
+        doc.rect(colObsX, y - 3, colObsW, 5, 'F')
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(6)
+        doc.setFont('helvetica', 'bold')
+        doc.text('ÍTEM DE VERIFICACIÓN', colItemX + 1, y + 0.5)
+        doc.text('OK', colOkX + colOkW / 2, y + 0.5, { align: 'center' })
+        doc.text('NO OK', colNoOkX + colNoOkW / 2, y + 0.5, { align: 'center' })
+        doc.text('N/A', colNaX + colNaW / 2, y + 0.5, { align: 'center' })
+        doc.text('OBSERVACIÓN', colObsX + 1, y + 0.5)
+        doc.setTextColor(0, 0, 0)
         y += 5
       }
 
-      // Firmas
-      if (y > pageHeight - 30) {
-        doc.addPage()
-        y = 15
+      drawColHeader()
+
+      // ===== Secciones e items con checklist =====
+      doc.setFontSize(7)
+      for (const seccion of lv.items) {
+        // Verificar si quedaba poco espacio para la sección + al menos un ítem
+        if (y > pageHeight - 25) {
+          doc.addPage()
+          y = 8
+          drawColHeader()
+        }
+
+        // Fila de título de sección
+        doc.setFillColor(241, 245, 249)
+        doc.rect(colItemX, y - 3, pageWidth - 16, 4.5, 'F')
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 68)
+        doc.setFontSize(7)
+        doc.text(`${seccion.seccion}. ${seccion.titulo}`, colItemX + 1, y + 0.3)
+        doc.setTextColor(0, 0, 0)
+        y += 5
+
+        // Items
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(6.5)
+        for (const item of seccion.items) {
+          if (y > pageHeight - 15) {
+            doc.addPage()
+            y = 8
+            drawColHeader()
+          }
+
+          // Calcular alto de la fila según el texto
+          const itemLines = doc.splitTextToSize(item, colItemW - 3)
+          const rowH = Math.max(4.5, itemLines.length * 3 + 1.5)
+
+          // Bordes de la fila (líneas sutiles)
+          doc.setDrawColor(220, 220, 220)
+          doc.setLineWidth(0.1)
+          doc.line(colItemX, y - 3 + rowH, pageWidth - 8, y - 3 + rowH)
+          doc.line(colOkX, y - 3, colOkX, y - 3 + rowH)
+          doc.line(colNoOkX, y - 3, colNoOkX, y - 3 + rowH)
+          doc.line(colNaX, y - 3, colNaX, y - 3 + rowH)
+          doc.line(colObsX, y - 3, colObsX, y - 3 + rowH)
+
+          // Texto del ítem
+          doc.text(itemLines, colItemX + 1, y - 1)
+
+          // Casillas de verificación (cuadros vacíos para marcar a mano)
+          doc.setDrawColor(80, 80, 80)
+          doc.setLineWidth(0.3)
+          const boxSize = 3.5
+          // OK
+          doc.rect(colOkX + (colOkW - boxSize) / 2, y - 3 + (rowH - boxSize) / 2, boxSize, boxSize)
+          // NO OK
+          doc.rect(colNoOkX + (colNoOkW - boxSize) / 2, y - 3 + (rowH - boxSize) / 2, boxSize, boxSize)
+          // N/A
+          doc.rect(colNaX + (colNaW - boxSize) / 2, y - 3 + (rowH - boxSize) / 2, boxSize, boxSize)
+
+          y += rowH
+        }
+        y += 1.5
       }
-      y += 10
+
+      // ===== Observaciones (compacto, 2 líneas) =====
+      if (y > pageHeight - 20) {
+        doc.addPage()
+        y = 8
+      }
+      y += 2
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 32, 68)
+      doc.text('Observaciones / Acciones Correctivas:', 8, y)
+      doc.setTextColor(0, 0, 0)
+      y += 3
+      doc.setDrawColor(150, 150, 150)
+      doc.setLineWidth(0.2)
+      for (let i = 0; i < 2; i++) {
+        doc.line(8, y, pageWidth - 8, y)
+        y += 4
+      }
+      y += 3
+
+      // ===== Firmas (compacto) =====
+      if (y > pageHeight - 15) {
+        doc.addPage()
+        y = 8
+      }
+      const firmY = Math.max(y + 5, pageHeight - 18)
       doc.setDrawColor(0, 0, 0)
       doc.setLineWidth(0.3)
-      doc.line(20, y, 90, y)
-      doc.line(pageWidth - 90, y, pageWidth - 20, y)
-      doc.setFontSize(8)
+      doc.line(20, firmY, 110, firmY)
+      doc.line(pageWidth - 110, firmY, pageWidth - 20, firmY)
+      doc.setFontSize(6.5)
       doc.setFont('helvetica', 'normal')
-      doc.text('Operario Responsable', 55, y + 4, { align: 'center' })
-      doc.text('Supervisor / Jefe de Mantenimiento', pageWidth - 55, y + 4, { align: 'center' })
-      doc.text('Nombre | Firma | RUT | Fecha', 55, y + 8, { align: 'center' })
-      doc.text('Nombre | Firma | RUT | Fecha', pageWidth - 55, y + 8, { align: 'center' })
+      doc.text('Operario Responsable', 65, firmY + 3, { align: 'center' })
+      doc.text('Supervisor / Jefe de Mantenimiento', pageWidth - 65, firmY + 3, { align: 'center' })
+      doc.text('Nombre · Firma · RUT · Fecha', 65, firmY + 6, { align: 'center' })
+      doc.text('Nombre · Firma · RUT · Fecha', pageWidth - 65, firmY + 6, { align: 'center' })
 
-      // Footer
-      doc.setFontSize(7)
+      // ===== Footer =====
+      doc.setFontSize(6)
       doc.setTextColor(120, 120, 120)
       doc.text(
-        `Elaborado por Asesorías Integrales CyJ | Uso Interno | Generado el ${new Date().toLocaleString('es-CL')}`,
+        `Elaborado por Asesorías Integrales CyJ · Uso Interno · Generado el ${new Date().toLocaleString('es-CL')}`,
         pageWidth / 2,
-        pageHeight - 5,
+        pageHeight - 3,
         { align: 'center' },
       )
 
