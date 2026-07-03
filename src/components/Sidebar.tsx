@@ -72,6 +72,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
     section: 'Principal',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-4 h-4" /> },
+      { id: 'pmi', label: 'PMI', icon: <ClipboardCheck className="w-4 h-4" /> },
       { id: 'notificaciones', label: 'Notificaciones', icon: <Bell className="w-4 h-4" /> },
     ]
   },
@@ -84,7 +85,6 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'proyectos', label: 'Proyectos', icon: <DraftingCompass className="w-4 h-4" /> },
       { id: 'inspecciones', label: 'Inspecciones', icon: <Search className="w-4 h-4" /> },
       { id: 'rondas', label: 'Rondas', icon: <QrCode className="w-4 h-4" /> },
-      { id: 'pmi', label: 'PMI', icon: <ClipboardCheck className="w-4 h-4" /> },
       { id: 'personal', label: 'Personal', icon: <User className="w-4 h-4" /> },
       { id: 'asistencia', label: 'Control Asistencia', icon: <Calendar className="w-4 h-4" /> },
       { id: 'activos', label: 'Activos', icon: <Package className="w-4 h-4" /> },

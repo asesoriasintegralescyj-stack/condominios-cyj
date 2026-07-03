@@ -29,6 +29,13 @@ import {
   User,
   MapPin,
   Clock,
+  Printer,
+  Pencil,
+  CheckCheck,
+  RotateCcw,
+  X,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSession } from '@/hooks/use-session'
@@ -138,6 +145,14 @@ export function PMIModule() {
   const [itemsCompletados, setItemsCompletados] = useState<Set<string>>(new Set())
   const [observaciones, setObservaciones] = useState('')
   const [guardandoRegistro, setGuardandoRegistro] = useState(false)
+
+  // Dialog de edición de LV
+  const [lvEditando, setLvEditando] = useState<LV | null>(null)
+  const [dialogEditarOpen, setDialogEditarOpen] = useState(false)
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false)
+
+  // Operación masiva
+  const [procesandoMasivo, setProcesandoMasivo] = useState(false)
 
   // Cargar LVs (para el dialog)
   const cargarLvs = useCallback(async () => {
@@ -334,6 +349,320 @@ export function PMIModule() {
       console.error(e)
       toast.error('Error de conexión')
     }
+  }
+
+  // ===== Marcar/desmarcar como pendiente una LV individual =====
+  const desmarcarLV = async (lvCal: LVCalendario) => {
+    const registro = registrosDelDia.find(r => r.lvId === lvCal.id)
+    if (!registro) {
+      toast.info('Esta LV no tiene registro para desmarcar')
+      return
+    }
+    try {
+      const res = await fetch(`/api/pmi/registros/${registro.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'Pendiente' }),
+      })
+      if (res.ok) {
+        toast.success(`${lvCal.codigo} marcada como pendiente`)
+        await cargarCalendario()
+      } else {
+        toast.error('Error al desmarcar')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Error de conexión')
+    }
+  }
+
+  // ===== Operación masiva: marcar todas como completadas =====
+  const marcarTodasCompletadas = async () => {
+    if (lvsDelDia.length === 0) return
+    setProcesandoMasivo(true)
+    try {
+      const res = await fetch('/api/pmi/registros/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: fechaSeleccionada,
+          accion: 'completar',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.afectados} LVs marcadas como completadas`)
+        await cargarCalendario()
+      } else {
+        toast.error(data.error || 'Error en operación masiva')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Error de conexión')
+    } finally {
+      setProcesandoMasivo(false)
+    }
+  }
+
+  // ===== Operación masiva: marcar todas como pendientes =====
+  const marcarTodasPendientes = async () => {
+    if (lvsDelDia.length === 0) return
+    setProcesandoMasivo(true)
+    try {
+      const res = await fetch('/api/pmi/registros/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fecha: fechaSeleccionada,
+          accion: 'desmarcar',
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`${data.afectados} LVs marcadas como pendientes`)
+        await cargarCalendario()
+      } else {
+        toast.error(data.error || 'Error en operación masiva')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Error de conexión')
+    } finally {
+      setProcesandoMasivo(false)
+    }
+  }
+
+  // ===== Imprimir LV individual (formato checklist) =====
+  const imprimirLV = async (lv: LV) => {
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+      let y = 15
+
+      // Header corporativo
+      doc.setFillColor(15, 32, 68)
+      doc.rect(0, 0, pageWidth, 22, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('ASESORÍAS INTEGRALES CyJ', 10, 9)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Condominio Laguna Norte | Lampa, Santiago', 10, 15)
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.text(lv.codigo, pageWidth - 10, 9, { align: 'right' })
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Versión 1.0 | ${new Date().getFullYear()}`, pageWidth - 10, 15, { align: 'right' })
+      doc.setTextColor(0, 0, 0)
+      y += 14
+
+      // Título de la LV
+      doc.setFontSize(12)
+      doc.setFont('helvetica', 'bold')
+      doc.text(lv.nombre, pageWidth / 2, y, { align: 'center' })
+      y += 6
+
+      // Info sector / frecuencia / responsable
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Sector: ${lv.sector}`, 10, y)
+      doc.text(`Frecuencia: ${lv.frecuencia}`, 10, y + 4)
+      doc.text(`Responsable: ${lv.responsable}`, 10, y + 8)
+      doc.text(`Fecha: ${formatFechaLarga(fechaSeleccionada)}`, pageWidth - 10, y, { align: 'right' })
+      doc.text(`Turno: ____________`, pageWidth - 10, y + 4, { align: 'right' })
+      doc.text(`Hora: ____________`, pageWidth - 10, y + 8, { align: 'right' })
+      y += 14
+
+      // Línea separadora
+      doc.setDrawColor(15, 32, 68)
+      doc.setLineWidth(0.5)
+      doc.line(10, y, pageWidth - 10, y)
+      y += 5
+
+      // Secciones e items
+      for (const seccion of lv.items) {
+        if (y > pageHeight - 30) {
+          doc.addPage()
+          y = 15
+        }
+        // Título de sección
+        doc.setFillColor(241, 245, 249)
+        doc.rect(10, y - 3, pageWidth - 20, 6, 'F')
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(15, 32, 68)
+        doc.text(`${seccion.seccion}. ${seccion.titulo}`, 12, y + 1)
+        doc.setTextColor(0, 0, 0)
+        y += 6
+
+        // Items con checkboxes
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(9)
+        for (const item of seccion.items) {
+          if (y > pageHeight - 20) {
+            doc.addPage()
+            y = 15
+          }
+          // Checkbox ☐
+          doc.setDrawColor(100, 100, 100)
+          doc.setLineWidth(0.3)
+          doc.rect(12, y - 3, 4, 4)
+          // Texto del item
+          const lines = doc.splitTextToSize(item, pageWidth - 35)
+          doc.text(lines, 18, y)
+          y += Math.max(5, lines.length * 4 + 1)
+        }
+        y += 3
+      }
+
+      // Observaciones
+      if (y > pageHeight - 40) {
+        doc.addPage()
+        y = 15
+      }
+      y += 3
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Observaciones / Acciones Correctivas:', 10, y)
+      y += 5
+      doc.setDrawColor(150, 150, 150)
+      doc.setLineWidth(0.2)
+      for (let i = 0; i < 4; i++) {
+        doc.line(10, y, pageWidth - 10, y)
+        y += 5
+      }
+
+      // Firmas
+      if (y > pageHeight - 30) {
+        doc.addPage()
+        y = 15
+      }
+      y += 10
+      doc.setDrawColor(0, 0, 0)
+      doc.setLineWidth(0.3)
+      doc.line(20, y, 90, y)
+      doc.line(pageWidth - 90, y, pageWidth - 20, y)
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Operario Responsable', 55, y + 4, { align: 'center' })
+      doc.text('Supervisor / Jefe de Mantenimiento', pageWidth - 55, y + 4, { align: 'center' })
+      doc.text('Nombre | Firma | RUT | Fecha', 55, y + 8, { align: 'center' })
+      doc.text('Nombre | Firma | RUT | Fecha', pageWidth - 55, y + 8, { align: 'center' })
+
+      // Footer
+      doc.setFontSize(7)
+      doc.setTextColor(120, 120, 120)
+      doc.text(
+        `Elaborado por Asesorías Integrales CyJ | Uso Interno | Generado el ${new Date().toLocaleString('es-CL')}`,
+        pageWidth / 2,
+        pageHeight - 5,
+        { align: 'center' },
+      )
+
+      // Abrir diálogo de impresión
+      doc.autoPrint()
+      const blobUrl = doc.output('bloburl') as unknown as string
+      window.open(blobUrl, '_blank')
+      toast.success(`Preparando impresión de ${lv.codigo}`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al generar PDF para impresión')
+    }
+  }
+
+  // ===== Abrir dialog de edición de LV =====
+  const abrirEdicion = (lv: LV) => {
+    setLvEditando(JSON.parse(JSON.stringify(lv))) // clon profundo
+    setDialogEditarOpen(true)
+  }
+
+  // ===== Guardar edición de LV =====
+  const guardarEdicion = async () => {
+    if (!lvEditando) return
+    setGuardandoEdicion(true)
+    try {
+      const res = await fetch(`/api/pmi/${lvEditando.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigo: lvEditando.codigo,
+          nombre: lvEditando.nombre,
+          sector: lvEditando.sector,
+          frecuencia: lvEditando.frecuencia,
+          responsable: lvEditando.responsable,
+          personalRequerido: lvEditando.personalRequerido,
+          descripcion: lvEditando.descripcion,
+          items: lvEditando.items,
+          activa: lvEditando.activa,
+        }),
+      })
+      if (res.ok) {
+        toast.success(`${lvEditando.codigo} actualizada`)
+        setDialogEditarOpen(false)
+        setLvEditando(null)
+        await cargarLvs()
+        await cargarCalendario()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error(data.error || 'Error al guardar')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error('Error de conexión')
+    } finally {
+      setGuardandoEdicion(false)
+    }
+  }
+
+  // ===== Helpers de edición de items =====
+  const editarItem = (sIdx: number, iIdx: number, valor: string) => {
+    if (!lvEditando) return
+    const nuevo = { ...lvEditando, items: [...lvEditando.items] }
+    nuevo.items[sIdx] = { ...nuevo.items[sIdx], items: [...nuevo.items[sIdx].items] }
+    nuevo.items[sIdx].items[iIdx] = valor
+    setLvEditando(nuevo)
+  }
+
+  const eliminarItem = (sIdx: number, iIdx: number) => {
+    if (!lvEditando) return
+    const nuevo = { ...lvEditando, items: [...lvEditando.items] }
+    nuevo.items[sIdx] = { ...nuevo.items[sIdx], items: nuevo.items[sIdx].items.filter((_, i) => i !== iIdx) }
+    setLvEditando(nuevo)
+  }
+
+  const agregarItem = (sIdx: number) => {
+    if (!lvEditando) return
+    const nuevo = { ...lvEditando, items: [...lvEditando.items] }
+    nuevo.items[sIdx] = { ...nuevo.items[sIdx], items: [...nuevo.items[sIdx].items, 'Nuevo ítem'] }
+    setLvEditando(nuevo)
+  }
+
+  const editarTituloSeccion = (sIdx: number, valor: string) => {
+    if (!lvEditando) return
+    const nuevo = { ...lvEditando, items: [...lvEditando.items] }
+    nuevo.items[sIdx] = { ...nuevo.items[sIdx], titulo: valor }
+    setLvEditando(nuevo)
+  }
+
+  const agregarSeccion = () => {
+    if (!lvEditando) return
+    const nuevaLetra = String.fromCharCode(65 + lvEditando.items.length) // A, B, C, ...
+    setLvEditando({
+      ...lvEditando,
+      items: [...lvEditando.items, { seccion: nuevaLetra, titulo: 'Nueva sección', items: ['Nuevo ítem'] }],
+    })
+  }
+
+  const eliminarSeccion = (sIdx: number) => {
+    if (!lvEditando) return
+    setLvEditando({
+      ...lvEditando,
+      items: lvEditando.items.filter((_, i) => i !== sIdx),
+    })
   }
 
   const exportarPDFDia = async () => {
@@ -618,10 +947,42 @@ export function PMIModule() {
         {/* ===== Panel del día seleccionado (2/5 = 40%) ===== */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {fechaSeleccionada === TODAY_STR ? 'Hoy - ' : ''}
-              {formatFechaLarga(fechaSeleccionada)}
-            </CardTitle>
+            <div className="flex items-start justify-between gap-2">
+              <CardTitle className="text-base">
+                {fechaSeleccionada === TODAY_STR ? 'Hoy - ' : ''}
+                {formatFechaLarga(fechaSeleccionada)}
+              </CardTitle>
+              {lvsDelDia.length > 0 && (
+                <div className="flex gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={marcarTodasCompletadas}
+                    disabled={procesandoMasivo}
+                    className="h-7 text-[10px] bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                    title="Marcar todas las LVs del día como completadas"
+                  >
+                    {procesandoMasivo ? (
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    ) : (
+                      <CheckCheck className="w-3 h-3 mr-1" />
+                    )}
+                    Todas OK
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={marcarTodasPendientes}
+                    disabled={procesandoMasivo}
+                    className="h-7 text-[10px] bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                    title="Marcar todas las LVs del día como pendientes"
+                  >
+                    <RotateCcw className="w-3 h-3 mr-1" />
+                    Todas Pend.
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="max-h-[600px] overflow-y-auto">
             {lvsDelDia.length === 0 ? (
@@ -634,6 +995,7 @@ export function PMIModule() {
                 {lvsDelDia.map(lv => {
                   const registro = registrosDelDia.find(r => r.lvId === lv.id)
                   const completada = registro?.estado === 'Completado'
+                  const lvCompleta = lvs.find(l => l.id === lv.id)
                   return (
                     <div
                       key={lv.id}
@@ -645,7 +1007,7 @@ export function PMIModule() {
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="text-xs font-bold text-[#0f2044] font-mono">
                               {lv.codigo}
                             </span>
@@ -685,7 +1047,7 @@ export function PMIModule() {
                         )}
                       </div>
 
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-1.5 flex-wrap">
                         <Button
                           size="sm"
                           variant="outline"
@@ -693,16 +1055,49 @@ export function PMIModule() {
                           className="h-7 text-[11px] flex-1"
                         >
                           <Eye className="w-3 h-3 mr-1" />
-                          Ver detalles
+                          Detalles
                         </Button>
-                        {!completada && (
+                        {lvCompleta && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => imprimirLV(lvCompleta)}
+                            className="h-7 text-[11px] px-2"
+                            title="Imprimir LV en formato checklist"
+                          >
+                            <Printer className="w-3 h-3" />
+                          </Button>
+                        )}
+                        {lvCompleta && esAdmin && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => abrirEdicion(lvCompleta)}
+                            className="h-7 text-[11px] px-2"
+                            title="Editar LV"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </Button>
+                        )}
+                        {!completada ? (
                           <Button
                             size="sm"
                             onClick={() => marcarCompletadaRapido(lv)}
                             className="h-7 text-[11px] bg-green-600 hover:bg-green-700"
                           >
                             <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Marcar OK
+                            OK
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => desmarcarLV(lv)}
+                            className="h-7 text-[11px] bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                            title="Marcar como pendiente"
+                          >
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Desmarcar
                           </Button>
                         )}
                       </div>
@@ -719,13 +1114,44 @@ export function PMIModule() {
       <Dialog open={dialogDetalleOpen} onOpenChange={setDialogDetalleOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="font-mono text-[#0f2044]">{lvDetalle?.codigo}</span>
-              <span className="text-base font-semibold">{lvDetalle?.nombre}</span>
-            </DialogTitle>
-            <DialogDescription>
-              {lvDetalle?.sector} · {lvDetalle?.frecuencia} · Responsable: {lvDetalle?.responsable}
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="flex items-center gap-2">
+                  <span className="font-mono text-[#0f2044]">{lvDetalle?.codigo}</span>
+                  <span className="text-base font-semibold">{lvDetalle?.nombre}</span>
+                </DialogTitle>
+                <DialogDescription>
+                  {lvDetalle?.sector} · {lvDetalle?.frecuencia} · Responsable: {lvDetalle?.responsable}
+                </DialogDescription>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                {lvDetalle && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => imprimirLV(lvDetalle)}
+                    title="Imprimir LV"
+                  >
+                    <Printer className="w-4 h-4 mr-1" />
+                    Imprimir
+                  </Button>
+                )}
+                {lvDetalle && esAdmin && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      abrirEdicion(lvDetalle)
+                      setDialogDetalleOpen(false)
+                    }}
+                    title="Editar LV"
+                  >
+                    <Pencil className="w-4 h-4 mr-1" />
+                    Editar
+                  </Button>
+                )}
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto space-y-4 py-2">
@@ -810,6 +1236,186 @@ export function PMIModule() {
                 <Save className="w-4 h-4 mr-2" />
               )}
               Guardar registro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Dialog de edición de LV ===== */}
+      <Dialog open={dialogEditarOpen} onOpenChange={setDialogEditarOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-4 h-4 text-[#0f2044]" />
+              <span className="font-mono text-[#0f2044]">{lvEditando?.codigo}</span>
+              <span className="text-base font-semibold">Editar LV</span>
+            </DialogTitle>
+            <DialogDescription>
+              Modifique los campos y los ítems de verificación. Los cambios se aplican inmediatamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {lvEditando && (
+            <div className="flex-1 overflow-y-auto space-y-4 py-2">
+              {/* Campos principales */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-md">
+                <div>
+                  <Label className="text-xs">Código</Label>
+                  <input
+                    type="text"
+                    value={lvEditando.codigo}
+                    onChange={e => setLvEditando({ ...lvEditando, codigo: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Nombre</Label>
+                  <input
+                    type="text"
+                    value={lvEditando.nombre}
+                    onChange={e => setLvEditando({ ...lvEditando, nombre: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Sector</Label>
+                  <input
+                    type="text"
+                    value={lvEditando.sector}
+                    onChange={e => setLvEditando({ ...lvEditando, sector: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Frecuencia</Label>
+                  <select
+                    value={lvEditando.frecuencia}
+                    onChange={e => setLvEditando({ ...lvEditando, frecuencia: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md bg-white"
+                  >
+                    {['Diaria', 'Semanal', 'Quincenal', 'Mensual', 'Trimestral', 'Semestral', 'Anual'].map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">Responsable</Label>
+                  <input
+                    type="text"
+                    value={lvEditando.responsable}
+                    onChange={e => setLvEditando({ ...lvEditando, responsable: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Personal requerido</Label>
+                  <input
+                    type="text"
+                    value={lvEditando.personalRequerido || ''}
+                    onChange={e => setLvEditando({ ...lvEditando, personalRequerido: e.target.value })}
+                    className="mt-1 w-full px-2 py-1.5 text-sm border border-slate-200 rounded-md"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-xs">Descripción</Label>
+                  <Textarea
+                    value={lvEditando.descripcion || ''}
+                    onChange={e => setLvEditando({ ...lvEditando, descripcion: e.target.value })}
+                    rows={2}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Secciones e items editables */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-slate-700">
+                    Secciones de verificación ({lvEditando.items.length})
+                  </h4>
+                  <Button size="sm" variant="outline" onClick={agregarSeccion} className="h-7 text-xs">
+                    <Plus className="w-3 h-3 mr-1" />
+                    Agregar sección
+                  </Button>
+                </div>
+
+                {lvEditando.items.map((seccion, sIdx) => (
+                  <div key={sIdx} className="border border-slate-200 rounded-md">
+                    <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-[#0f2044] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                        {seccion.seccion}
+                      </span>
+                      <input
+                        type="text"
+                        value={seccion.titulo}
+                        onChange={e => editarTituloSeccion(sIdx, e.target.value)}
+                        className="flex-1 px-2 py-1 text-sm font-semibold border border-slate-200 rounded bg-white"
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => eliminarSeccion(sIdx)}
+                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
+                        title="Eliminar sección"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <div className="p-3 space-y-1.5">
+                      {seccion.items.map((item, iIdx) => (
+                        <div key={iIdx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={item}
+                            onChange={e => editarItem(sIdx, iIdx, e.target.value)}
+                            className="flex-1 px-2 py-1 text-sm border border-slate-200 rounded"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => eliminarItem(sIdx, iIdx)}
+                            className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
+                            title="Eliminar ítem"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => agregarItem(sIdx)}
+                        className="h-7 text-xs text-blue-600 hover:bg-blue-50"
+                      >
+                        <Plus className="w-3 h-3 mr-1" />
+                        Agregar ítem
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogEditarOpen(false)}
+              disabled={guardandoEdicion}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={guardarEdicion}
+              disabled={guardandoEdicion}
+              className="bg-[#0f2044] hover:bg-[#0a1628]"
+            >
+              {guardandoEdicion ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Guardar cambios
             </Button>
           </DialogFooter>
         </DialogContent>
