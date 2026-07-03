@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
+import { generarCorrelativo } from '@/lib/utils'
 
 // GET - List all activos
 export async function GET(request: NextRequest) {
@@ -59,8 +60,16 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
 
+    // Generar código automático si no se proporciona (ACT-001, ACT-002, ...)
+    let codigo = data.codigo || null
+    if (!codigo) {
+      const existentes = await db.activo.findMany({ select: { codigo: true } })
+      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'ACT', 3)
+    }
+
     const activo = await db.activo.create({
       data: {
+        codigo,
         nombre: data.nombre,
         categoria: data.categoria || 'Equipo',
         estado: data.estado || 'Activo',

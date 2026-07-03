@@ -295,6 +295,7 @@ model Personal {
 // ============================================
 model Activo {
   id            String   @id @default(cuid())
+  codigo        String?  @unique // ACT-001, ACT-002, etc.
   nombre        String
   categoria     String   @default("Equipo") // Equipo, Herramienta, Vehículo, Mobiliario, Infraestructura, Tecnología
   estado        String   @default("Activo") // Activo, Inactivo, En Reparación, Dado de Baja

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
+import { generarCorrelativo } from '@/lib/utils'
 
 // GET - List all cat herramientas
 export async function GET() {
@@ -47,10 +48,17 @@ export async function POST(request: NextRequest) {
   }
   try {
     const data = await request.json()
-    
+
+    // Generar código automático si no se proporciona (HERR-001, HERR-002, ...)
+    let codigo = data.codigo || null
+    if (!codigo) {
+      const existentes = await db.catHerramienta.findMany({ select: { codigo: true } })
+      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'HERR', 3)
+    }
+
     const herramienta = await db.catHerramienta.create({
       data: {
-        codigo: data.codigo || null,
+        codigo,
         nombre: data.nombre,
         marca: data.marca || null,
         modelo: data.modelo || null,

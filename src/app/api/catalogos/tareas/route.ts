@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
+import { generarCorrelativo } from '@/lib/utils'
 
 // GET - List all cat tareas
 export async function GET() {
@@ -31,11 +32,25 @@ export async function POST(request: NextRequest) {
   }
   try {
     const data = await request.json()
-    
+
+    // Generar código automático si no se proporciona (TAR-001, TAR-002, ...)
+    let codigo = data.codigo || null
+    if (!codigo) {
+      const existentes = await db.catTarea.findMany({ select: { codigo: true } })
+      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'TAR', 3)
+    }
+
     const tarea = await db.catTarea.create({
       data: {
+        codigo,
         nombre: data.nombre,
         categoria: data.categoria || 'General',
+        sistema: data.sistema || null,
+        tipoMantencion: data.tipoMantencion || 'Preventivo',
+        frecuencia: data.frecuencia || null,
+        responsable: data.responsable || null,
+        tiempoEstimado: parseInt(data.tiempoEstimado) || 0,
+        descripcion: data.descripcion || null,
       }
     })
     

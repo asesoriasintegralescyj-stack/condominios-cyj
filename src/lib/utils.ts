@@ -209,3 +209,30 @@ export function getPrioridadBadgeColor(prioridad: string): string {
   return PRIORIDAD_COLOR[prioridad] || COLORES_SISTEMA.badge.gris
 }
 
+/**
+ * Genera el siguiente correlativo para un modelo.
+ * Busca el último código existente y le suma 1.
+ *
+ * @param existingCodigos - Array de códigos existentes (ej: ['HERR-01', 'HERR-02'])
+ * @param prefix - Prefijo del código (ej: 'HERR', 'MAT', 'TAR', 'ACT')
+ * @param padLength - Cantidad de dígitos (default: 3 → 001, 002, etc.)
+ * @returns El siguiente código (ej: 'HERR-003')
+ */
+export function generarCorrelativo(
+  existingCodigos: (string | null | undefined)[],
+  prefix: string,
+  padLength: number = 3
+): string {
+  let maxNum = 0
+  for (const codigo of existingCodigos) {
+    if (!codigo) continue
+    // Extraer el número del código (ej: 'HERR-015' → 15)
+    const match = codigo.match(new RegExp(`^${prefix}-(\\d+)$`, 'i'))
+    if (match) {
+      const num = parseInt(match[1])
+      if (num > maxNum) maxNum = num
+    }
+  }
+  const nextNum = maxNum + 1
+  return `${prefix}-${String(nextNum).padStart(padLength, '0')}`
+}

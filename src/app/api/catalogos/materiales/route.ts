@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
+import { generarCorrelativo } from '@/lib/utils'
 
 // GET - List all cat materiales
 export async function GET() {
@@ -31,10 +32,17 @@ export async function POST(request: NextRequest) {
   }
   try {
     const data = await request.json()
-    
+
+    // Generar código automático si no se proporciona (MAT-001, MAT-002, ...)
+    let codigo = data.codigo || null
+    if (!codigo) {
+      const existentes = await db.catMaterial.findMany({ select: { codigo: true } })
+      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'MAT', 3)
+    }
+
     const material = await db.catMaterial.create({
       data: {
-        codigo: data.codigo || null,
+        codigo,
         nombre: data.nombre,
         unidad: data.unidad || 'unidad',
         precioUnit: parseFloat(data.precioUnit) || 0,
