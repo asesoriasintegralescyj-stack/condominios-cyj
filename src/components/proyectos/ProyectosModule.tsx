@@ -93,6 +93,7 @@ interface PersonalItem {
 
 interface Proyecto {
   id: string
+  codigo?: string | null
   nombre: string
   categoria: string
   estado: string
@@ -1944,7 +1945,7 @@ export function ProyectosModule() {
                     const totalAdj = (proy.tieneFotosAntes ? 1 : 0) + (proy.tieneFotosDespues ? 1 : 0) + (proy.tieneCotizaciones ? 1 : 0) + (proy._count?.documentos || 0)
                     return (
                       <tr key={proy.id} className={`border-b last:border-0 hover:bg-blue-50 cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`} onClick={() => openDetailDialog(proy)}>
-                        <td className="text-center p-2 font-bold text-[#0f2044]">{extraerNumProyecto(proy.nombre)}</td>
+                        <td className="text-center p-2 font-bold text-[#0f2044]">{proy.codigo || extraerNumProyecto(proy.nombre)}</td>
                         <td className="p-2 font-medium max-w-[250px] truncate" title={extraerDescripcion(proy.nombre)}>{extraerDescripcion(proy.nombre)}</td>
                         <td className="p-2 text-slate-600">{sector}</td>
                         <td className="p-2 text-slate-600">{tipo}</td>

@@ -527,6 +527,7 @@ model OTDocumento {
 // ============================================
 model Proyecto {
   id            String   @id @default(cuid())
+  codigo        String?  @unique // PROY-001, PROY-002, etc.
   nombre        String
   categoria     String   @default("General") // Áreas Verdes, Eléctrico, Sanitario, Infraestructura, Seguridad
   estado        String   @default("Planificado") // Planificado, En Ejecución, Completado, Cancelado, Pausado

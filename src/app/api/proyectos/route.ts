@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
+import { generarCorrelativo } from '@/lib/utils'
 
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
@@ -107,6 +108,7 @@ export async function GET(request: NextRequest) {
       where,
       select: {
         id: true,
+        codigo: true,
         nombre: true,
         categoria: true,
         estado: true,
@@ -204,8 +206,13 @@ export async function POST(request: NextRequest) {
           ? proyectoData.cotizaciones
           : JSON.stringify(proyectoData.cotizaciones)
 
+    // Generar código automático PROY-001, PROY-002, ...
+    const existentes = await db.proyecto.findMany({ select: { codigo: true } })
+    const codigo = generarCorrelativo(existentes.map(e => e.codigo), 'PROY', 3)
+
     const proyecto = await db.proyecto.create({
       data: {
+        codigo,
         nombre: proyectoData.nombre,
         categoria: proyectoData.categoria || 'General',
         estado: proyectoData.estado || 'Planificado',
