@@ -167,9 +167,11 @@ export async function POST(request: NextRequest) {
         // Nuevos campos
         sector: proyectoData.sector || null,
         tipoReparacion: proyectoData.tipoReparacion || null,
+        tipoTrabajo: proyectoData.tipoTrabajo || null,
         prioridad: proyectoData.prioridad || null,
         estadoAprobacion: proyectoData.estadoAprobacion || null,
         responsable: proyectoData.responsable || null,
+        responsableExterno: proyectoData.responsableExterno || null,
         tiempoEstimado: proyectoData.tiempoEstimado || null,
         monto: parseFloat(proyectoData.monto) || 0,
         fechaInicioReal: proyectoData.fechaInicioReal || null,
@@ -179,6 +181,7 @@ export async function POST(request: NextRequest) {
         fotosDespues,
         cotizaciones,
 
+        centroCostoId: proyectoData.centroCostoId || null,
         condominioId: CONDOMINIO_ID,
 
         // Create related resources

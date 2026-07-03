@@ -112,9 +112,11 @@ interface Proyecto {
   // Nuevos campos
   sector?: string | null
   tipoReparacion?: string | null
+  tipoTrabajo?: string | null
   prioridad?: string | null
   estadoAprobacion?: string | null
   responsable?: string | null
+  responsableExterno?: string | null
   tiempoEstimado?: string | null
   monto?: number
   fechaInicioReal?: string | null
@@ -123,6 +125,8 @@ interface Proyecto {
   fotosAntes?: string | null
   fotosDespues?: string | null
   cotizaciones?: string | null
+  centroCostoId?: string | null
+  centroCosto?: { id: string; codigo: string; nombre: string } | null
   tieneFotosAntes?: boolean
   tieneFotosDespues?: boolean
   tieneCotizaciones?: boolean
@@ -161,6 +165,24 @@ const TIPOS_REPARACION = [
   'Techado',
   'Revestimiento',
   'Equipamiento',
+  'Otros',
+]
+
+const TIPOS_TRABAJO = [
+  'Mantención Preventiva',
+  'Mantención Correctiva',
+  'Reparación',
+  'Instalación',
+  'Construcción',
+  'Remodelación',
+  'Inspección',
+  'Limpieza Profunda',
+  'Pintura',
+  'Impermeabilización',
+  'Poda / Jardinería',
+  'Reparación Eléctrica',
+  'Reparación Sanitaria',
+  'Reparación Estructural',
   'Otros',
 ]
 
@@ -323,15 +345,32 @@ export function ProyectosModule() {
     // Nuevos campos
     sector: '',
     tipoReparacion: '',
+    tipoTrabajo: '',
     prioridad: '',
     estadoAprobacion: '',
     responsable: '',
+    responsableExterno: '',
     tiempoEstimado: '',
     monto: 0,
     fechaInicioReal: '',
     fechaFinReal: '',
     comentarios: '',
+    centroCostoId: '',
   })
+
+  // Centros de costo disponibles
+  const [centrosCosto, setCentrosCosto] = useState<{ id: string; codigo: string; nombre: string }[]>([])
+
+  // Cargar centros de costo al montar
+  useEffect(() => {
+    fetch('/api/centros-costo')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const lista = Array.isArray(data) ? data : (data.centros || data.data || [])
+        setCentrosCosto(lista.map((cc: any) => ({ id: cc.id, codigo: cc.codigo, nombre: cc.nombre })))
+      })
+      .catch(() => {})
+  }, [])
 
   // Resources state
   const [materiales, setMateriales] = useState<ProyectoMaterial[]>([])
@@ -819,14 +858,17 @@ export function ProyectosModule() {
         notas: proy.notas || '',
         sector: proy.sector || '',
         tipoReparacion: proy.tipoReparacion || '',
+        tipoTrabajo: proy.tipoTrabajo || '',
         prioridad: proy.prioridad || '',
         estadoAprobacion: proy.estadoAprobacion || '',
         responsable: proy.responsable || '',
+        responsableExterno: proy.responsableExterno || '',
         tiempoEstimado: proy.tiempoEstimado || '',
         monto: proy.monto ?? 0,
         fechaInicioReal: proy.fechaInicioReal || '',
         fechaFinReal: proy.fechaFinReal || '',
         comentarios: proy.comentarios || '',
+        centroCostoId: proy.centroCostoId || '',
       })
       setMateriales((proy.materiales || []).map((m) => ({ ...m, linkCompra: m.linkCompra || '' })))
       setHerramientas(proy.herramientas || [])
@@ -852,14 +894,17 @@ export function ProyectosModule() {
         notas: '',
         sector: '',
         tipoReparacion: '',
+        tipoTrabajo: '',
         prioridad: '',
         estadoAprobacion: '',
         responsable: '',
+        responsableExterno: '',
         tiempoEstimado: '',
         monto: 0,
         fechaInicioReal: '',
         fechaFinReal: '',
         comentarios: '',
+        centroCostoId: '',
       })
       setMateriales([])
       setHerramientas([])
@@ -1955,8 +2000,22 @@ export function ProyectosModule() {
                   <p className={`text-sm ${aprobacionColors[selectedProy.estadoAprobacion || ''] || 'text-slate-500'}`}>{selectedProy.estadoAprobacion || '–'}</p>
                 </div>
                 <div className="min-w-0">
-                  <Label className="text-xs text-slate-500">Responsable</Label>
+                  <Label className="text-xs text-slate-500">Responsable Interno</Label>
                   <p className="text-sm font-medium truncate">{selectedProy.responsable || '–'}</p>
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs text-slate-500">Empresa Externa</Label>
+                  <p className="text-sm font-medium truncate">{selectedProy.responsableExterno || '–'}</p>
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs text-slate-500">Tipo de Trabajo</Label>
+                  <p className="text-sm font-medium truncate">{selectedProy.tipoTrabajo || '–'}</p>
+                </div>
+                <div className="min-w-0">
+                  <Label className="text-xs text-slate-500">Centro de Costo</Label>
+                  <p className="text-sm font-medium truncate">
+                    {selectedProy.centroCosto ? `${selectedProy.centroCosto.codigo} · ${selectedProy.centroCosto.nombre}` : '–'}
+                  </p>
                 </div>
                 <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Tiempo Estimado</Label>
@@ -2200,7 +2259,7 @@ export function ProyectosModule() {
                       </Select>
                     </div>
                     <div className="space-y-2 min-w-0">
-                      <Label>Responsable</Label>
+                      <Label>Responsable Interno</Label>
                       <Select value={formData.responsable} onValueChange={(v) => setFormData({ ...formData, responsable: v })}>
                         <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                         <SelectContent>
@@ -2215,7 +2274,44 @@ export function ProyectosModule() {
                           )}
                         </SelectContent>
                       </Select>
-                      <p className="text-[10px] text-slate-500">Lista cargada desde /api/personal</p>
+                      <p className="text-[10px] text-slate-500">Personal interno</p>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Tipo de Trabajo</Label>
+                      <Select value={formData.tipoTrabajo} onValueChange={(v) => setFormData({ ...formData, tipoTrabajo: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {TIPOS_TRABAJO.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-slate-500">Mantención, reparación, instalación...</p>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Empresa Externa</Label>
+                      <Input
+                        value={formData.responsableExterno}
+                        onChange={(e) => setFormData({ ...formData, responsableExterno: e.target.value })}
+                        placeholder="Ej: Constructora XYZ, Gasfíter Juan Pérez..."
+                        className="w-full"
+                      />
+                      <p className="text-[10px] text-slate-500">Si el trabajo lo hace una empresa externa</p>
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <Label>Centro de Costo</Label>
+                      <Select value={formData.centroCostoId} onValueChange={(v) => setFormData({ ...formData, centroCostoId: v })}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Sin asignar" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Sin asignar</SelectItem>
+                          {centrosCosto.map((cc) => (
+                            <SelectItem key={cc.id} value={cc.id}>
+                              {cc.codigo} · {cc.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[10px] text-slate-500">Para imputación contable</p>
                     </div>
                   </div>
                 </div>

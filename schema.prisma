@@ -387,6 +387,7 @@ model CentroCostoMaster {
   herramientas    CatHerramienta[]
   ordenesTrabajo  OrdenTrabajo[]
   gastos          Gasto[]
+  proyectos       Proyecto[]
 }
 
 // ============================================
@@ -542,9 +543,11 @@ model Proyecto {
   // Nuevos campos (PMI)
   sector            String?
   tipoReparacion    String?
+  tipoTrabajo       String?  // Nuevo: tipo de trabajo (mantención, reparación, instalación, etc.)
   prioridad         String?
   estadoAprobacion  String?
   responsable       String?
+  responsableExterno String? // Nuevo: empresa externa responsable (si aplica)
   tiempoEstimado    String?
   monto             Float    @default(0)
   fechaInicioReal   String?
@@ -558,12 +561,17 @@ model Proyecto {
   condominioId  String?
   condominio    Condominio? @relation(fields: [condominioId], references: [id])
 
+  // Relación con Centro de Costo
+  centroCostoId     String?
+  centroCosto       CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+
   materiales    ProyectoMaterial[]
   herramientas  ProyectoHerramienta[]
   tareas        ProyectoTarea[]
   personal      ProyectoPersonal[]
   documentos    ProyectoDocumento[]
   @@index([condominioId, estado])
+  @@index([centroCostoId])
 }
 
 model ProyectoMaterial {

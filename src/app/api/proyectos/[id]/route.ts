@@ -99,14 +99,17 @@ export async function PUT(
         // Nuevos campos
         sector: proyectoData.sector === undefined ? undefined : (proyectoData.sector || null),
         tipoReparacion: proyectoData.tipoReparacion === undefined ? undefined : (proyectoData.tipoReparacion || null),
+        tipoTrabajo: proyectoData.tipoTrabajo === undefined ? undefined : (proyectoData.tipoTrabajo || null),
         prioridad: proyectoData.prioridad === undefined ? undefined : (proyectoData.prioridad || null),
         estadoAprobacion: proyectoData.estadoAprobacion === undefined ? undefined : (proyectoData.estadoAprobacion || null),
         responsable: proyectoData.responsable === undefined ? undefined : (proyectoData.responsable || null),
+        responsableExterno: proyectoData.responsableExterno === undefined ? undefined : (proyectoData.responsableExterno || null),
         tiempoEstimado: proyectoData.tiempoEstimado === undefined ? undefined : (proyectoData.tiempoEstimado || null),
         monto: proyectoData.monto !== undefined ? (parseFloat(proyectoData.monto) || 0) : undefined,
         fechaInicioReal: proyectoData.fechaInicioReal === undefined ? undefined : (proyectoData.fechaInicioReal || null),
         fechaFinReal: proyectoData.fechaFinReal === undefined ? undefined : (proyectoData.fechaFinReal || null),
         comentarios: proyectoData.comentarios === undefined ? undefined : (proyectoData.comentarios || null),
+        centroCostoId: proyectoData.centroCostoId === undefined ? undefined : (proyectoData.centroCostoId || null),
 
         fotosAntes: proyectoData.fotosAntes === undefined ? undefined : serializeJSON(proyectoData.fotosAntes),
         fotosDespues: proyectoData.fotosDespues === undefined ? undefined : serializeJSON(proyectoData.fotosDespues),
