@@ -21,11 +21,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { 
-  Plus, Pencil, Trash2, Search, Wrench, 
+import {
+  Plus, Pencil, Trash2, Search, Wrench,
   CheckCircle, AlertCircle, XCircle, Settings,
   Upload, Download, FileSpreadsheet, QrCode, ExternalLink,
-  FileText, Clock, AlertTriangle,
+  FileText, Clock, AlertTriangle, Printer, ClipboardList,
 } from 'lucide-react'
 import {
   AlertDialog,
@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSession } from '@/hooks/use-session'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { imprimirLVHerramienta } from '@/components/herramientas/LVHerramientas'
 
 interface CentroCosto {
   id: string
@@ -694,30 +695,48 @@ export function HerramientasModule() {
                       </td>
                       <td className="p-3">
                         <div className="flex justify-center gap-1">
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-7 w-7" 
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
                             onClick={() => openQrDialog(herr)}
                             title="Ver QR"
                           >
                             <QrCode className="w-3.5 h-3.5" />
                           </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-amber-600 hover:text-amber-800"
+                            onClick={() => imprimirLVHerramienta(herr, 'antes')}
+                            title="Imprimir LV Antes de Uso"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-blue-600 hover:text-blue-800"
+                            onClick={() => window.open(`/h/${herr.id}`, '_blank')}
+                            title="Pañol / Ver página de la herramienta"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" />
+                          </Button>
                           {canEdit && (
                             <>
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="h-7 w-7" 
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
                                 onClick={() => openEditDialog(herr)}
                                 title="Editar"
                               >
                                 <Pencil className="w-3.5 h-3.5" />
                               </Button>
-                              <Button 
-                                size="icon" 
-                                variant="ghost" 
-                                className="h-7 w-7 text-red-500 hover:text-red-700" 
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-red-500 hover:text-red-700"
                                 onClick={() => openDeleteDialog(herr)}
                                 title="Eliminar"
                               >

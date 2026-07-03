@@ -761,8 +761,53 @@ model CatHerramienta {
   centroCostoId   String?
   centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
 
+  // Relación con salidas de pañol
+  salidas         SalidaPañol[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ============================================
+// SALIDAS DE PAÑOL — Registro de uso de herramientas
+// ============================================
+model SalidaPañol {
+  id              String   @id @default(cuid())
+  herramientaId   String
+  herramienta     CatHerramienta @relation(fields: [herramientaId], references: [id], onDelete: Cascade)
+
+  // Datos de la salida
+  usuarioNombre   String   // Quién retira la herramienta
+  usuarioRUT      String?  // RUT del operario (opcional)
+  fechaSalida     DateTime @default(now())
+  horaSalida      String   // HH:MM
+  trabajoRealizar String?  // Descripción del trabajo a realizar
+  sectorTrabajo   String?  // Dónde se usará
+
+  // Verificación ANTES de uso (adjunta)
+  lvAntesCompletada Boolean @default(false)
+  lvAntesItems    String?  // JSON array de items completados
+  lvAntesFirma    String?  // Firma en base64 (opcional)
+
+  // Datos de la devolución (ingreso)
+  fechaIngreso    DateTime?
+  horaIngreso     String?  // HH:MM
+  estadoDevolucion String? // Operativo, Regular, Malo, etc.
+  comentarios     String?  // Comentarios del operario
+
+  // Verificación DESPUÉS de uso (adjunta)
+  lvDespuesCompletada Boolean @default(false)
+  lvDespuesItems   String?  // JSON array de items completados
+  lvDespuesFirma   String?  // Firma en base64 (opcional)
+
+  estado          String   @default("Pendiente") // Pendiente (salida), Devuelta (ingreso)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([herramientaId, estado])
+  @@index([usuarioNombre])
+  @@index([fechaSalida])
 }
 
 model CatTarea {
