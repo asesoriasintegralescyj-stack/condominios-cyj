@@ -12,7 +12,7 @@ export async function GET(
   if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
-    const salidas = await db.salidaPañol.findMany({
+    const salidas = await db.salidaPanol.findMany({
       where: { herramientaId: id },
       orderBy: { fechaSalida: 'desc' },
       take: 50,
@@ -45,7 +45,7 @@ export async function POST(
     if (!herramienta) return apiError('Herramienta no encontrada', 404)
 
     // Verificar que no haya una salida pendiente
-    const pendiente = await db.salidaPañol.findFirst({
+    const pendiente = await db.salidaPanol.findFirst({
       where: { herramientaId: id, estado: 'Pendiente' },
     })
     if (pendiente) {
@@ -57,7 +57,7 @@ export async function POST(
       : JSON.stringify(data.lvAntesItems || [])
 
     const ahora = new Date()
-    const salida = await db.salidaPañol.create({
+    const salida = await db.salidaPanol.create({
       data: {
         herramientaId: id,
         usuarioNombre: data.usuarioNombre || 'N/A',

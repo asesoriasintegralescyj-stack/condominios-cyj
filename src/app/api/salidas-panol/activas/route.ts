@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '100')
 
     const where = soloPendientes ? { estado: 'Pendiente' } : {}
-    const salidas = await db.salidaPañol.findMany({
+    const salidas = await db.salidaPanol.findMany({
       where,
       include: { herramienta: true },
       orderBy: { fechaSalida: 'desc' },

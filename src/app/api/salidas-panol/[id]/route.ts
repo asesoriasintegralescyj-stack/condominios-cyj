@@ -14,7 +14,7 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
 
-    const salida = await db.salidaPañol.findUnique({ where: { id } })
+    const salida = await db.salidaPanol.findUnique({ where: { id } })
     if (!salida) return apiError('Salida no encontrada', 404)
     if (salida.estado === 'Devuelta') return apiError('Esta herramienta ya fue devuelta', 400)
 
@@ -23,7 +23,7 @@ export async function PUT(
       : JSON.stringify(data.lvDespuesItems || [])
 
     const ahora = new Date()
-    const actualizada = await db.salidaPañol.update({
+    const actualizada = await db.salidaPanol.update({
       where: { id },
       data: {
         fechaIngreso: data.fechaIngreso ? new Date(data.fechaIngreso) : ahora,
@@ -65,7 +65,7 @@ export async function GET(
   if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
-    const salida = await db.salidaPañol.findUnique({
+    const salida = await db.salidaPanol.findUnique({
       where: { id },
       include: { herramienta: true },
     })
@@ -91,7 +91,7 @@ export async function DELETE(
   if (session.user.rol !== 'admin') return apiError('Sin permisos', 403)
   try {
     const { id } = await params
-    await db.salidaPañol.delete({ where: { id } })
+    await db.salidaPanol.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting salida:', error)

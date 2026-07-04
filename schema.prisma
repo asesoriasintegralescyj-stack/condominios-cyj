@@ -764,7 +764,7 @@ model CatHerramienta {
   centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
 
   // Relación con salidas de pañol
-  salidas         SalidaPañol[]
+  salidas         SalidaPanol[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -773,7 +773,7 @@ model CatHerramienta {
 // ============================================
 // SALIDAS DE PAÑOL — Registro de uso de herramientas
 // ============================================
-model SalidaPañol {
+model SalidaPanol {
   id              String   @id @default(cuid())
   herramientaId   String
   herramienta     CatHerramienta @relation(fields: [herramientaId], references: [id], onDelete: Cascade)
