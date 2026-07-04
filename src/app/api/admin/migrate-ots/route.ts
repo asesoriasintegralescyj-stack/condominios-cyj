@@ -56,7 +56,7 @@ export async function POST() {
     for (const ot of ots) {
       try {
         await db.$executeRawUnsafe(
-          `INSERT INTO "OrdenTrabajo" ("id","otNum","titulo","tipo","prioridad","estado","ubicacion","fechaInicio","fechaLimite","costoEstimado","costoReal","progreso","descripcion","tiempoEst","tiempoReal","valorHora","notas","esRecurrente","formaPago","estadoAprobacion","createdAt","updatedAt","condominioId","propiedadId","asignadoId","centroCostoId","fechaInicioReal","fechaFinReal") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) ON CONFLICT (id) DO NOTHING`,
+          `INSERT INTO "OrdenTrabajo" ("id","otNum","titulo","tipo","prioridad","estado","ubicacion","fechaInicio","fechaLimite","costoEstimado","costoReal","progreso","descripcion","tiempoEst","tiempoReal","valorHora","notas","esRecurrente","formaPago","estadoAprobacion","createdAt","updatedAt","condominioId","propiedadId","asignadoId","centroCostoId","fechaInicioReal","fechaFinReal") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
           ot.id, ot.otNum, ot.titulo, ot.tipo||'Correctivo', ot.prioridad||'Media', ot.estado||'Pendiente',
           ot.ubicacion||null, ot.fechaInicio||null, ot.fechaLimite||null,
           ot.costoEstimado||0, ot.costoReal||0, ot.progreso||0,
@@ -69,7 +69,7 @@ export async function POST() {
         )
         otOk++
       } catch (e: any) {
-        if (otErr < 3) out.push(`OT ERR ${ot.otNum}: ${e.message.substring(0, 80)}`)
+        if (otErr < 5) out.push(`OT ERR ${ot.otNum}: ${e.message.substring(0, 200)}`)
         otErr++
       }
     }
@@ -80,7 +80,7 @@ export async function POST() {
     let tarOk = 0
     for (const t of tareas) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTTarea" ("id","descripcion","cantidad","estado","ok","noOk","na","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTTarea" ("id","descripcion","cantidad","estado","ok","noOk","na","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
           t.id, t.descripcion, t.cantidad||1, t.estado||'Pendiente', t.ok||false, t.noOk||false, t.na||false, t.otId)
         tarOk++
       } catch {}
@@ -92,7 +92,7 @@ export async function POST() {
     let matOk = 0
     for (const m of mats) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTMaterial" ("id","descripcion","cantidad","precioUnit","total","unidad","otId") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTMaterial" ("id","descripcion","cantidad","precioUnit","total","unidad","otId") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
           m.id, m.descripcion, m.cantidad||1, m.precioUnit||0, m.total||0, m.unidad||'unidad', m.otId)
         matOk++
       } catch {}
@@ -104,7 +104,7 @@ export async function POST() {
     let herOk = 0
     for (const h of hers) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTHerramienta" ("id","nombre","cantidad","otId") VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTHerramienta" ("id","nombre","cantidad","otId") VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
           h.id, h.nombre, h.cantidad||1, h.otId)
         herOk++
       } catch {}
@@ -116,7 +116,7 @@ export async function POST() {
     let perOk = 0
     for (const p of pers) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTPersonal" ("id","nombre","tipo","cantidad","precioUnit","horasTrabajadas","total","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTPersonal" ("id","nombre","tipo","cantidad","precioUnit","horasTrabajadas","total","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
           p.id, p.nombre, p.tipo||'Interno', p.cantidad||1, p.precioUnit||0, p.horasTrabajadas||0, p.total||0, p.otId)
         perOk++
       } catch {}
