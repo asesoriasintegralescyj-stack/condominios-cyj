@@ -78,15 +78,12 @@ export async function POST() {
 
   // Agregar columnas faltantes a tablas existentes
   const alters = [
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "rut" TEXT',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "direccion" TEXT',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerificado" TIMESTAMP(3)',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "ultimoAcceso" TIMESTAMP(3)',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "twoFactorSecret" TEXT',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "debeCambiarPassword" BOOLEAN NOT NULL DEFAULT false',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT',
-    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "sessionExpiry" TIMESTAMP(3)',
-    'ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_rut_key" UNIQUE ("rut")',
+    // Recrear tabla User con TODOS los campos del schema
+    'DROP TABLE IF EXISTS "User"',
+    'CREATE TABLE "User" ("id" TEXT NOT NULL DEFAULT gen_random_uuid()::text, "email" TEXT NOT NULL, "nombre" TEXT NOT NULL, "apellido" TEXT, "password" TEXT NOT NULL, "rut" TEXT, "telefono" TEXT, "direccion" TEXT, "rol" TEXT NOT NULL DEFAULT \'usuario\', "permisos" TEXT, "activo" BOOLEAN NOT NULL DEFAULT true, "emailVerificado" TIMESTAMP(3), "ultimoAcceso" TIMESTAMP(3), "intentosLogin" INTEGER NOT NULL DEFAULT 0, "bloqueadoHasta" TIMESTAMP(3), "twoFactorSecret" TEXT, "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false, "resetToken" TEXT, "resetTokenExp" TIMESTAMP(3), "cambiarPasswordProximoLogin" BOOLEAN NOT NULL DEFAULT false, "passwordTemp" TEXT, "lastPasswordChange" TIMESTAMP(3), "lastPasswordChangeMotivo" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, "condominioId" TEXT, "sessionToken" TEXT, "sessionExpiry" TIMESTAMP(3), CONSTRAINT "User_pkey" PRIMARY KEY ("id"), CONSTRAINT "User_email_key" UNIQUE ("email"), CONSTRAINT "User_rut_key" UNIQUE ("rut"))',
+    // Session también necesita recrearse
+    'DROP TABLE IF EXISTS "Session"',
+    'CREATE TABLE "Session" ("id" TEXT NOT NULL DEFAULT gen_random_uuid()::text, "userId" TEXT NOT NULL, "token" TEXT NOT NULL, "expiresAt" TIMESTAMP(3) NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userAgent" TEXT, "ip" TEXT, CONSTRAINT "Session_pkey" PRIMARY KEY ("id"), CONSTRAINT "Session_token_key" UNIQUE ("token"))',
   ]
   for (const a of alters) {
     try { await p.$executeRawUnsafe(a); out.push('ALTER OK') }
