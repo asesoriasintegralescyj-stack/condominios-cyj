@@ -1,37 +1,41 @@
 import { NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 
-// Diagnóstico: probar conexión con diferentes URLs de Neon
-export async function GET() {
-  const originalUrl = process.env.DATABASE_URL || ''
-  
-  // URL sin -pooler (conexión directa)
-  const directUrl = originalUrl.replace('-pooler.', '.')
-  
-  const results: any = {
-    originalUrl: originalUrl.replace(/:[^:@]+@/, ':***@').substring(0, 100),
-    directUrl: directUrl.replace(/:[^:@]+@/, ':***@').substring(0, 100),
+// Intentar conectar a Neon con timeout extendido (30s)
+// Neon free tier auto-suspende computes after 5 min inactivity
+// El cold start puede tardar hasta 30 segundos
+export async function POST() {
+  const url = process.env.DATABASE_URL || ''
+  const results: string[] = []
+
+  // Intentar 5 veces con 5 segundos entre cada intento
+  for (let i = 1; i <= 5; i++) {
+    try {
+      results.push(`Intento ${i}: conectando...`)
+      const prisma = new PrismaClient({
+        datasources: { db: { url: url + '&connect_timeout=30&pool_timeout=30' } },
+      })
+      
+      // Timeout manual de 25 segundos
+      const promise = prisma.$queryRaw`SELECT 1 as test, NOW() as now`
+      const timeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout 25s')), 25000)
+      )
+      
+      await Promise.race([promise, timeout])
+      await prisma.$disconnect()
+      results.push(`Intento ${i}: ¡CONECTADO!`)
+      return NextResponse.json({ success: true, results, intento: i })
+    } catch (e: any) {
+      results.push(`Intento ${i}: ${e.message.substring(0, 100)}`)
+      // Esperar 5 segundos antes del siguiente intento
+      await new Promise(r => setTimeout(r, 5000))
+    }
   }
 
-  // Probar URL original (pooler)
-  try {
-    const prisma1 = new PrismaClient({ datasources: { db: { url: originalUrl } } })
-    await prisma1.$queryRaw`SELECT 1 as test`
-    results.pooler = 'OK - CONECTADO'
-    await prisma1.$disconnect()
-  } catch (e: any) {
-    results.pooler = 'ERROR: ' + e.message.substring(0, 150)
-  }
-
-  // Probar URL directa (sin pooler)
-  try {
-    const prisma2 = new PrismaClient({ datasources: { db: { url: directUrl } } })
-    await prisma2.$queryRaw`SELECT 1 as test`
-    results.directo = 'OK - CONECTADO'
-    await prisma2.$disconnect()
-  } catch (e: any) {
-    results.directo = 'ERROR: ' + e.message.substring(0, 150)
-  }
-
-  return NextResponse.json(results)
+  return NextResponse.json({ 
+    success: false, 
+    results,
+    message: 'No se pudo conectar a Neon después de 5 intentos. La BD está suspendida.'
+  })
 }
