@@ -32,12 +32,40 @@ model Condominio {
   updatedAt     DateTime @updatedAt
 
   // Relaciones
-  
-  
+  propiedades   Propiedad[]
+  residentes    Residente[]
+  personal      Personal[]
+  activos       Activo[]
+  ordenesTrabajo OrdenTrabajo[]
+  proyectos     Proyecto[]
+  inspecciones  Inspeccion[]
+  gastos        Gasto[]
+  proveedores   Proveedor[]
+  reservas      Reserva[]
+  gastosComunes GastoComun[]
+  notificaciones Notificacion[]
+  catMateriales CatMaterial[]
+  catHerramientas CatHerramienta[]
+  catTareas     CatTarea[]
+  centroCostos  CentroCostoMaster[]
   // Nuevas relaciones
+  comites       Comite[]
+  sesionesComite SesionComite[]
+  deudas        Deuda[]
+  estadosCuenta EstadoCuenta[]
+  configMorosidad ConfigMorosidad[]
+  movimientosInventario MovimientoInventario[]
+  configNotificaciones ConfigNotificacion[]
+  integraciones Integracion[]
   // Cumplimiento Legal
+  categoriasCumplimiento CategoriaCumplimiento[]
+  documentosCumplimiento DocumentoCumplimiento[]
+  resumenCumplimiento ResumenCumplimiento?
   // Rondas
+  rondas         Ronda[]
   // Solicitudes de Compra
+  solicitudesCompra SolicitudCompra[]
+  listasDesplegables ListaDesplegable[]
 }
 
 // ============================================
@@ -89,6 +117,9 @@ model User {
   updatedAt     DateTime @updatedAt
   
   // Relaciones
+  sessions      Session[]
+  cuentas       Cuenta[]
+  logsAuditoria LogAuditoria[]
 }
 
 // ============================================
@@ -97,6 +128,7 @@ model User {
 model Session {
   id           String   @id @default(cuid())
   userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token        String   @unique
   userAgent    String?
   ip           String?
@@ -111,6 +143,7 @@ model Session {
 model Cuenta {
   id           String   @id @default(cuid())
   userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider     String   // google, facebook, etc.
   providerId   String   // ID del proveedor
   accessToken  String?
@@ -127,6 +160,7 @@ model Cuenta {
 model LogAuditoria {
   id          String   @id @default(cuid())
   userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   accion      String   // login, logout, create, update, delete
   entidad     String   // Nombre del modelo afectado
   entidadId   String?  // ID del registro afectado
@@ -163,7 +197,10 @@ model Propiedad {
 
   // Relación con Condominio
   condominioId String?
+  condominio   Condominio? @relation(fields: [condominioId], references: [id])
 
+  residentes   Residente[]
+  otPropiedad  OrdenTrabajo[] @relation("OTPropiedad")
   @@index([condominioId])
   @@index([estado])
 }
@@ -190,10 +227,19 @@ model Residente {
 
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
 
   propiedadId   String?
+  propiedad     Propiedad? @relation(fields: [propiedadId], references: [id])
   
+  reservas      Reserva[]
+  pagosGastos   PagoGastoComun[]
   // Nuevas relaciones
+  deudas        Deuda[]
+  estadosCuenta EstadoCuenta[]
+  cartasCobranza CartaCobranza[]
+  accesosPortal AccesoPortal[]
+  solicitudes   SolicitudMantenimiento[]
   @@index([condominioId, estado])
   @@index([rut])
   @@index([unidad])
@@ -230,7 +276,14 @@ model Personal {
 
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
 
+  activos       Activo[] @relation("ActivoAsignado")
+  otPersonal    OrdenTrabajo[] @relation("OTPersonal")
+  asistencias   Asistencia[]
+  horariosTrabajador HorarioTrabajador[]
+  registrosReloj RegistroAsistenciaReloj[]
+  inasistenciasAtrasos InasistenciaAtraso[]
   @@index([condominioId, estado])
   @@index([rut])
   @@index([createdAt])
@@ -269,8 +322,11 @@ model Activo {
 
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
 
   asignadoId    String?
+  asignado      Personal? @relation("ActivoAsignado", fields: [asignadoId], references: [id])
+  otActivo      OrdenTrabajo[] @relation("OTActivo")
   @@index([condominioId, estado])
   @@index([categoria])
 }
@@ -300,7 +356,9 @@ model Proveedor {
 
   // Relación con Condominio
   condominioId   String?
+  condominio     Condominio? @relation(fields: [condominioId], references: [id])
 
+  gastos         Gasto[]
   @@index([estado])
 }
 
@@ -322,8 +380,14 @@ model CentroCostoMaster {
 
   // Relación con Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
-  
+  tareas          CatTarea[]
+  materiales      CatMaterial[]
+  herramientas    CatHerramienta[]
+  ordenesTrabajo  OrdenTrabajo[]
+  gastos          Gasto[]
+  proyectos       Proyecto[]
 }
 
 // ============================================
@@ -374,15 +438,25 @@ model OrdenTrabajo {
 
   // Relación con Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
   propiedadId     String?
+  propiedad       Propiedad? @relation("OTPropiedad", fields: [propiedadId], references: [id])
   asignadoId      String?
+  asignado        Personal? @relation("OTPersonal", fields: [asignadoId], references: [id])
   activoId        String?
+  activo          Activo? @relation("OTActivo", fields: [activoId], references: [id])
   
   // Relación con Centro de Costo
   centroCostoId   String?
-  
+  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
 
+  materiales      OTMaterial[]
+  herramientas    OTHerramienta[]
+  tareas          OTTarea[]
+  personalOT      OTPersonal[]
+  documentos      OTDocumento[]
+  historialAprobaciones HistorialAprobacionOT[]
   @@index([condominioId, estado])
   @@index([estadoAprobacion])
   @@index([asignadoId])
@@ -400,6 +474,7 @@ model OTMaterial {
   total         Float    @default(0)
   unidad        String   @default("unidad")
   otId          String
+  ot            OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
 
 model OTHerramienta {
@@ -407,6 +482,7 @@ model OTHerramienta {
   nombre    String
   cantidad  Int      @default(1)
   otId      String
+  ot        OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
 
 model OTTarea {
@@ -419,6 +495,7 @@ model OTTarea {
   noOk        Boolean  @default(false)
   na          Boolean  @default(false)
   otId        String
+  ot          OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
 
 model OTPersonal {
@@ -432,6 +509,7 @@ model OTPersonal {
   cumple          Boolean? // Si cumplió la tarea
   observaciones   String?
   otId            String
+  ot              OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
 
 model OTDocumento {
@@ -440,6 +518,7 @@ model OTDocumento {
   tipo      String   @default("documento")
   archivo   String   // base64 or URL
   otId      String
+  ot        OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
 }
 
 // ============================================
@@ -481,11 +560,17 @@ model Proyecto {
 
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
 
   // Relación con Centro de Costo
   centroCostoId     String?
-  
+  centroCosto       CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
 
+  materiales    ProyectoMaterial[]
+  herramientas  ProyectoHerramienta[]
+  tareas        ProyectoTarea[]
+  personal      ProyectoPersonal[]
+  documentos    ProyectoDocumento[]
   @@index([condominioId, estado])
   @@index([centroCostoId])
 }
@@ -499,6 +584,7 @@ model ProyectoMaterial {
   unidad      String   @default("unidad")
   linkCompra  String?  // URL de compra del material
   proyectoId  String
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 }
 
 model ProyectoHerramienta {
@@ -506,6 +592,7 @@ model ProyectoHerramienta {
   nombre      String
   cantidad    Int      @default(1)
   proyectoId  String
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 }
 
 model ProyectoTarea {
@@ -514,6 +601,7 @@ model ProyectoTarea {
   cantidad    Int      @default(1)
   estado      String   @default("Pendiente")
   proyectoId  String
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 }
 
 model ProyectoPersonal {
@@ -524,6 +612,7 @@ model ProyectoPersonal {
   precioUnit  Float    @default(0)
   total       Float    @default(0)
   proyectoId  String
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
 }
 
 model ProyectoDocumento {
@@ -534,6 +623,7 @@ model ProyectoDocumento {
   archivo     String   // base64 or URL
   fechaDoc    String?
   proyectoId  String
+  proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
 }
 
@@ -561,6 +651,7 @@ model Inspeccion {
 
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   @@index([condominioId, estado])
 }
 
@@ -576,16 +667,18 @@ model Gasto {
   fecha         String?
   propiedad     String?
   proveedorId   String?
+  proveedor     Proveedor? @relation(fields: [proveedorId], references: [id])
   nDoc          String?  // Número de documento
   notas         String?
   comprobante   String?  // base64 or URL
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   // Relación con Centro de Costo
   centroCostoId String?
-  
+  centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -624,10 +717,11 @@ model CatMaterial {
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   // Centro de Costo de imputación
   centroCostoId String?
-  
+  centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -662,13 +756,14 @@ model CatHerramienta {
 
   // Relación con Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
   // Centro de Costo de adquisición
   centroCostoId   String?
-  
+  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
 
   // Relación con salidas de pañol
-  
+  salidas         SalidaPanol[]
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -680,6 +775,7 @@ model CatHerramienta {
 model SalidaPanol {
   id              String   @id @default(cuid())
   herramientaId   String
+  herramienta     CatHerramienta @relation(fields: [herramientaId], references: [id], onDelete: Cascade)
 
   // Datos de la salida
   usuarioNombre   String   // Quién retira la herramienta
@@ -729,10 +825,11 @@ model CatTarea {
   
   // Relación con Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Centro de Costo asociado
   centroCostoId   String?
-  
+  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
   
   // Campos para tareas recurrentes
   esRecurrente    Boolean  @default(false)
@@ -769,8 +866,10 @@ model Reserva {
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   residenteId   String?
+  residenteRel  Residente? @relation(fields: [residenteId], references: [id])
   @@index([condominioId, fecha])
   @@index([estado])
 }
@@ -805,7 +904,10 @@ model GastoComun {
 
   // Relación con Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
+  detalles        DetalleGastoComun[]
+  pagos           PagoGastoComun[]
 }
 
 model DetalleGastoComun {
@@ -816,6 +918,7 @@ model DetalleGastoComun {
   centroCosto   String?
   notas         String?
   gastoComunId  String
+  gastoComun    GastoComun @relation(fields: [gastoComunId], references: [id], onDelete: Cascade)
 }
 
 model PagoGastoComun {
@@ -828,7 +931,9 @@ model PagoGastoComun {
   notas         String?
   
   residenteId   String?
+  residente     Residente? @relation(fields: [residenteId], references: [id])
   gastoComunId  String
+  gastoComun    GastoComun @relation(fields: [gastoComunId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -854,6 +959,7 @@ model Notificacion {
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -867,6 +973,7 @@ model Notificacion {
 model Asistencia {
   id            String   @id @default(cuid())
   personalId    String
+  personal      Personal  @relation(fields: [personalId], references: [id])
   fecha         String    // Fecha de la asistencia
   horaEntrada   String?   // Hora de entrada
   horaSalida    String?   // Hora de salida
@@ -885,6 +992,7 @@ model Asistencia {
 model HorarioTrabajador {
   id              String   @id @default(cuid())
   personalId      String?  // vinculado a Personal (opcional, puede no estar en BD)
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
   nombreTrabajador String  // nombre del trabajador (del archivo de horarios)
   rut             String?  @unique
   turno           String   // TURNO A, TURNO B
@@ -908,6 +1016,8 @@ model HorarioTrabajador {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  registrosReloj  RegistroAsistenciaReloj[]
+  inasistenciasAtrasos InasistenciaAtraso[]
 
   @@index([nombreTrabajador])
   @@index([rut])
@@ -931,8 +1041,10 @@ model RegistroAsistenciaReloj {
   estado          String?  // Activo, etc.
   // Vinculación con Personal (opcional)
   personalId      String?
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
   // Vinculación con HorarioTrabajador (opcional)
   horarioId       String?
+  horario         HorarioTrabajador? @relation(fields: [horarioId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
 
   @@index([nombre, fecha])
@@ -946,7 +1058,9 @@ model RegistroAsistenciaReloj {
 model InasistenciaAtraso {
   id              String   @id @default(cuid())
   personalId      String?  // vinculado a Personal (opcional)
+  personal        Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
   horarioId       String?  // vinculado a HorarioTrabajador (opcional)
+  horario         HorarioTrabajador? @relation(fields: [horarioId], references: [id], onDelete: SetNull)
   nombreTrabajador String  // nombre del trabajador
   rut             String?
   departamento    String?
@@ -970,6 +1084,7 @@ model InasistenciaAtraso {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  justificacion      JustificacionAsistencia?
 
   @@index([nombreTrabajador, fecha])
   @@index([estado])
@@ -983,6 +1098,7 @@ model InasistenciaAtraso {
 model JustificacionAsistencia {
   id              String   @id @default(cuid())
   inasistenciaId  String   @unique
+  inasistencia    InasistenciaAtraso @relation(fields: [inasistenciaId], references: [id], onDelete: Cascade)
 
   // Supervisor que justifica
   supervisorId    String?
@@ -1021,11 +1137,14 @@ model CuentaContable {
   tipo          String   @default("Cuenta") // Activo, Pasivo, Patrimonio, Ingreso, Gasto
   nivel         Int      @default(1)
   padreId       String?
+  padre         CuentaContable? @relation("CuentaJerarquia", fields: [padreId], references: [id])
+  hijos         CuentaContable[] @relation("CuentaJerarquia")
   saldo         Float    @default(0)
   estado        String   @default("Activa")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  detalles      DetalleAsiento[]
 }
 
 model AsientoContable {
@@ -1043,6 +1162,7 @@ model AsientoContable {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  detalles      DetalleAsiento[]
   @@index([estado, createdAt])
   @@index([tipo])
 }
@@ -1054,7 +1174,9 @@ model DetalleAsiento {
   haber           Float    @default(0)
   
   cuentaId        String
+  cuenta          CuentaContable @relation(fields: [cuentaId], references: [id])
   asientoId       String
+  asiento         AsientoContable @relation(fields: [asientoId], references: [id], onDelete: Cascade)
   
   createdAt       DateTime @default(now())
   @@index([asientoId])
@@ -1067,6 +1189,7 @@ model DetalleAsiento {
 model HistorialAprobacionOT {
   id              String   @id @default(cuid())
   otId            String
+  ordenTrabajo    OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
   estadoAnterior  String?  // Estado anterior
   estadoNuevo     String   // Nuevo estado (Aprobada, Rechazada)
   observaciones   String?  // Observaciones del supervisor
@@ -1097,6 +1220,7 @@ model Comite {
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1125,6 +1249,7 @@ model SesionComite {
   
   // Relación con Condominio
   condominioId  String?
+  condominio    Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -1176,9 +1301,11 @@ model Deuda {
   
   // Residente
   residenteId     String?
+  residente       Residente? @relation(fields: [residenteId], references: [id])
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1207,11 +1334,14 @@ model EstadoCuenta {
   
   // Residente
   residenteId     String?
+  residente       Residente? @relation(fields: [residenteId], references: [id])
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Detalles del estado de cuenta
+  detalles        DetalleEstadoCuenta[]
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1231,6 +1361,7 @@ model DetalleEstadoCuenta {
   referencia      String?  // Referencia a documento
   
   estadoCuentaId  String
+  estadoCuenta    EstadoCuenta @relation(fields: [estadoCuentaId], references: [id], onDelete: Cascade)
   
   createdAt       DateTime @default(now())
 }
@@ -1251,6 +1382,7 @@ model CartaCobranza {
   
   // Residente
   residenteId     String?
+  residente       Residente? @relation(fields: [residenteId], references: [id])
   
   // Deudas incluidas
   deudasIncluidas String?  // JSON con IDs de deudas
@@ -1281,6 +1413,7 @@ model ConfigMorosidad {
   
   // Condominio
   condominioId        String?
+  condominio          Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -1307,6 +1440,7 @@ model MovimientoInventario {
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt       DateTime @default(now())
   
@@ -1357,6 +1491,7 @@ model ConfigNotificacion {
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1394,6 +1529,7 @@ model EnvioNotificacion {
 model AccesoPortal {
   id              String   @id @default(cuid())
   residenteId     String
+  residente       Residente? @relation(fields: [residenteId], references: [id])
   token           String   @unique
   fechaCreacion   DateTime @default(now())
   fechaExpiracion DateTime?
@@ -1432,8 +1568,10 @@ model Integracion {
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Transacciones asociadas
+  transacciones   TransaccionPago[]
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1462,6 +1600,7 @@ model TransaccionPago {
   
   // Integración
   integracionId   String?
+  integracion     Integracion? @relation(fields: [integracionId], references: [id])
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1529,6 +1668,7 @@ model SolicitudMantenimiento {
   
   // Residente
   residenteId     String?
+  residente       Residente? @relation(fields: [residenteId], references: [id])
   
   // Comunicación
   conversacion    String?  // JSON array con mensajes de la conversación
@@ -1561,8 +1701,10 @@ model CategoriaCumplimiento {
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Documentos en esta categoría
+  documentos      DocumentoCumplimiento[]
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1601,9 +1743,11 @@ model DocumentoCumplimiento {
   
   // Categoría
   categoriaId     String?
+  categoria       CategoriaCumplimiento? @relation(fields: [categoriaId], references: [id])
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Usuario que creó/editó
   creadoPor       String?  // ID del usuario
@@ -1638,6 +1782,7 @@ model HistorialCumplimiento {
 model ResumenCumplimiento {
   id                      String   @id @default(cuid())
   condominioId            String   @unique
+  condominio              Condominio @relation(fields: [condominioId], references: [id])
   
   // Contadores
   totalRequisitos         Int      @default(0)
@@ -1678,6 +1823,7 @@ model Ronda {
   
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
   
   // Usuario que creó
   creadoPor       String?
@@ -1686,6 +1832,7 @@ model Ronda {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
+  registros       RegistroRonda[]
   
   @@index([condominioId, activo])
   @@index([codigo])
@@ -1694,6 +1841,7 @@ model Ronda {
 model RegistroRonda {
   id              String   @id @default(cuid())
   rondaId         String
+  ronda           Ronda    @relation(fields: [rondaId], references: [id])
   
   // Usuario que escaneó
   usuarioId       String?
@@ -1744,6 +1892,7 @@ model SolicitudCompra {
   emailFechaEnvio DateTime?
   // Condominio
   condominioId    String?
+  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
   // ===== Campos del flujo de aprobación =====
   // Etapa del flujo: 'Pendiente Supervisor' → 'Aprobada Supervisor' → 'Aprobada Admin' (lista para gestionar)
@@ -1764,6 +1913,7 @@ model SolicitudCompra {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  historialAprobaciones HistorialAprobacionSC[]
 
   @@index([estado, createdAt])
   @@index([condominioId])
@@ -1777,6 +1927,7 @@ model SolicitudCompra {
 model HistorialAprobacionSC {
   id              String   @id @default(cuid())
   solicitudId     String
+  solicitud       SolicitudCompra @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
   etapaAnterior   String?
   etapaNueva      String
   accion          String   // aprobar_supervisor, rechazar_supervisor, aprobar_admin, rechazar_admin
@@ -1796,6 +1947,7 @@ model ListaDesplegable {
   valor        String
   activo       Boolean  @default(true)
   condominioId String?
+  condominio   Condominio? @relation(fields: [condominioId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1820,6 +1972,7 @@ model ListaVerificacion {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  registros RegistroLV[]
 
   @@index([frecuencia])
   @@index([activa])
@@ -1828,6 +1981,7 @@ model ListaVerificacion {
 model RegistroLV {
   id                   String   @id @default(cuid())
   lvId                 String
+  lv                   ListaVerificacion @relation(fields: [lvId], references: [id], onDelete: Cascade)
   fecha                String   // YYYY-MM-DD
   hora                 String?
   responsableEjecucion String?
