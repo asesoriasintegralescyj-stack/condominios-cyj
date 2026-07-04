@@ -74,7 +74,42 @@ export async function POST() {
     try { await p.$executeRawUnsafe(s); ok++ }
     catch (e: any) { if (e.message.includes('already exists')) ok++; else { err++; out.push(e.message.substring(0, 80)) } }
   }
-  out.push(`${ok} OK, ${err} err`)
+  out.push(`${ok} tablas OK, ${err} err`)
+
+  // Crear condominio si no existe
+  try {
+    await p.$executeRawUnsafe(`INSERT INTO "Condominio" ("id", "nombre", "direccion", "comuna", "ciudad", "activo", "updatedAt") VALUES ('cmo9f3x7j0000ktyeb0rzhwt9', 'Laguna Norte', 'Av. La Montaña Norte 3650, Lampa', 'Lampa', 'Santiago', true, NOW()) ON CONFLICT DO NOTHING`)
+    out.push('Condominio creado')
+  } catch (e: any) { out.push('Condominio: ' + e.message.substring(0, 50)) }
+
+  // Crear usuarios con bcrypt
+  const bcrypt = await import('bcryptjs').then(m => m.default).catch(() => null)
+  if (bcrypt) {
+    const users = [
+      { email: 'admin@cyj.cl', pass: 'Admin123456', nombre: 'Administrador', apellido: 'Sistema', rol: 'admin' },
+      { email: 'supervisor.test@cyj.cl', pass: 'Supervisor2026!', nombre: 'Supervisor', apellido: 'Test', rol: 'supervisor' },
+      { email: 'usuario.test@cyj.cl', pass: 'Usuario2026!', nombre: 'Usuario', apellido: 'Test', rol: 'usuario' },
+      { email: 'personal.test@cyj.cl', pass: 'Personal2026!', nombre: 'Personal', apellido: 'Test', rol: 'personal' },
+      { email: 'auditor.test@cyj.cl', pass: 'Auditor2026!', nombre: 'Auditor', apellido: 'Test', rol: 'auditor' },
+      { email: 'guardia.test@cyj.cl', pass: 'Guardia2026!', nombre: 'Guardia', apellido: 'Test', rol: 'guardia' },
+    ]
+    for (const u of users) {
+      try {
+        const hash = bcrypt.hashSync(u.pass, 10)
+        await p.$executeRawUnsafe(`INSERT INTO "User" ("id", "email", "password", "nombre", "apellido", "rol", "activo", "condominioId", "updatedAt") VALUES (gen_random_uuid()::text, '${u.email}', '${hash}', '${u.nombre}', '${u.apellido}', '${u.rol}', true, 'cmo9f3x7j0000ktyeb0rzhwt9', NOW()) ON CONFLICT DO NOTHING`)
+        out.push(`User ${u.email} creado`)
+      } catch (e: any) { out.push(`User ${u.email}: ${e.message.substring(0, 50)}`) }
+    }
+  } else {
+    out.push('bcrypt no disponible')
+  }
+
+  // Crear caja chica
+  try {
+    await p.$executeRawUnsafe(`INSERT INTO "CajaChica" ("id", "saldo", "saldoInicial", "condominioId", "updatedAt") VALUES (gen_random_uuid()::text, 500000, 500000, 'cmo9f3x7j0000ktyeb0rzhwt9', NOW()) ON CONFLICT DO NOTHING`)
+    out.push('Caja chica creada')
+  } catch (e: any) { out.push('Caja chica: ' + e.message.substring(0, 50)) }
+
   await p.$disconnect()
   return NextResponse.json({ success: true, out, tablas: ok })
 }
