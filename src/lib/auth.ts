@@ -203,15 +203,7 @@ export async function createSession(userId: string, userAgent?: string, ip?: str
   const token = generateSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
   
-  await db.session.create({
-    data: {
-      userId,
-      token,
-      userAgent,
-      ip,
-      expiresAt,
-    },
-  });
+  await db.$executeRawUnsafe(`INSERT INTO "Session" ("id", "userId", "token", "expiresAt", "userAgent", "ip") VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5)`, userId, token, expiresAt, userAgent || null, ip || null);
   
   return token;
 }
@@ -342,9 +334,9 @@ export async function authenticateUser(
   userAgent?: string,
   ip?: string
 ): Promise<{ success: boolean; error?: string; token?: string }> {
-  const user = await db.user.findUnique({
-    where: { email: email.toLowerCase() },
-  });
+  // Usar queryRaw para evitar problemas de compatibilidad del Prisma client
+  const users = await db.$queryRawUnsafe(`SELECT * FROM "User" WHERE email = $1 LIMIT 1`, email.toLowerCase()) as any[]
+  const user = users[0]
   
   // Usuario no encontrado
   if (!user) {
@@ -374,13 +366,7 @@ export async function authenticateUser(
     
     if (intentos >= MAX_LOGIN_ATTEMPTS) {
       // Bloquear cuenta
-      await db.user.update({
-        where: { id: user.id },
-        data: {
-          intentosLogin: intentos,
-          bloqueadoHasta: new Date(Date.now() + LOCKOUT_DURATION_MS),
-        },
-      });
+      await db.$executeRawUnsafe(`UPDATE "User" SET "intentosLogin" = $1, "bloqueadoHasta" = $2 WHERE "id" = $3`, intentos, new Date(Date.now() + LOCKOUT_DURATION_MS), user.id);
       
       // Registrar en logs
       await logAction(user.id, 'login_blocked', 'User', user.id, null, null, ip, userAgent);
@@ -391,10 +377,7 @@ export async function authenticateUser(
       };
     }
     
-    await db.user.update({
-      where: { id: user.id },
-      data: { intentosLogin: intentos },
-    });
+    await db.$executeRawUnsafe(`UPDATE "User" SET "intentosLogin" = $1 WHERE "id" = $2`, intentos, user.id);
     
     const intentosRestantes = MAX_LOGIN_ATTEMPTS - intentos;
     return { 
@@ -404,14 +387,7 @@ export async function authenticateUser(
   }
   
   // Login exitoso - resetear intentos
-  await db.user.update({
-    where: { id: user.id },
-    data: {
-      intentosLogin: 0,
-      bloqueadoHasta: null,
-      ultimoAcceso: new Date(),
-    },
-  });
+  await db.$executeRawUnsafe(`UPDATE "User" SET "intentosLogin" = 0, "bloqueadoHasta" = NULL WHERE "id" = $1`, user.id);
   
   // Crear sesión
   const token = await createSession(user.id, userAgent, ip);
