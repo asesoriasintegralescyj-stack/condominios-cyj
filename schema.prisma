@@ -37,7 +37,7 @@ model Condominio {
   personal      Personal[]
   activos       Activo[]
   ordenesTrabajo OrdenTrabajo[]
-  proyectos     Proyecto[]
+  
   inspecciones  Inspeccion[]
   gastos        Gasto[]
   proveedores   Proveedor[]
@@ -47,7 +47,7 @@ model Condominio {
   catMateriales CatMaterial[]
   catHerramientas CatHerramienta[]
   catTareas     CatTarea[]
-  centroCostos  CentroCostoMaster[]
+  
   // Nuevas relaciones
   comites       Comite[]
   sesionesComite SesionComite[]
@@ -387,7 +387,7 @@ model CentroCostoMaster {
   herramientas    CatHerramienta[]
   ordenesTrabajo  OrdenTrabajo[]
   gastos          Gasto[]
-  proyectos       Proyecto[]
+  
 }
 
 // ============================================
@@ -449,7 +449,7 @@ model OrdenTrabajo {
   
   // Relación con Centro de Costo
   centroCostoId   String?
-  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
 
   materiales      OTMaterial[]
   herramientas    OTHerramienta[]
@@ -564,7 +564,7 @@ model Proyecto {
 
   // Relación con Centro de Costo
   centroCostoId     String?
-  centroCosto       CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
 
   materiales    ProyectoMaterial[]
   herramientas  ProyectoHerramienta[]
@@ -678,7 +678,7 @@ model Gasto {
   
   // Relación con Centro de Costo
   centroCostoId String?
-  centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -721,7 +721,7 @@ model CatMaterial {
   
   // Centro de Costo de imputación
   centroCostoId String?
-  centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -760,10 +760,10 @@ model CatHerramienta {
 
   // Centro de Costo de adquisición
   centroCostoId   String?
-  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
 
   // Relación con salidas de pañol
-  salidas         SalidaPanol[]
+  
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -829,7 +829,7 @@ model CatTarea {
   
   // Centro de Costo asociado
   centroCostoId   String?
-  centroCosto     CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  
   
   // Campos para tareas recurrentes
   esRecurrente    Boolean  @default(false)
