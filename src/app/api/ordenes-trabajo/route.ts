@@ -29,11 +29,11 @@ export async function GET(request: NextRequest) {
       })
 
       if (matched) {
-        // Filtrar OT donde asignadoId = matched.id O donde el trabajador está en personalOT
+        // Filtrar OT donde asignadoId = matched.id O donde el trabajador está en personalOT (por nombre)
         personalFilter = {
           OR: [
             { asignadoId: matched.id },
-            { personalOT: { some: { personalId: matched.id } } },
+            { personalOT: { some: { nombre: { contains: matched.nombre } } } },
           ],
         }
       } else {

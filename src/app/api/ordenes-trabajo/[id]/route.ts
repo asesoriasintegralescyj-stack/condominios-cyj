@@ -233,7 +233,19 @@ export async function PUT(
         }
       }
 
-      return updated
+      // Devolver la OT actualizada con todas sus relaciones
+      const updatedWithRelations = await tx.ordenTrabajo.findUnique({
+        where: { id },
+        include: {
+          propiedad: true,
+          asignado: true,
+          materiales: true,
+          herramientas: true,
+          tareas: true,
+          personalOT: true,
+        }
+      })
+      return updatedWithRelations
     })
 
     return NextResponse.json(orden)

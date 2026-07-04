@@ -67,6 +67,11 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const existing = await db.solicitudCompra.findUnique({ where: { id } })
     if (!existing) return apiError('Solicitud no encontrada', 404)
 
+    // Validación de seguridad: solo admin puede cambiar etapaAprobacion
+    if (body.etapaAprobacion !== undefined && session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
+      return apiError('Sin permisos para cambiar etapa', 403)
+    }
+
     // Normalize materiales
     const materialesRaw: MaterialSolicitud[] = Array.isArray(body.materiales)
       ? body.materiales.map((m: any) => ({
