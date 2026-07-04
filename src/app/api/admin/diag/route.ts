@@ -76,6 +76,23 @@ export async function POST() {
   }
   out.push(`${ok} tablas OK, ${err} err`)
 
+  // Agregar columnas faltantes a tablas existentes
+  const alters = [
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "rut" TEXT',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "direccion" TEXT',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "emailVerificado" TIMESTAMP(3)',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "ultimoAcceso" TIMESTAMP(3)',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "twoFactorSecret" TEXT',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "debeCambiarPassword" BOOLEAN NOT NULL DEFAULT false',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "sessionToken" TEXT',
+    'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "sessionExpiry" TIMESTAMP(3)',
+    'ALTER TABLE "User" ADD CONSTRAINT IF NOT EXISTS "User_rut_key" UNIQUE ("rut")',
+  ]
+  for (const a of alters) {
+    try { await p.$executeRawUnsafe(a); out.push('ALTER OK') }
+    catch (e: any) { out.push('ALTER: ' + e.message.substring(0, 60)) }
+  }
+
   // Crear condominio si no existe
   try {
     await p.$executeRawUnsafe(`INSERT INTO "Condominio" ("id", "nombre", "direccion", "comuna", "ciudad", "activo", "updatedAt") VALUES ('cmo9f3x7j0000ktyeb0rzhwt9', 'Laguna Norte', 'Av. La Montaña Norte 3650, Lampa', 'Lampa', 'Santiago', true, NOW()) ON CONFLICT DO NOTHING`)
