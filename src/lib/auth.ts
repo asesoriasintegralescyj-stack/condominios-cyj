@@ -214,32 +214,43 @@ export async function createSession(userId: string, userAgent?: string, ip?: str
 export async function verifySession(token: string): Promise<{ userId: string; user: SafeUser } | null> {
   if (!token) return null;
   
-  const session = await db.session.findUnique({
-    where: { token },
-    include: {
-      user: {
-        select: {
-          id: true,
-          email: true,
-          nombre: true,
-          apellido: true,
-          rut: true,
-          telefono: true,
-          direccion: true,
-          rol: true,
-          permisos: true,
-          activo: true,
-          emailVerificado: true,
-          ultimoAcceso: true,
-          intentosLogin: true,
-          bloqueadoHasta: true,
-          twoFactorEnabled: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-    },
-  });
+  // Usar queryRaw en vez de db.session.findUnique (que requiere relaciones)
+  const sessions = await db.$queryRawUnsafe(`
+    SELECT s.*, u."id" as u_id, u."email" as u_email, u."nombre" as u_nombre, u."apellido" as u_apellido,
+           u."rut" as u_rut, u."telefono" as u_telefono, u."direccion" as u_direccion, u."rol" as u_rol,
+           u."permisos" as u_permisos, u."activo" as u_activo, u."emailVerificado" as u_emailVerificado,
+           u."ultimoAcceso" as u_ultimoAcceso, u."intentosLogin" as u_intentosLogin, u."bloqueadoHasta" as u_bloqueadoHasta,
+           u."twoFactorEnabled" as u_twoFactorEnabled, u."createdAt" as u_createdAt, u."updatedAt" as u_updatedAt
+    FROM "Session" s
+    JOIN "User" u ON s."userId" = u."id"
+    WHERE s."token" = $1 LIMIT 1
+  `, token) as any[]
+
+  const sessionRow = sessions[0]
+  if (!sessionRow) return null
+
+  const session = {
+    userId: sessionRow.userId,
+    user: {
+      id: sessionRow.u_id,
+      email: sessionRow.u_email,
+      nombre: sessionRow.u_nombre,
+      apellido: sessionRow.u_apellido,
+      rut: sessionRow.u_rut,
+      telefono: sessionRow.u_telefono,
+      direccion: sessionRow.u_direccion,
+      rol: sessionRow.u_rol,
+      permisos: sessionRow.u_permisos,
+      activo: sessionRow.u_activo,
+      emailVerificado: sessionRow.u_emailVerificado,
+      ultimoAcceso: sessionRow.u_ultimoAcceso,
+      intentosLogin: sessionRow.u_intentosLogin,
+      bloqueadoHasta: sessionRow.u_bloqueadoHasta,
+      twoFactorEnabled: sessionRow.u_twoFactorEnabled,
+      createdAt: sessionRow.u_createdAt,
+      updatedAt: sessionRow.u_updatedAt,
+    }
+  }
   
   if (!session) return null;
   

@@ -61,10 +61,8 @@ export async function POST(request: NextRequest) {
     const permisos = getPermissions(session.user.rol);
     
     // Verificar si el usuario debe cambiar su contraseña en el primer login
-    const userFull = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { cambiarPasswordProximoLogin: true },
-    });
+    const userRows = await prisma.$queryRawUnsafe(`SELECT "cambiarPasswordProximoLogin" FROM "User" WHERE "id" = $1`, session.user.id) as any[]
+    const userFull = userRows[0]
     
     return NextResponse.json({
       success: true,
