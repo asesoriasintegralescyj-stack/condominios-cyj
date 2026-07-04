@@ -1,29 +1,37 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { PrismaClient } from '@prisma/client'
 
+// Diagnóstico: probar conexión con diferentes URLs de Neon
 export async function GET() {
-  const dbUrl = process.env.DATABASE_URL || 'NO CONFIGURADA'
-  const hostMatch = dbUrl.match(/@([^:]+):/)
-  const host = hostMatch ? hostMatch[1] : 'desconocido'
-  const safeUrl = dbUrl.replace(/:[^:@]+@/, ':***@')
-
-  let dbReachable = false
-  let dbError = ''
-  try {
-    const result: any = await db.$queryRaw`SELECT 1 as test`
-    dbReachable = true
-  } catch (e: any) {
-    dbError = e.message.substring(0, 300)
+  const originalUrl = process.env.DATABASE_URL || ''
+  
+  // URL sin -pooler (conexión directa)
+  const directUrl = originalUrl.replace('-pooler.', '.')
+  
+  const results: any = {
+    originalUrl: originalUrl.replace(/:[^:@]+@/, ':***@').substring(0, 100),
+    directUrl: directUrl.replace(/:[^:@]+@/, ':***@').substring(0, 100),
   }
 
-  return NextResponse.json({
-    host,
-    dbReachable,
-    dbError,
-    url: safeUrl.substring(0, 100),
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL_ENV: process.env.VERCEL_ENV || 'n/a',
-    },
-  })
+  // Probar URL original (pooler)
+  try {
+    const prisma1 = new PrismaClient({ datasources: { db: { url: originalUrl } } })
+    await prisma1.$queryRaw`SELECT 1 as test`
+    results.pooler = 'OK - CONECTADO'
+    await prisma1.$disconnect()
+  } catch (e: any) {
+    results.pooler = 'ERROR: ' + e.message.substring(0, 150)
+  }
+
+  // Probar URL directa (sin pooler)
+  try {
+    const prisma2 = new PrismaClient({ datasources: { db: { url: directUrl } } })
+    await prisma2.$queryRaw`SELECT 1 as test`
+    results.directo = 'OK - CONECTADO'
+    await prisma2.$disconnect()
+  } catch (e: any) {
+    results.directo = 'ERROR: ' + e.message.substring(0, 150)
+  }
+
+  return NextResponse.json(results)
 }
