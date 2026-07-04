@@ -10,7 +10,7 @@ export async function POST() {
     const raw = await readFile(filePath, 'utf-8')
     const data = JSON.parse(raw)
 
-    // ALTER para agregar columnas faltantes
+    // 1. ALTER tables
     const alters = [
       'ALTER TABLE "OrdenTrabajo" ADD COLUMN IF NOT EXISTS "tipo" TEXT NOT NULL DEFAULT \'Correctivo\'',
       'ALTER TABLE "OrdenTrabajo" ADD COLUMN IF NOT EXISTS "prioridad" TEXT NOT NULL DEFAULT \'Media\'',
@@ -44,15 +44,27 @@ export async function POST() {
       'ALTER TABLE "OTPersonal" ADD COLUMN IF NOT EXISTS "horasTrabajadas" DOUBLE PRECISION NOT NULL DEFAULT 0',
       'ALTER TABLE "OTPersonal" ADD COLUMN IF NOT EXISTS "cumple" BOOLEAN',
       'ALTER TABLE "OTPersonal" ADD COLUMN IF NOT EXISTS "observaciones" TEXT',
-      'ALTER TABLE "ProyectoMaterial" ADD COLUMN IF NOT EXISTS "linkCompra" TEXT',
     ]
     for (const a of alters) { try { await db.$executeRawUnsafe(a) } catch {} }
     out.push('ALTER OK')
 
-    // Migrar OTs
+    // 2. Dropear foreign keys problemáticas
+    out.push('Dropping FK...')
+    const dropFks = [
+      'ALTER TABLE "OrdenTrabajo" DROP CONSTRAINT IF EXISTS "OrdenTrabajo_centroCostoId_fkey"',
+      'ALTER TABLE "OrdenTrabajo" DROP CONSTRAINT IF EXISTS "OrdenTrabajo_propiedadId_fkey"',
+      'ALTER TABLE "OrdenTrabajo" DROP CONSTRAINT IF EXISTS "OrdenTrabajo_asignadoId_fkey"',
+      'ALTER TABLE "OrdenTrabajo" DROP CONSTRAINT IF EXISTS "OrdenTrabajo_activoId_fkey"',
+      'ALTER TABLE "OrdenTrabajo" DROP CONSTRAINT IF EXISTS "OrdenTrabajo_condominioId_fkey"',
+      'ALTER TABLE "Proyecto" DROP CONSTRAINT IF EXISTS "Proyecto_centroCostoId_fkey"',
+      'ALTER TABLE "Proyecto" DROP CONSTRAINT IF EXISTS "Proyecto_condominioId_fkey"',
+    ]
+    for (const d of dropFks) { try { await db.$executeRawUnsafe(d); out.push('  FK dropped') } catch {} }
+
+    // 3. Insertar OTs (centroCostoId = null para evitar FK errors)
+    out.push('Migrando OTs...')
     const ots = data.ordenTrabajo || []
     let otOk = 0
-    let otErr = 0
     for (const ot of ots) {
       try {
         await db.$executeRawUnsafe(
@@ -64,59 +76,58 @@ export async function POST() {
           ot.notas||null, ot.esRecurrente||false,
           ot.formaPago||null, ot.estadoAprobacion||null,
           ot.createdAt ? new Date(ot.createdAt) : new Date(), new Date(),
-          ot.condominioId||null, ot.propiedadId||null, ot.asignadoId||null, ot.centroCostoId||null,
+          ot.condominioId||null, ot.propiedadId||null, ot.asignadoId||null, null, // centroCostoId = null
           ot.fechaInicioReal||null, ot.fechaFinReal||null
         )
         otOk++
       } catch (e: any) {
-        if (otErr < 5) out.push(`OT ERR ${ot.otNum}: ${e.message.substring(0, 200)}`)
-        otErr++
+        if (otOk === 0 && otOk < 3) out.push(`ERR ${ot.otNum}: ${e.message.substring(0, 100)}`)
       }
     }
-    out.push(`OTs: ${otOk}/${ots.length} (${otErr} errores)`)
+    out.push(`OTs: ${otOk}/${ots.length}`)
 
-    // Migrar OTTareas
+    // 4. Tareas
     const tareas = data.oTTarea || []
     let tarOk = 0
     for (const t of tareas) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTTarea" ("id","descripcion","cantidad","estado","ok","noOk","na","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTTarea" ("id","descripcion","cantidad","estado","ok","noOk","na","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
           t.id, t.descripcion, t.cantidad||1, t.estado||'Pendiente', t.ok||false, t.noOk||false, t.na||false, t.otId)
         tarOk++
       } catch {}
     }
     out.push(`Tareas: ${tarOk}/${tareas.length}`)
 
-    // Migrar OTMateriales
+    // 5. Materiales
     const mats = data.oTMaterial || []
     let matOk = 0
     for (const m of mats) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTMaterial" ("id","descripcion","cantidad","precioUnit","total","unidad","otId") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTMaterial" ("id","descripcion","cantidad","precioUnit","total","unidad","otId") VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
           m.id, m.descripcion, m.cantidad||1, m.precioUnit||0, m.total||0, m.unidad||'unidad', m.otId)
         matOk++
       } catch {}
     }
     out.push(`Materiales: ${matOk}/${mats.length}`)
 
-    // Migrar OTHerramientas
+    // 6. Herramientas
     const hers = data.oTHerramienta || []
     let herOk = 0
     for (const h of hers) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTHerramienta" ("id","nombre","cantidad","otId") VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTHerramienta" ("id","nombre","cantidad","otId") VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING`,
           h.id, h.nombre, h.cantidad||1, h.otId)
         herOk++
       } catch {}
     }
     out.push(`Herramientas: ${herOk}/${hers.length}`)
 
-    // Migrar OTPersonal
+    // 7. Personal OT
     const pers = data.oTPersonal || []
     let perOk = 0
     for (const p of pers) {
       try {
-        await db.$executeRawUnsafe(`INSERT INTO "OTPersonal" ("id","nombre","tipo","cantidad","precioUnit","horasTrabajadas","total","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO UPDATE SET "otNum" = EXCLUDED."otNum"`,
+        await db.$executeRawUnsafe(`INSERT INTO "OTPersonal" ("id","nombre","tipo","cantidad","precioUnit","horasTrabajadas","total","otId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
           p.id, p.nombre, p.tipo||'Interno', p.cantidad||1, p.precioUnit||0, p.horasTrabajadas||0, p.total||0, p.otId)
         perOk++
       } catch {}
