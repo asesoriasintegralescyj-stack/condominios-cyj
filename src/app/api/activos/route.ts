@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
 
-    // Generar código automático si no se proporciona (ACT-001, ACT-002, ...)
+    // Generar código automático si no se proporciona usando tabla de secuencias
     let codigo = data.codigo || null
     if (!codigo) {
-      const existentes = await db.activo.findMany({ select: { codigo: true } })
-      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'ACT', 3)
+      const { generarCorrelativoDB } = await import('@/lib/utils')
+      codigo = await generarCorrelativoDB(db, 'Activo', 'ACT', 3)
     }
 
     const activo = await db.activo.create({

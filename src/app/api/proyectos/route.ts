@@ -206,9 +206,9 @@ export async function POST(request: NextRequest) {
           ? proyectoData.cotizaciones
           : JSON.stringify(proyectoData.cotizaciones)
 
-    // Generar código automático PROY-001, PROY-002, ...
-    const existentes = await db.proyecto.findMany({ select: { codigo: true } })
-    const codigo = generarCorrelativo(existentes.map(e => e.codigo), 'PROY', 3)
+    // Generar código automático usando tabla de secuencias
+    const { generarCorrelativoDB } = await import('@/lib/utils')
+    const codigo = await generarCorrelativoDB(db, 'Proyecto', 'PROY', 3)
 
     const proyecto = await db.proyecto.create({
       data: {

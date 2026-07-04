@@ -74,16 +74,9 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    // Generar codigo SC-XXXX
-    const last = await db.solicitudCompra.findFirst({
-      orderBy: { codigo: 'desc' },
-    })
-    let nextNum = 1
-    if (last && last.codigo) {
-      const match = last.codigo.match(/SC-(\d+)/i)
-      if (match) nextNum = parseInt(match[1], 10) + 1
-    }
-    const codigo = `SC-${String(nextNum).padStart(4, '0')}`
+    // Generar codigo SC-XXXX usando tabla de secuencias
+    const { generarCorrelativoDB } = await import('@/lib/utils')
+    const codigo = await generarCorrelativoDB(db, 'SolicitudCompra', 'SC', 4)
 
     // Normalize materiales
     const materialesRaw: MaterialSolicitud[] = Array.isArray(body.materiales)

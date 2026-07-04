@@ -33,11 +33,11 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
 
-    // Generar código automático si no se proporciona (TAR-001, TAR-002, ...)
+    // Generar código automático si no se proporciona usando tabla de secuencias
     let codigo = data.codigo || null
     if (!codigo) {
-      const existentes = await db.catTarea.findMany({ select: { codigo: true } })
-      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'TAR', 3)
+      const { generarCorrelativoDB } = await import('@/lib/utils')
+      codigo = await generarCorrelativoDB(db, 'CatTarea', 'TAR', 3)
     }
 
     const tarea = await db.catTarea.create({

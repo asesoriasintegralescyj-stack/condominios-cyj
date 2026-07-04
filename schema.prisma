@@ -33,7 +33,6 @@ model Condominio {
 
   // Relaciones
   propiedades   Propiedad[]
-  residentes    Residente[]
   personal      Personal[]
   activos       Activo[]
   ordenesTrabajo OrdenTrabajo[]
@@ -41,8 +40,6 @@ model Condominio {
   inspecciones  Inspeccion[]
   gastos        Gasto[]
   proveedores   Proveedor[]
-  reservas      Reserva[]
-  gastosComunes GastoComun[]
   notificaciones Notificacion[]
   catMateriales CatMaterial[]
   catHerramientas CatHerramienta[]
@@ -50,13 +47,7 @@ model Condominio {
   centroCostos  CentroCostoMaster[]
   // Nuevas relaciones
   comites       Comite[]
-  sesionesComite SesionComite[]
-  deudas        Deuda[]
-  estadosCuenta EstadoCuenta[]
-  configMorosidad ConfigMorosidad[]
   movimientosInventario MovimientoInventario[]
-  configNotificaciones ConfigNotificacion[]
-  integraciones Integracion[]
   // Cumplimiento Legal
   categoriasCumplimiento CategoriaCumplimiento[]
   documentosCumplimiento DocumentoCumplimiento[]
@@ -118,7 +109,6 @@ model User {
   
   // Relaciones
   sessions      Session[]
-  cuentas       Cuenta[]
   logsAuditoria LogAuditoria[]
 }
 
@@ -139,20 +129,6 @@ model Session {
 
 // ============================================
 // CUENTAS EXTERNAS (OAuth)
-// ============================================
-model Cuenta {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider     String   // google, facebook, etc.
-  providerId   String   // ID del proveedor
-  accessToken  String?
-  refreshToken String?
-  expiresAt    DateTime?
-  createdAt    DateTime @default(now())
-  
-  @@unique([provider, providerId])
-}
 
 // ============================================
 // LOGS DE AUDITORÍA
@@ -199,7 +175,6 @@ model Propiedad {
   condominioId String?
   condominio   Condominio? @relation(fields: [condominioId], references: [id])
 
-  residentes   Residente[]
   otPropiedad  OrdenTrabajo[] @relation("OTPropiedad")
   @@index([condominioId])
   @@index([estado])
@@ -207,45 +182,6 @@ model Propiedad {
 
 // ============================================
 // RESIDENTES
-// ============================================
-model Residente {
-  id            String   @id @default(cuid())
-  nombre        String
-  apellido      String?
-  rut           String?  @unique
-  unidad        String?
-  etapa         String?  // BANDURRIAS, BECACINAS, etc.
-  tipo          String   @default("Residente") // Residente, Propietario, Arrendatario, Visita
-  telefono      String?
-  email         String?
-  fechaIngreso  String?  // Date as string
-  estado        String   @default("Activo") // Activo, Moroso, Vacaciones, Licencia, Inactivo
-  vehiculos     String?  // Información de vehículos
-  notas         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relación con Condominio
-  condominioId  String?
-  condominio    Condominio? @relation(fields: [condominioId], references: [id])
-
-  propiedadId   String?
-  propiedad     Propiedad? @relation(fields: [propiedadId], references: [id])
-  
-  reservas      Reserva[]
-  pagosGastos   PagoGastoComun[]
-  // Nuevas relaciones
-  deudas        Deuda[]
-  estadosCuenta EstadoCuenta[]
-  cartasCobranza CartaCobranza[]
-  accesosPortal AccesoPortal[]
-  solicitudes   SolicitudMantenimiento[]
-  @@index([condominioId, estado])
-  @@index([rut])
-  @@index([unidad])
-  @@index([etapa])
-  @@index([createdAt])
-}
 
 // ============================================
 // PERSONAL / EMPLEADOS
@@ -843,36 +779,6 @@ model CatTarea {
 
 // ============================================
 // RESERVAS (ESPACIOS COMUNES)
-// ============================================
-model Reserva {
-  id            String   @id @default(cuid())
-  titulo        String
-  espacio       String   // Quincho, Sala de Eventos, Piscina, Estacionamiento, Cancha, Gimnasio, etc.
-  fecha         String   // Fecha de la reserva
-  horaInicio    String   // Hora de inicio
-  horaFin       String   // Hora de término
-  residente     String   // Nombre del residente
-  unidad        String?  // Unidad del residente
-  telefono      String?  // Teléfono de contacto
-  email         String?  // Email de contacto
-  numPersonas   Int      @default(1)  // Número de personas
-  estado        String   @default("Pendiente") // Pendiente, Confirmada, Cancelada, Completada
-  monto         Float    @default(0)  // Monto de la reserva
-  pagado        Boolean  @default(false)
-  comprobante   String?  // Base64 del comprobante de pago
-  notas         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Relación con Condominio
-  condominioId  String?
-  condominio    Condominio? @relation(fields: [condominioId], references: [id])
-  
-  residenteId   String?
-  residenteRel  Residente? @relation(fields: [residenteId], references: [id])
-  @@index([condominioId, fecha])
-  @@index([estado])
-}
 
 // ============================================
 // CONFIGURACIÓN DEL SISTEMA
@@ -888,59 +794,8 @@ model Configuracion {
 
 // ============================================
 // GASTOS COMUNES
-// ============================================
-model GastoComun {
-  id              String   @id @default(cuid())
-  periodo         String   // Formato: "2024-01"
-  fechaEmision    String
-  fechaVencimiento String
-  estado          String   @default("Pendiente") // Pendiente, Pagado, Vencido, Parcial
-  totalGastos     Float    @default(0)
-  totalCobrar     Float    @default(0)
-  montoPorUnidad  Float    @default(0)
-  notas           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
-  // Relación con Condominio
-  condominioId    String?
-  condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
-  detalles        DetalleGastoComun[]
-  pagos           PagoGastoComun[]
-}
-
-model DetalleGastoComun {
-  id            String   @id @default(cuid())
-  concepto      String
-  categoria     String   @default("General") // Personal, Servicios, Mantenimiento, Administración, etc.
-  monto         Float    @default(0)
-  centroCosto   String?
-  notas         String?
-  gastoComunId  String
-  gastoComun    GastoComun @relation(fields: [gastoComunId], references: [id], onDelete: Cascade)
-}
-
-model PagoGastoComun {
-  id            String   @id @default(cuid())
-  monto         Float    @default(0)
-  fechaPago     String
-  metodo        String   @default("Efectivo") // Efectivo, Transferencia, Cheque, Tarjeta
-  referencia    String?  // Número de comprobante o referencia
-  estado        String   @default("Pagado") // Pagado, Pendiente, Rechazado
-  notas         String?
-  
-  residenteId   String?
-  residente     Residente? @relation(fields: [residenteId], references: [id])
-  gastoComunId  String
-  gastoComun    GastoComun @relation(fields: [gastoComunId], references: [id])
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@index([residenteId, createdAt])
-  @@index([gastoComunId])
-  @@index([estado])
-}
 
 // ============================================
 // NOTIFICACIONES
@@ -1129,59 +984,8 @@ model JustificacionAsistencia {
 
 // ============================================
 // CONTABILIDAD
-// ============================================
-model CuentaContable {
-  id            String   @id @default(cuid())
-  codigo        String   @unique
-  nombre        String
-  tipo          String   @default("Cuenta") // Activo, Pasivo, Patrimonio, Ingreso, Gasto
-  nivel         Int      @default(1)
-  padreId       String?
-  padre         CuentaContable? @relation("CuentaJerarquia", fields: [padreId], references: [id])
-  hijos         CuentaContable[] @relation("CuentaJerarquia")
-  saldo         Float    @default(0)
-  estado        String   @default("Activa")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
-  detalles      DetalleAsiento[]
-}
 
-model AsientoContable {
-  id            String   @id @default(cuid())
-  numero        String   @unique
-  fecha         String
-  glosa         String
-  tipo          String   @default("Normal") // Normal, Apertura, Cierre, Ajuste
-  estado        String   @default("Pendiente") // Pendiente, Aprobado, Anulado
-  totalDebe     Float    @default(0)
-  totalHaber    Float    @default(0)
-  documento     String?  // Referencia a documento (OT, Gasto, Pago, etc.)
-  documentoId   String?
-  notas         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  detalles      DetalleAsiento[]
-  @@index([estado, createdAt])
-  @@index([tipo])
-}
-
-model DetalleAsiento {
-  id              String   @id @default(cuid())
-  glosa           String?
-  debe            Float    @default(0)
-  haber           Float    @default(0)
-  
-  cuentaId        String
-  cuenta          CuentaContable @relation(fields: [cuentaId], references: [id])
-  asientoId       String
-  asiento         AsientoContable @relation(fields: [asientoId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime @default(now())
-  @@index([asientoId])
-  @@index([cuentaId])
-}
 
 // ============================================
 // HISTORIAL DE APROBACIONES OT
@@ -1231,193 +1035,22 @@ model Comite {
 
 // ============================================
 // SESIONES DE COMITÉ
-// ============================================
-model SesionComite {
-  id            String   @id @default(cuid())
-  titulo        String
-  tipo          String   @default("Ordinaria") // Ordinaria, Extraordinaria
-  fecha         String
-  hora          String?
-  lugar         String?
-  estado        String   @default("Programada") // Programada, Realizada, Cancelada
-  ordenDia      String?  // JSON con puntos del orden del día
-  acuerdos      String?  // JSON con acuerdos tomados
-  asistentes    String?  // JSON con lista de asistentes
-  acta          String?  // Texto del acta o referencia a documento
-  quorum        Float    @default(0) // Porcentaje de asistencia
-  notas         String?
-  
-  // Relación con Condominio
-  condominioId  String?
-  condominio    Condominio? @relation(fields: [condominioId], references: [id])
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  @@index([estado])
-  @@index([fecha])
-}
 
 // ============================================
 // AUDITORÍA DEL SISTEMA (extendido)
-// ============================================
-model AuditoriaSistema {
-  id              String   @id @default(cuid())
-  tipoAccion      String   // Acceso, Modificación, Eliminación, Exportación, Backup, Login, Logout
-  modulo          String   // Módulo afectado
-  descripcion     String   // Descripción de la acción
-  entidad         String?  // Entidad afectada
-  entidadId       String?  // ID de la entidad
-  datosAntes      String?  // JSON con datos antes
-  datosDespues    String?  // JSON con datos después
-  usuarioId       String?  // Usuario que realizó la acción
-  usuarioNombre   String?  // Nombre del usuario
-  ip              String?
-  userAgent       String?
-  resultado       String   @default("Exitoso") // Exitoso, Fallido
-  mensajeError    String?
-  
-  createdAt       DateTime @default(now())
-  @@index([tipoAccion, createdAt])
-  @@index([modulo])
-  @@index([resultado])
-  @@index([createdAt])
-}
 
 // ============================================
 // MOROSIDAD Y DEUDAS
-// ============================================
-model Deuda {
-  id              String   @id @default(cuid())
-  tipo            String   @default("GastoComun") // GastoComun, Multa, Interes, CargoExtra
-  periodo         String   // Período de la deuda (2024-01)
-  concepto        String   // Descripción del concepto
-  montoOriginal   Float    @default(0) // Monto original
-  montoInteres    Float    @default(0) // Interés acumulado
-  montoTotal      Float    @default(0) // Total a pagar
-  fechaVencimiento String?
-  diasMora        Int      @default(0)
-  estado          String   @default("Pendiente") // Pendiente, Parcial, Pagado, Condonado
-  notas           String?
-  
-  // Residente
-  residenteId     String?
-  residente       Residente? @relation(fields: [residenteId], references: [id])
-  
-  // Condominio
-  condominioId    String?
-  condominio      Condominio? @relation(fields: [condominioId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([residenteId, estado])
-  @@index([periodo])
-  @@index([condominioId, periodo])
-  @@index([estado])
-}
 
 // ============================================
 // ESTADOS DE CUENTA
-// ============================================
-model EstadoCuenta {
-  id              String   @id @default(cuid())
-  periodo         String   // Período del estado
-  fechaGeneracion String
-  saldoAnterior   Float    @default(0)
-  cargosMes       Float    @default(0)
-  pagosMes        Float    @default(0)
-  saldoActual     Float    @default(0)
-  interesesMora   Float    @default(0)
-  totalPagar      Float    @default(0)
-  fechaVencimiento String?
-  estado          String   @default("Generado") // Generado, Enviado, Pagado, Vencido
-  
-  // Residente
-  residenteId     String?
-  residente       Residente? @relation(fields: [residenteId], references: [id])
-  
-  // Condominio
-  condominioId    String?
-  condominio      Condominio? @relation(fields: [condominioId], references: [id])
-  
-  // Detalles del estado de cuenta
-  detalles        DetalleEstadoCuenta[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@unique([residenteId, periodo])
-  @@index([residenteId])
-  @@index([condominioId, periodo])
-  @@index([estado])
-}
 
-model DetalleEstadoCuenta {
-  id              String   @id @default(cuid())
-  tipo            String   // Cargo, Pago, Interes, NotaCredito
-  concepto        String
-  monto           Float    @default(0)
-  fecha           String?
-  referencia      String?  // Referencia a documento
-  
-  estadoCuentaId  String
-  estadoCuenta    EstadoCuenta @relation(fields: [estadoCuentaId], references: [id], onDelete: Cascade)
-  
-  createdAt       DateTime @default(now())
-}
 
 // ============================================
 // CARTAS DE COBRANZA
-// ============================================
-model CartaCobranza {
-  id              String   @id @default(cuid())
-  tipo            String   @default("Recordatorio") // Recordatorio, Aviso, UltimoAviso, CobroJudicial
-  numeroCarta     Int      @default(1) // Número de carta enviada (1, 2, 3)
-  asunto          String
-  contenido       String   // Texto de la carta
-  fechaEnvio      String?
-  fechaGeneracion String
-  metodoEnvio     String   @default("Email") // Email, WhatsApp, CartaFisica
-  estado          String   @default("Generada") // Generada, Enviada, Entregada, SinRespuesta
-  
-  // Residente
-  residenteId     String?
-  residente       Residente? @relation(fields: [residenteId], references: [id])
-  
-  // Deudas incluidas
-  deudasIncluidas String?  // JSON con IDs de deudas
-  
-  // PDF generado
-  archivoPdf      String?  // Base64 del PDF
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([residenteId, estado])
-  @@index([residenteId, createdAt])
-  @@index([estado])
-}
 
 // ============================================
 // CONFIGURACIÓN DE MOROSIDAD
-// ============================================
-model ConfigMorosidad {
-  id                  String   @id @default(cuid())
-  tasaInteresMensual  Float    @default(1.5) // Tasa de interés mensual (%)
-  tasaInteresDiario   Float    @default(0.05) // Tasa de interés diario (%)
-  diasGracia          Int      @default(10) // Días de gracia antes de aplicar interés
-  maxDiasMora         Int      @default(90) // Días máximos de mora para cobro judicial
-  montosCartas        String?  // JSON con montos que disparan cada tipo de carta
-  plantillasCartas    String?  // JSON con plantillas de cartas
-  activo              Boolean  @default(true)
-  
-  // Condominio
-  condominioId        String?
-  condominio          Condominio? @relation(fields: [condominioId], references: [id])
-  
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-}
 
 // ============================================
 // MOVIMIENTOS DE INVENTARIO
@@ -1477,208 +1110,27 @@ model Backup {
 
 // ============================================
 // CONFIGURACIÓN DE NOTIFICACIONES
-// ============================================
-model ConfigNotificacion {
-  id              String   @id @default(cuid())
-  tipo            String   // Email, WhatsApp, SMS, Push
-  proveedor       String?  // sendgrid, mailgun, twilio, etc.
-  configuracion   String?  // JSON con configuración del proveedor
-  plantillas      String?  // JSON con plantillas de mensajes
-  activo          Boolean  @default(false)
-  
-  // Eventos que disparan notificación
-  eventos         String?  // JSON con lista de eventos
-  
-  // Condominio
-  condominioId    String?
-  condominio      Condominio? @relation(fields: [condominioId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@unique([tipo, condominioId])
-}
 
 // ============================================
 // BITÁCORA DE ENVÍOS
-// ============================================
-model EnvioNotificacion {
-  id              String   @id @default(cuid())
-  tipo            String   // Email, WhatsApp, SMS
-  destino         String   // Email, teléfono, etc.
-  asunto          String?
-  mensaje         String
-  estado          String   @default("Pendiente") // Pendiente, Enviado, Fallido, Entregado, Leido
-  fechaEnvio      DateTime?
-  fechaEntrega    DateTime?
-  mensajeError    String?
-  referenciaId    String?  // ID de la entidad relacionada
-  referenciaTipo  String?  // OT, Reserva, Morosidad, etc.
-  
-  // Usuario destinatario
-  usuarioId       String?
-  
-  createdAt       DateTime @default(now())
-  
-  @@index([estado, createdAt])
-}
 
 // ============================================
 // PORTAL RESIDENTE
-// ============================================
-model AccesoPortal {
-  id              String   @id @default(cuid())
-  residenteId     String
-  residente       Residente? @relation(fields: [residenteId], references: [id])
-  token           String   @unique
-  fechaCreacion   DateTime @default(now())
-  fechaExpiracion DateTime?
-  ultimoAcceso    DateTime?
-  activo          Boolean  @default(true)
-  
-  @@index([residenteId])
-}
 
 // ============================================
 // RATE LIMITING (Limitación de velocidad)
-// ============================================
-model RateLimit {
-  id              String   @id @default(cuid())
-  ip              String
-  endpoint        String
-  contador        Int      @default(1)
-  ventanaInicio   DateTime @default(now())
-  bloqueadoHasta  DateTime?
-  
-  @@unique([ip, endpoint])
-  @@index([ip, ventanaInicio])
-}
 
 // ============================================
 // INTEGRACIONES (Pagos en línea, etc.)
-// ============================================
-model Integracion {
-  id              String   @id @default(cuid())
-  tipo            String   // Flow, Khipu, MercadoPago, PayPal, WhatsApp
-  nombre          String
-  configuracion   String?  // JSON con configuración (API keys, etc.)
-  activo          Boolean  @default(false)
-  entorno         String   @default("sandbox") // sandbox, production
-  webhooks        String?  // URL de webhooks configurados
-  
-  // Condominio
-  condominioId    String?
-  condominio      Condominio? @relation(fields: [condominioId], references: [id])
-  
-  // Transacciones asociadas
-  transacciones   TransaccionPago[]
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@unique([tipo, condominioId])
-}
 
 // ============================================
 // TRANSACCIONES DE PAGO
-// ============================================
-model TransaccionPago {
-  id              String   @id @default(cuid())
-  externoId       String?  // ID de la transacción en el proveedor
-  tipo            String   // GastoComun, Reserva, Multa
-  referenciaId    String?  // ID de la entidad relacionada
-  monto           Float    @default(0)
-  moneda          String   @default("CLP")
-  estado          String   @default("Pendiente") // Pendiente, Completado, Fallido, Reembolsado
-  metodo          String?  // Webpay, Transferencia, etc.
-  fechaPago       DateTime?
-  datosPago       String?  // JSON con datos del pago
-  comprobante     String?  // URL o base64 del comprobante
-  
-  // Residente
-  residenteId     String?
-  
-  // Integración
-  integracionId   String?
-  integracion     Integracion? @relation(fields: [integracionId], references: [id])
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([estado, createdAt])
-  @@index([residenteId])
-}
 
 // ============================================
 // FIRMAS DIGITALES
-// ============================================
-model FirmaDigital {
-  id              String   @id @default(cuid())
-  documento       String   // Tipo de documento (Acta, Contrato, OT)
-  documentoId     String?
-  titulo          String
-  contenido       String?  // Hash o contenido del documento
-  archivo         String?  // PDF en base64
-  estado          String   @default("Pendiente") // Pendiente, Firmado, Rechazado, Vencido
-  
-  // Solicitante
-  solicitadoPor   String?  // ID del usuario
-  solicitadoNombre String?
-  fechaSolicitud  DateTime @default(now())
-  
-  // Firmante
-  firmanteId      String?
-  firmanteNombre  String?
-  firmanteEmail   String?
-  firmaHash       String?
-  fechaFirma      DateTime?
-  ipFirma         String?
-  certificado     String?  // Datos del certificado
-  
-  // Caducidad
-  fechaExpiracion DateTime?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([estado, createdAt])
-}
 
 // ============================================
 // SOLICITUDES DE MANTENIMIENTO (Portal Residentes)
-// ============================================
-model SolicitudMantenimiento {
-  id              String   @id @default(cuid())
-  titulo          String
-  descripcion     String?
-  tipo            String   @default("Mantenimiento") // Mantenimiento, Reparación, Sugerencia, Queja, Otro
-  prioridad       String   @default("Normal") // Baja, Normal, Alta, Urgente
-  estado          String   @default("Pendiente") // Pendiente, En Revisión, En Proceso, Resuelto, Cerrado
-  ubicacion       String?  // Ubicación del problema
-  fotos           String?  // JSON array de fotos en base64
-  
-  // Respuesta de administración
-  respuesta       String?  // Respuesta o comentario de la administración
-  fechaRespuesta  DateTime?
-  respondidoPor   String?  // Nombre del usuario que respondió
-  
-  // Fechas
-  fechaSolicitud  DateTime @default(now())
-  fechaCierre     DateTime?
-  
-  // Residente
-  residenteId     String?
-  residente       Residente? @relation(fields: [residenteId], references: [id])
-  
-  // Comunicación
-  conversacion    String?  // JSON array con mensajes de la conversación
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  @@index([residenteId, estado])
-  @@index([estado, createdAt])
-}
 
 // ============================================
 // MÓDULO DE CUMPLIMIENTO LEGAL
@@ -1995,4 +1447,18 @@ model RegistroLV {
 
   @@index([lvId, fecha])
   @@index([fecha])
+}
+
+// ============================================
+// SECUENCIAS — Correlativos automáticos
+// ============================================
+model Secuencia {
+  id        String   @id @default(cuid())
+  tabla     String   @unique // "OrdenTrabajo", "Proyecto", "SolicitudCompra", etc.
+  prefijo   String   // "OT", "PROY", "SC", "HERR", "MAT", "TAR", "ACT"
+  ultimoNum Int      @default(0)
+  padding   Int      @default(3)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

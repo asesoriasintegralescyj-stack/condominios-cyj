@@ -127,16 +127,9 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    // Get next OT number
-    const lastOT = await db.ordenTrabajo.findFirst({
-      orderBy: { otNum: 'desc' }
-    })
-    
-    let nextNum = 'OT-1001'
-    if (lastOT && lastOT.otNum) {
-      const lastNum = parseInt(lastOT.otNum.replace('OT-', ''))
-      nextNum = `OT-${String(lastNum + 1).padStart(4, '0')}`
-    }
+    // Get next OT number using sequence table
+    const { generarCorrelativoDB } = await import('@/lib/utils')
+    const nextNum = await generarCorrelativoDB(db, 'OrdenTrabajo', 'OT', 4)
     
     // Extract resources from data
     const { materiales, herramientas, tareas, personalOT, centroCostoId, ...otData } = data

@@ -33,11 +33,11 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
 
-    // Generar código automático si no se proporciona (MAT-001, MAT-002, ...)
+    // Generar código automático si no se proporciona usando tabla de secuencias
     let codigo = data.codigo || null
     if (!codigo) {
-      const existentes = await db.catMaterial.findMany({ select: { codigo: true } })
-      codigo = generarCorrelativo(existentes.map(e => e.codigo), 'MAT', 3)
+      const { generarCorrelativoDB } = await import('@/lib/utils')
+      codigo = await generarCorrelativoDB(db, 'CatMaterial', 'MAT', 3)
     }
 
     const material = await db.catMaterial.create({

@@ -236,3 +236,33 @@ export function generarCorrelativo(
   const nextNum = maxNum + 1
   return `${prefix}-${String(nextNum).padStart(padLength, '0')}`
 }
+
+// ============================================
+// CORRELATIVOS CON TABLA DE SECUENCIAS
+// ============================================
+
+/**
+ * Genera el siguiente correlativo usando la tabla Secuencia.
+ * Es transaccional y atómica: no hay riesgo de duplicación.
+ * 
+ * @param db - Instancia de PrismaClient
+ * @param tabla - Nombre de la tabla ("OrdenTrabajo", "Proyecto", etc.)
+ * @param prefijo - Prefijo del código ("OT", "PROY", "SC", etc.)
+ * @param padding - Cantidad de dígitos (default: 3)
+ * @returns El siguiente código (ej: "OT-110")
+ */
+export async function generarCorrelativoDB(
+  db: any,
+  tabla: string,
+  prefijo: string,
+  padding: number = 3
+): Promise<string> {
+  // Upsert atómico: incrementa el contador y devuelve el nuevo número
+  const secuencia = await db.secuencia.upsert({
+    where: { tabla },
+    update: { ultimoNum: { increment: 1 } },
+    create: { tabla, prefijo, ultimoNum: 1, padding },
+  })
+  
+  return `${prefijo}-${String(secuencia.ultimoNum).padStart(padding, '0')}`
+}
