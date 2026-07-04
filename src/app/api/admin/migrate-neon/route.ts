@@ -1,93 +1,90 @@
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const NEON_URL = 'postgresql://neondb_owner:npg_Z7FeoOqKwj5f@ep-purple-fog-aj8k6r6o-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require'
+import { db } from '@/lib/db'
+import { readFile } from 'fs/promises'
+import path from 'path'
 
 export async function POST() {
   const out: string[] = []
   
-  // 1. Probar conexión a Neon
-  out.push('1. Probando Neon...')
-  const neon = new PrismaClient({ datasources: { db: { url: NEON_URL } } })
-  
   try {
-    const r: any = await neon.$queryRaw`SELECT 1 as test`
-    out.push('   Neon CONECTADO!')
-  } catch (e: any) {
-    out.push('   Neon NO disponible: ' + e.message.substring(0, 100))
-    await neon.$disconnect()
-    return NextResponse.json({ success: false, out })
-  }
-
-  // 2. Exportar TODOS los datos de Neon
-  out.push('2. Exportando datos de Neon...')
-  const data: any = {}
-  
-  const tables = [
-    'OrdenTrabajo', 'Proyecto', 'SolicitudCompra', 'Inspeccion',
-    'RegistroRonda', 'Ronda', 'Personal', 'Activo', 'Proveedor',
-    'CatHerramienta', 'CatMaterial', 'CatTarea', 'CentroCostoMaster',
-    'Gasto', 'Notificacion', 'CajaChica', 'Configuracion',
-    'OTMaterial', 'OTHerramienta', 'OTTarea', 'OTPersonal', 'OTDocumento',
-    'ProyectoMaterial', 'ProyectoHerramienta', 'ProyectoTarea', 'ProyectoPersonal', 'ProyectoDocumento',
-    'HistorialAprobacionOT', 'HistorialAprobacionSC',
-    'HorarioTrabajador', 'RegistroAsistenciaReloj', 'InasistenciaAtraso', 'JustificacionAsistencia',
-    'MovimientoInventario', 'ListaDesplegable', 'Backup',
-    'ListaVerificacion', 'RegistroLV',
-  ]
-  
-  for (const table of tables) {
+    // Leer JSON de respaldo
+    const filePath1 = path.join(process.cwd(), 'public', 'respaldo-bd-part1.json')
+    const filePath2 = path.join(process.cwd(), 'public', 'respaldo-bd-part2.json')
+    
+    let data: any = {}
+    
     try {
-      const rows = await (neon as any)[table[0].toLowerCase() + table.slice(1)].findMany()
-      data[table] = rows
-      out.push(`   ${table}: ${rows.length} registros`)
-    } catch (e: any) {
-      out.push(`   ${table}: SKIP (${e.message.substring(0, 40)})`)
-    }
-  }
-  
-  await neon.$disconnect()
-  
-  // 3. Importar datos a Aiven (BD actual)
-  out.push('3. Importando a Aiven...')
-  const aiven = new PrismaClient()
-  
-  let totalImported = 0
-  
-  for (const [table, rows] of Object.entries(data)) {
-    if (!rows || rows.length === 0) continue
+      const raw1 = await readFile(filePath1, 'utf-8')
+      data = { ...data, ...JSON.parse(raw1) }
+      out.push('Part 1 cargada')
+    } catch (e: any) { out.push('Part 1 error: ' + e.message.substring(0, 60)) }
     
-    const modelName = table[0].toLowerCase() + table.slice(1)
+    try {
+      const raw2 = await readFile(filePath2, 'utf-8')
+      data = { ...data, ...JSON.parse(raw2) }
+      out.push('Part 2 cargada')
+    } catch (e: any) { out.push('Part 2 error: ' + e.message.substring(0, 60)) }
     
-    for (const row of rows) {
-      try {
-        // Limpiar el row (quitar relaciones que no existen)
-        const cleanRow: any = {}
-        for (const [key, value] of Object.entries(row)) {
-          // Skip relation fields (objects/arrays)
-          if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) continue
-          if (Array.isArray(value)) continue
-          cleanRow[key] = value
+    // Migrar cada tabla
+    const tableOrder = [
+      'condominio', 'centroCostoMaster', 'configuracion',
+      'propiedad', 'personal', 'user', 'activo', 'proveedor',
+      'catHerramienta', 'catMaterial', 'catTarea',
+      'ordenTrabajo', 'oTMaterial', 'oTHerramienta', 'oTTarea', 'oTPersonal', 'oTDocumento',
+      'proyecto', 'proyectoMaterial', 'proyectoHerramienta', 'proyectoTarea', 'proyectoPersonal', 'proyectoDocumento',
+      'solicitudCompra',
+      'inspeccion', 'ronda', 'registroRonda',
+      'notificacion', 'asistencia',
+      'categoriaCumplimiento', 'documentoCumplimiento', 'historialCumplimiento', 'resumenCumplimiento',
+      'horarioTrabajador',
+      'historialAprobacionOT', 'historialAprobacionSC',
+    ]
+    
+    let totalImported = 0
+    
+    for (const table of tableOrder) {
+      const rows = data[table]
+      if (!rows || rows.length === 0) continue
+      
+      const modelName = table[0].toLowerCase() + table.slice(1)
+      let imported = 0
+      
+      for (const row of rows) {
+        try {
+          // Limpiar el row
+          const cleanRow: any = {}
+          for (const [k, v] of Object.entries(row)) {
+            // Skip relation fields
+            if (v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) continue
+            if (Array.isArray(v)) continue
+            // Convertir fechas string a Date si parecen fechas
+            if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}T/) && (k === 'createdAt' || k === 'updatedAt' || k === 'fechaSolicitud' || k === 'fechaIngreso' || k === 'supervisorFechaAprobacion' || k === 'adminFechaAprobacion' || k === 'emailFechaEnvio' || k === 'fechaVerificacion' || k === 'fechaFin' || k === 'fechaInicio')) {
+              cleanRow[k] = new Date(v)
+            } else {
+              cleanRow[k] = v
+            }
+          }
+          
+          await (db as any)[modelName].upsert({
+            where: { id: cleanRow.id },
+            update: cleanRow,
+            create: cleanRow,
+          })
+          imported++
+          totalImported++
+        } catch (e: any) {
+          // Skip errors
         }
-        
-        // Upsert
-        await (aiven as any)[modelName].upsert({
-          where: { id: cleanRow.id },
-          update: cleanRow,
-          create: cleanRow,
-        })
-        totalImported++
-      } catch (e: any) {
-        // Skip errors (duplicates, missing columns, etc)
       }
+      out.push(`${table}: ${imported}/${rows.length}`)
     }
-    out.push(`   ${table}: importado`)
+    
+    out.push(`TOTAL: ${totalImported} registros migrados`)
+    out.push('MIGRACION COMPLETA')
+    
+  } catch (e: any) {
+    out.push('ERROR: ' + e.message.substring(0, 100))
   }
   
-  await aiven.$disconnect()
-  
-  out.push(`TOTAL importado: ${totalImported} registros`)
-  out.push('MIGRACION COMPLETA')
-  
-  return NextResponse.json({ success: true, out, totalImported })
+  return NextResponse.json({ success: true, out })
 }
