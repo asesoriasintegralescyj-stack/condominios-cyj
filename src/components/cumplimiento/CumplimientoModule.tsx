@@ -196,6 +196,9 @@ export function CumplimientoModule() {
   const [deleteId, setDeleteId] = useState<string>('')
   
   // Form data
+  // archivoRemoved: bandera para distinguir entre "no toqué el archivo" (false, default)
+  // y "el usuario hizo clic en Quitar archivo" (true). Solo cuando es true el backend
+  // debe borrar el archivo existente.
   const [documentoForm, setDocumentoForm] = useState({
     titulo: '',
     descripcion: '',
@@ -207,6 +210,7 @@ export function CumplimientoModule() {
     archivoNombre: '',
     archivoTipo: '',
     archivoBase64: '',
+    archivoRemoved: false,
   })
   
   const [categoriaForm, setCategoriaForm] = useState({
@@ -323,6 +327,7 @@ export function CumplimientoModule() {
         archivoNombre: documento.archivoNombre || '',
         archivoTipo: documento.archivoTipo || '',
         archivoBase64: documento.archivoBase64 || '',
+        archivoRemoved: false,
       })
     } else {
       setEditingDocumento(null)
@@ -337,6 +342,7 @@ export function CumplimientoModule() {
         archivoNombre: '',
         archivoTipo: '',
         archivoBase64: '',
+        archivoRemoved: false,
       })
     }
     setDocumentoDialogOpen(true)
@@ -374,7 +380,15 @@ export function CumplimientoModule() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
+
+    // Validar tamaño máximo (10MB)
+    const MAX_SIZE = 10 * 1024 * 1024
+    if (file.size > MAX_SIZE) {
+      toast.error('El archivo es demasiado grande. Máximo 10MB.')
+      e.target.value = ''
+      return
+    }
+
     const reader = new FileReader()
     reader.onload = () => {
       const base64 = reader.result as string
@@ -383,7 +397,11 @@ export function CumplimientoModule() {
         archivoNombre: file.name,
         archivoTipo: file.type,
         archivoBase64: base64,
+        archivoRemoved: false,  // Si selecciona uno nuevo, ya no está "removido"
       })
+    }
+    reader.onerror = () => {
+      toast.error('Error al leer el archivo. Inténtalo de nuevo.')
     }
     reader.readAsDataURL(file)
   }
@@ -397,14 +415,48 @@ export function CumplimientoModule() {
       toast.error('No hay condominio seleccionado')
       return
     }
-    
+
     setSaving(true)
     try {
-      const data = {
-        ...documentoForm,
+      // Al editar, si el usuario NO seleccionó un archivo nuevo Y NO hizo clic en "Quitar",
+      // NO enviar archivoBase64 (dejar que el backend lo preserve).
+      // Solo enviar archivoBase64 si:
+      //   1. Es un documento nuevo (POST) -> enviar siempre
+      //   2. El usuario seleccionó un archivo nuevo (archivoBase64 tiene data nueva)
+      //   3. El usuario hizo clic en "Quitar archivo" (archivoRemoved = true)
+      let data: Record<string, unknown> = {
+        titulo: documentoForm.titulo,
+        descripcion: documentoForm.descripcion,
+        categoriaId: documentoForm.categoriaId,
+        fechaDocumento: documentoForm.fechaDocumento,
+        fechaVencimiento: documentoForm.fechaVencimiento,
+        estado: documentoForm.estado,
+        observaciones: documentoForm.observaciones,
         condominioId: condominioId,
       }
-      
+
+      if (!editingDocumento) {
+        // POST: enviar siempre el archivo (aunque sea vacío)
+        data.archivoNombre = documentoForm.archivoNombre
+        data.archivoTipo = documentoForm.archivoTipo
+        data.archivoBase64 = documentoForm.archivoBase64
+      } else {
+        // PUT: distinguir 3 casos
+        if (documentoForm.archivoRemoved) {
+          // Usuario quiere BORRAR el archivo
+          data.archivoNombre = ''
+          data.archivoTipo = ''
+          data.archivoBase64 = ''
+          data.archivoRemoved = true
+        } else if (documentoForm.archivoBase64 && documentoForm.archivoBase64.startsWith('data:')) {
+          // Usuario seleccionó un archivo NUEVO (base64 starts with 'data:')
+          data.archivoNombre = documentoForm.archivoNombre
+          data.archivoTipo = documentoForm.archivoTipo
+          data.archivoBase64 = documentoForm.archivoBase64
+        }
+        // else: NO enviar campos de archivo -> backend preserva el existente
+      }
+
       let response
       if (editingDocumento) {
         response = await fetch(`/api/cumplimiento/${editingDocumento.id}`, {
@@ -419,12 +471,12 @@ export function CumplimientoModule() {
           body: JSON.stringify(data),
         })
       }
-      
+
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
         throw new Error(err.error || `Error ${response.status} al guardar documento`)
       }
-      
+
       toast.success(editingDocumento ? 'Documento actualizado' : 'Documento creado')
       setDocumentoDialogOpen(false)
       await fetchData()
@@ -1117,10 +1169,17 @@ export function CumplimientoModule() {
                   <div className="flex items-center justify-center gap-2">
                     <FileCheck className="w-5 h-5 text-green-500" />
                     <span className="text-sm">{documentoForm.archivoNombre}</span>
-                    <Button 
-                      size="sm" 
-                      variant="ghost" 
-                      onClick={() => setDocumentoForm({...documentoForm, archivoNombre: '', archivoTipo: '', archivoBase64: ''})}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Quitar archivo"
+                      onClick={() => setDocumentoForm({
+                        ...documentoForm,
+                        archivoNombre: '',
+                        archivoTipo: '',
+                        archivoBase64: '',
+                        archivoRemoved: true,  // Marcar que el usuario quiere borrar
+                      })}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -1128,7 +1187,11 @@ export function CumplimientoModule() {
                 ) : (
                   <div>
                     <Upload className="w-8 h-8 mx-auto text-slate-400 mb-2" />
-                    <p className="text-sm text-slate-500">Arrastra un archivo o haz clic para seleccionar</p>
+                    <p className="text-sm text-slate-500">
+                      {editingDocumento && documentoForm.archivoRemoved
+                        ? 'Archivo eliminado. Selecciona uno nuevo si quieres reemplazarlo.'
+                        : 'Arrastra un archivo o haz clic para seleccionar'}
+                    </p>
                     <Input
                       type="file"
                       className="mt-2"
@@ -1141,6 +1204,11 @@ export function CumplimientoModule() {
               <p className="text-xs text-slate-400">
                 Formatos permitidos: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG. Máx 10MB.
               </p>
+              {editingDocumento && !documentoForm.archivoNombre && !documentoForm.archivoRemoved && (
+                <p className="text-xs text-amber-600">
+                  ⓘ Este documento tiene un archivo guardado. Si guardas sin seleccionar uno nuevo, se mantendrá el actual.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2 min-w-0">

@@ -60,7 +60,32 @@ export async function PUT(
     }
 
     // Calculate compliance percentage
-    const tieneArchivo = !!(data.archivoBase64 || data.archivoUrl || documentoAnterior.archivoBase64 || documentoAnterior.archivoUrl)
+    // IMPORTANTE: distinguir 3 casos para el archivo:
+    //   1. data.archivoRemoved === true  → usuario quiere BORRAR el archivo
+    //   2. data.archivoBase64 empieza con 'data:' → usuario seleccionó archivo NUEVO
+    //   3. data.archivoBase64 no viene o viene vacío → PRESERVAR el archivo existente
+    let archivoBase64Final: string | null
+    let archivoNombreFinal: string | null
+    let archivoTipoFinal: string | null
+
+    if (data.archivoRemoved === true) {
+      // Caso 1: Borrar
+      archivoBase64Final = null
+      archivoNombreFinal = null
+      archivoTipoFinal = null
+    } else if (data.archivoBase64 && data.archivoBase64.startsWith('data:')) {
+      // Caso 2: Reemplazar con archivo nuevo
+      archivoBase64Final = data.archivoBase64
+      archivoNombreFinal = data.archivoNombre ?? null
+      archivoTipoFinal = data.archivoTipo ?? null
+    } else {
+      // Caso 3: Preservar el existente (no enviar campos o enviar vacíos)
+      archivoBase64Final = documentoAnterior.archivoBase64
+      archivoNombreFinal = documentoAnterior.archivoNombre
+      archivoTipoFinal = documentoAnterior.archivoTipo
+    }
+
+    const tieneArchivo = !!(archivoBase64Final || data.archivoUrl || documentoAnterior.archivoUrl)
     const porcentajeCumplimiento = tieneArchivo && data.estado === 'Aprobado' ? 100 : tieneArchivo ? 50 : 0
 
     const documento = await db.documentoCumplimiento.update({
@@ -68,9 +93,9 @@ export async function PUT(
       data: {
         titulo: data.titulo ?? documentoAnterior.titulo,
         descripcion: data.descripcion ?? documentoAnterior.descripcion,
-        archivoNombre: data.archivoNombre ?? documentoAnterior.archivoNombre,
-        archivoTipo: data.archivoTipo ?? documentoAnterior.archivoTipo,
-        archivoBase64: data.archivoBase64 ?? documentoAnterior.archivoBase64,
+        archivoNombre: archivoNombreFinal,
+        archivoTipo: archivoTipoFinal,
+        archivoBase64: archivoBase64Final,
         archivoUrl: data.archivoUrl ?? documentoAnterior.archivoUrl,
         fechaDocumento: data.fechaDocumento ?? documentoAnterior.fechaDocumento,
         fechaVencimiento: data.fechaVencimiento ?? documentoAnterior.fechaVencimiento,
