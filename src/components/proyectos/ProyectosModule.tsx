@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { verDocumentoEnVentana } from '@/lib/utils'
 
 // ============================================
 // Interfaces
@@ -1109,10 +1110,7 @@ export function ProyectosModule() {
   }
   const removeDocumento = (index: number) => setDocumentos(documentos.filter((_, i) => i !== index))
   const viewDocumento = (doc: ProyectoDocumento) => {
-    const newWindow = window.open()
-    if (newWindow) {
-      newWindow.document.write(`<iframe src="${doc.archivo}" style="width:100%;height:100%;border:none;"></iframe>`)
-    }
+    verDocumentoEnVentana(doc.archivo, doc.nombre || 'documento.pdf')
   }
 
   // ============================================
@@ -1219,10 +1217,7 @@ export function ProyectosModule() {
   }
 
   const viewCotizacion = (cot: Cotizacion) => {
-    const newWindow = window.open()
-    if (newWindow) {
-      newWindow.document.write(`<iframe src="${cot.archivo}" style="width:100%;height:100%;border:none;"></iframe>`)
-    }
+    verDocumentoEnVentana(cot.archivo, `cotizacion-${cot.nombre || Date.now()}.pdf`)
   }
 
   // ============================================

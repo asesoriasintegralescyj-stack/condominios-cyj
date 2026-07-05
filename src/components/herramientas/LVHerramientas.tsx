@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { ClipboardCheck, CheckCircle, Printer } from 'lucide-react'
+import { imprimirPDFDoc } from '@/lib/utils'
 
 // ============================================
 // LISTAS DE VERIFICACIÓN DE HERRAMIENTAS
@@ -416,6 +417,5 @@ export async function imprimirLVHerramienta(
   )
 
   doc.autoPrint()
-  const blobUrl = doc.output('bloburl') as unknown as string
-  window.open(blobUrl, '_blank')
+  imprimirPDFDoc(doc, `LV-${herramienta.codigo || herramienta.nombre}-${tipo}.pdf`)
 }

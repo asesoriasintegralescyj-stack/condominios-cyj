@@ -267,7 +267,10 @@ export function AuditorModule() {
   const exportToPDF = () => {
     // Generate HTML table for printing
     const printWindow = window.open('', '_blank')
-    if (!printWindow) return
+    if (!printWindow) {
+      alert('Tu navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio e inténtalo de nuevo.')
+      return
+    }
 
     const html = `
       <!DOCTYPE html>

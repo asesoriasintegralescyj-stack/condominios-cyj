@@ -38,6 +38,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { imprimirPDFDoc } from '@/lib/utils'
 import { useSession } from '@/hooks/use-session'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import {
@@ -660,8 +661,7 @@ export function PMIModule() {
 
       // Abrir diálogo de impresión
       doc.autoPrint()
-      const blobUrl = doc.output('bloburl') as unknown as string
-      window.open(blobUrl, '_blank')
+      imprimirPDFDoc(doc, `LV-${lv.codigo}.pdf`)
       toast.success(`Preparando impresión de ${lv.codigo}`)
     } catch (e) {
       console.error(e)

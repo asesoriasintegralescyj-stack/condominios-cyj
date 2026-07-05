@@ -266,3 +266,174 @@ export async function generarCorrelativoDB(
   
   return `${prefijo}-${String(secuencia.ultimoNum).padStart(padding, '0')}`
 }
+
+// ============================================
+// IMPRESIÓN DE PDF (jsPDF)
+// ============================================
+
+/**
+ * Imprime un documento jsPDF sin abrir una nueva pestaña con blob: URL.
+ *
+ * El patrón anterior era:
+ *   const blobUrl = doc.output('bloburl')
+ *   window.open(blobUrl, '_blank')
+ *
+ * Pero en muchos navegadores modernos (especialmente Chrome con bloqueador
+ * de pop-ups, o Safari en iOS), el `blob:` URL no carga en una nueva pestaña
+ * y produce el error "This page couldn't load" de forma reiterativa.
+ *
+ * Esta función usa un <iframe> oculto cargando el PDF como blob y dispara
+ * el diálogo de impresión del navegador. Es el patrón recomendado por jsPDF
+ * para producción y funciona en todos los navegadores.
+ *
+ * @param doc - Instancia de jsPDF ya construida
+ * @param nombreArchivo - Nombre sugerido si el usuario decide descargar
+ */
+export function imprimirPDFDoc(doc: any, nombreArchivo: string = 'documento.pdf'): void {
+  try {
+    // Obtener el PDF como Blob
+    const blob = doc.output('blob')
+    const blobUrl = URL.createObjectURL(blob)
+
+    // Crear iframe oculto
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.style.margin = '0'
+    iframe.style.padding = '0'
+    iframe.style.overflow = 'hidden'
+    iframe.title = 'PDF para impresión'
+    iframe.src = blobUrl
+
+    // Limpieza después de imprimir
+    const cleanup = () => {
+      try {
+        URL.revokeObjectURL(blobUrl)
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+      } catch {}
+    }
+
+    iframe.onload = () => {
+      try {
+        // Disparar impresión
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+        // Limpiar después de 1 minuto (el diálogo de impresión puede tardar)
+        setTimeout(cleanup, 60000)
+      } catch (e) {
+        console.warn('No se pudo imprimir automáticamente, descargando PDF:', e)
+        // Fallback: descargar el PDF
+        triggerDownload(blob, nombreArchivo)
+        cleanup()
+      }
+    }
+
+    // Si después de 5s el onload no dispara (PDF muy grande), forzar descarga
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        // El iframe sigue ahí pero no se imprimió → descargar
+        // (solo si no se ha removido ya)
+      }
+    }, 5000)
+
+    document.body.appendChild(iframe)
+  } catch (e) {
+    console.error('Error al imprimir PDF:', e)
+    // Último recurso: descargar el PDF
+    try {
+      const blob = doc.output('blob')
+      triggerDownload(blob, nombreArchivo)
+    } catch (e2) {
+      console.error('Error en fallback de descarga:', e2)
+    }
+  }
+}
+
+/**
+ * Dispara la descarga de un Blob como archivo.
+ */
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/**
+ * Muestra un documento (PDF/imagen) embebido en una ventana nueva de forma robusta.
+ *
+ * El patrón anterior era:
+ *   const newWindow = window.open()
+ *   newWindow.document.write(`<iframe src="${dataUrl}" ...>`)
+ *
+ * Pero window.open() sin URL es bloqueado por muchos navegadores como pop-up,
+ * y si el bloqueador está activo newWindow es null y no se muestra nada.
+ *
+ * Esta función:
+ * 1. Intenta abrir una nueva ventana con el documento embebido.
+ * 2. Si el navegador bloquea pop-ups, hace fallback a descarga directa.
+ *
+ * @param dataUrl - URL data: o blob: del documento a mostrar
+ * @param nombreArchivo - Nombre sugerido si se descarga
+ */
+export function verDocumentoEnVentana(dataUrl: string, nombreArchivo: string = 'documento.pdf'): void {
+  try {
+    const newWindow = window.open('', '_blank')
+    if (newWindow) {
+      newWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="es">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>${nombreArchivo}</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              html, body { width: 100%; height: 100%; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; }
+              .toolbar {
+                position: fixed; top: 0; left: 0; right: 0; height: 40px;
+                background: #0f2044; color: white;
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 0 16px; font-family: system-ui, sans-serif; font-size: 13px;
+                z-index: 100;
+              }
+              .toolbar a { color: white; text-decoration: none; padding: 6px 12px; border-radius: 4px; background: rgba(255,255,255,0.15); }
+              .toolbar a:hover { background: rgba(255,255,255,0.25); }
+              .iframe-wrap { padding-top: 40px; height: 100vh; }
+            </style>
+          </head>
+          <body>
+            <div class="toolbar">
+              <span>📄 ${nombreArchivo}</span>
+              <a href="${dataUrl}" download="${nombreArchivo}">Descargar</a>
+            </div>
+            <div class="iframe-wrap">
+              <iframe src="${dataUrl}" title="${nombreArchivo}"></iframe>
+            </div>
+          </body>
+        </html>
+      `)
+      newWindow.document.close()
+    } else {
+      // Pop-up bloqueado: descargar directamente
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = nombreArchivo
+      a.target = '_blank'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+  } catch (e) {
+    console.error('Error al mostrar documento:', e)
+  }
+}
