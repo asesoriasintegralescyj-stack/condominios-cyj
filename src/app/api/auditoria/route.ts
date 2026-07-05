@@ -1,5 +1,12 @@
 /**
  * API de Auditoría del Sistema
+ *
+ * Usa el modelo LogAuditoria (único modelo de logs disponible en el schema).
+ * Mapea los campos del frontend a los campos de LogAuditoria:
+ *   - tipoAccion  -> accion (login, logout, create, update, delete)
+ *   - modulo      -> entidad
+ *   - usuarioNombre -> (no existe; usamos user.email via relación)
+ *   - resultado   -> (no existe; no se filtra)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,35 +23,25 @@ export async function GET(request: NextRequest) {
   }
   try {
     const searchParams = request.nextUrl.searchParams
-    const tipoAccion = searchParams.get('tipoAccion')
-    const modulo = searchParams.get('modulo')
-    const usuario = searchParams.get('usuario')
-    const resultado = searchParams.get('resultado')
+    const tipoAccion = searchParams.get('tipoAccion') || searchParams.get('accion')
+    const modulo = searchParams.get('modulo') || searchParams.get('entidad')
     const fechaDesde = searchParams.get('fechaDesde')
     const fechaHasta = searchParams.get('fechaHasta')
     const search = searchParams.get('search')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
-    
-    // Construir filtros
-    const where: Prisma.AuditoriaSistemaWhereInput = {}
-    
+
+    // Construir filtros para LogAuditoria
+    const where: Prisma.LogAuditoriaWhereInput = {}
+
     if (tipoAccion) {
-      where.tipoAccion = tipoAccion
+      where.accion = tipoAccion
     }
-    
+
     if (modulo) {
-      where.modulo = modulo
+      where.entidad = modulo
     }
-    
-    if (usuario) {
-      where.usuarioNombre = { contains: usuario }
-    }
-    
-    if (resultado) {
-      where.resultado = resultado
-    }
-    
+
     if (fechaDesde || fechaHasta) {
       where.createdAt = {}
       if (fechaDesde) {
@@ -54,71 +51,84 @@ export async function GET(request: NextRequest) {
         where.createdAt.lte = new Date(fechaHasta + 'T23:59:59')
       }
     }
-    
+
     if (search) {
       where.OR = [
-        { descripcion: { contains: search } },
-        { modulo: { contains: search } },
-        { usuarioNombre: { contains: search } },
+        { accion: { contains: search } },
         { entidad: { contains: search } },
+        { entidadId: { contains: search } },
       ]
     }
-    
+
     // Obtener total
-    const total = await withRetry(() => db.auditoriaSistema.count({ where }))
-    
-    // Obtener registros
-    const registros = await withRetry(() => db.auditoriaSistema.findMany({
+    const total = await withRetry(() => db.logAuditoria.count({ where }))
+
+    // Obtener registros (con user para mostrar quién hizo la acción)
+    const registrosRaw = await withRetry(() => db.logAuditoria.findMany({
       where,
+      include: {
+        user: {
+          select: { id: true, email: true, nombre: true, apellido: true }
+        }
+      },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     }))
-    
+
+    // Adaptar campos al formato que espera el frontend
+    const registros = registrosRaw.map(r => ({
+      id: r.id,
+      tipoAccion: r.accion,
+      modulo: r.entidad,
+      entidad: r.entidad,
+      entidadId: r.entidadId,
+      descripcion: `${r.accion} en ${r.entidad}${r.entidadId ? ` (${r.entidadId})` : ''}`,
+      usuarioNombre: r.user ? `${r.user.nombre} ${r.user.apellido || ''}`.trim() : 'Sistema',
+      usuarioEmail: r.user?.email || null,
+      ip: r.ip,
+      resultado: 'Exitoso', // LogAuditoria no tiene campo resultado; asumimos exitoso
+      createdAt: r.createdAt,
+    }))
+
     // Calcular estadísticas
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
-    const accionesHoy = await withRetry(() => db.auditoriaSistema.count({
+    const accionesHoy = await withRetry(() => db.logAuditoria.count({
       where: { createdAt: { gte: hoy } }
     }))
-    
+
     const semanaAtras = new Date()
     semanaAtras.setDate(semanaAtras.getDate() - 7)
-    const accionesSemana = await withRetry(() => db.auditoriaSistema.count({
+    const accionesSemana = await withRetry(() => db.logAuditoria.count({
       where: { createdAt: { gte: semanaAtras } }
     }))
-    
-    const erroresRecientes = await withRetry(() => db.auditoriaSistema.count({
-      where: { 
-        resultado: 'Fallido',
-        createdAt: { gte: semanaAtras }
-      }
-    }))
-    
-    // Acciones por módulo (top 10) - usar groupBy en vez de findMany completo
-    const modulosGroup = await withRetry(() => db.auditoriaSistema.groupBy({
-      by: ['modulo'],
+
+    // LogAuditoria no tiene campo resultado, así que erroresRecientes = 0
+    const erroresRecientes = 0
+
+    // Acciones por módulo (entidad) - top 10
+    const modulosGroup = await withRetry(() => db.logAuditoria.groupBy({
+      by: ['entidad'],
       _count: true,
-      orderBy: { _count: { modulo: 'desc' } },
+      orderBy: { _count: { entidad: 'desc' } },
       take: 10,
     }))
     const accionesPorModulo: Record<string, number> = {}
     modulosGroup.forEach(g => {
-      accionesPorModulo[g.modulo] = g._count
+      accionesPorModulo[g.entidad] = g._count
     })
 
-    // Obtener módulos únicos para filtros (usar distinct en findMany)
-    const modulosUnicos = modulosGroup.map(g => g.modulo).sort()
+    // Módulos únicos para filtros
+    const modulosUnicos = modulosGroup.map(g => g.entidad).sort()
 
-    // Usuarios únicos para filtros (usar distinct en findMany con select mínimo)
-    const usuarios = await withRetry(() => db.auditoriaSistema.findMany({
-      select: { usuarioNombre: true },
-      distinct: ['usuarioNombre'],
-      where: { usuarioNombre: { not: null } },
-      take: 100,  // Limitar para evitar cargar toda la tabla
+    // Acciones únicas para filtros
+    const accionesGroup = await withRetry(() => db.logAuditoria.groupBy({
+      by: ['accion'],
+      _count: true,
     }))
-    const usuariosUnicos = usuarios.map(u => u.usuarioNombre).filter(Boolean).sort()
-    
+    const accionesUnicas = accionesGroup.map(g => g.accion).sort()
+
     return NextResponse.json({
       registros,
       total,
@@ -132,10 +142,11 @@ export async function GET(request: NextRequest) {
       },
       filtros: {
         modulos: modulosUnicos,
-        usuarios: usuariosUnicos,
+        tiposAccion: accionesUnicas,
+        usuarios: [], // LogAuditoria no tiene campo usuario directo
       }
     })
-    
+
   } catch (error) {
     console.error('Error fetching auditoria:', error)
     return NextResponse.json({ error: 'Error al obtener auditoría' }, { status: 500 })
