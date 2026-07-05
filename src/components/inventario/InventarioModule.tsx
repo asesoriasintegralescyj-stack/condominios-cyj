@@ -26,9 +26,10 @@ import {
   Plus, Pencil, Search, AlertTriangle, Package, 
   Minus, History, Download,
   ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
-  FolderTree, Boxes
+  FolderTree, Boxes, Wrench
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Material {
   id: string
@@ -72,6 +73,22 @@ interface MovimientosStats {
   ajustesMes: number
 }
 
+// Herramienta del catálogo CatHerramienta (inventario de herramientas)
+interface Herramienta {
+  id: string
+  codigo: string | null
+  nombre: string
+  marca: string | null
+  modelo: string | null
+  cantidad: number
+  ubicacion: string | null
+  estado: string
+  valorReposicion: number
+  fechaAdquisicion: string | null
+  descripcion: string | null
+  tieneManual?: boolean
+}
+
 const formatCLP = (n: number) => 
   '$' + new Intl.NumberFormat('es-CL').format(Math.round(n || 0))
 
@@ -102,6 +119,17 @@ const tipoMovimientoColors: Record<string, string> = {
   'Salida': 'bg-red-100 text-red-700 border-red-200',
   'Ajuste': 'bg-amber-100 text-amber-700 border-amber-200',
   'Transferencia': 'bg-blue-100 text-blue-700 border-blue-200',
+}
+
+// Colores para estados de herramientas (mismos que el módulo Herramientas)
+const estadoHerramientaColors: Record<string, string> = {
+  'Operativo': 'bg-green-100 text-green-700',
+  'Bueno': 'bg-green-100 text-green-700',
+  'Regular': 'bg-amber-100 text-amber-700',
+  'Malo': 'bg-red-100 text-red-700',
+  'Falta Mantención': 'bg-orange-100 text-orange-700',
+  'En reparación': 'bg-purple-100 text-purple-700',
+  'En Reparación': 'bg-purple-100 text-purple-700',
 }
 
 const MOTIVOS_OPTIONS = [
@@ -156,16 +184,35 @@ export function InventarioModule() {
   const [filterFechaDesde, setFilterFechaDesde] = useState('')
   const [filterFechaHasta, setFilterFechaHasta] = useState('')
 
+  // ===== Estado para Herramientas (separado de Consumibles) =====
+  const [herramientas, setHerramientas] = useState<Herramienta[]>([])
+  const [herrLoading, setHerrLoading] = useState(true)
+  const [searchHerr, setSearchHerr] = useState('')
+  const [filterEstadoHerr, setFilterEstadoHerr] = useState('todos')
+
   const fetchMateriales = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/catalogos/materiales')
-      const data = await res.json()
+      const data = await apiFetch<Material[]>('/api/catalogos/materiales', [])
       setMateriales(data)
     } catch (error) {
       console.error('Error fetching materiales:', error)
+      setMateriales([])
     }
     setLoading(false)
+  }
+
+  // Fetch independiente de herramientas
+  const fetchHerramientas = async () => {
+    setHerrLoading(true)
+    try {
+      const data = await apiFetch<Herramienta[]>('/api/catalogos/herramientas', [])
+      setHerramientas(data)
+    } catch (error) {
+      console.error('Error fetching herramientas:', error)
+      setHerramientas([])
+    }
+    setHerrLoading(false)
   }
 
   const fetchMovimientos = async () => {
@@ -198,6 +245,7 @@ export function InventarioModule() {
   useEffect(() => {
     void (async () => {
       await fetchMateriales()
+      await fetchHerramientas()
     })()
   }, [])
 
@@ -207,7 +255,7 @@ export function InventarioModule() {
     })()
   }, [filterTipo, filterMaterialId, filterFechaDesde, filterFechaHasta, movimientosPage])
 
-  // Filtrar materiales
+  // Filtrar materiales (CONSUMIBLES)
   const filteredMateriales = materiales.filter(m => {
     const matchSearch = !search || 
       m.nombre.toLowerCase().includes(search.toLowerCase()) ||
@@ -223,6 +271,17 @@ export function InventarioModule() {
     }
     
     return matchSearch && matchCategoria && matchStock
+  })
+
+  // Filtrar herramientas (separado de consumibles)
+  const filteredHerramientas = herramientas.filter(h => {
+    const matchSearch = !searchHerr ||
+      h.nombre.toLowerCase().includes(searchHerr.toLowerCase()) ||
+      (h.codigo && h.codigo.toLowerCase().includes(searchHerr.toLowerCase())) ||
+      (h.marca && h.marca.toLowerCase().includes(searchHerr.toLowerCase())) ||
+      (h.modelo && h.modelo.toLowerCase().includes(searchHerr.toLowerCase()))
+    const matchEstado = filterEstadoHerr === 'todos' || h.estado === filterEstadoHerr
+    return matchSearch && matchEstado
   })
 
   // Estadísticas de materiales cubiertas por <TableroIndicadores> al inicio del módulo.
@@ -346,40 +405,64 @@ export function InventarioModule() {
 
   const totalPages = Math.ceil(movimientosTotal / 20)
 
+  // Estadísticas separadas para Consumibles y Herramientas
   const categoriasCount = new Set(materiales.map(m => m.categoria).filter(Boolean)).size
   const stockBajoCount = materiales.filter(m => m.stockActual < m.stockMinimo).length
   const stockTotal = materiales.reduce((sum, m) => sum + (m.stockActual || 0), 0)
+
+  const totalHerramientas = herramientas.reduce((sum, h) => sum + (h.cantidad || 0), 0)
+  const herrOperativas = herramientas.filter(h => h.estado === 'Operativo' || h.estado === 'Bueno').length
+  const herrReparacion = herramientas.filter(h =>
+    h.estado === 'En reparación' || h.estado === 'En Reparación' || h.estado === 'Falta Mantención'
+  ).length
+  const valorTotalHerramientas = herramientas.reduce((sum, h) => sum + (h.valorReposicion || 0) * (h.cantidad || 1), 0)
 
   return (
     <div className="space-y-5">
       <TableroIndicadores
         cards={[
-          { titulo: 'Total Items', numero: materiales.length, icon: <Package className="w-5 h-5" />, color: 'primary' },
-          { titulo: 'Categorías', numero: categoriasCount, icon: <FolderTree className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Consumibles', numero: materiales.length, icon: <Package className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Herramientas', numero: totalHerramientas, icon: <Wrench className="w-5 h-5" />, color: 'purpura' },
           { titulo: 'Stock Bajo', numero: stockBajoCount, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
-          { titulo: 'Stock Total', numero: stockTotal, icon: <Boxes className="w-5 h-5" />, color: 'gris' },
+          { titulo: 'Herr. Operativas', numero: herrOperativas, icon: <Boxes className="w-5 h-5" />, color: 'verde' },
+          { titulo: 'En Reparación', numero: herrReparacion, icon: <RefreshCw className="w-5 h-5" />, color: 'naranja' },
+          { titulo: 'Valor Herramientas', numero: formatCLP(valorTotalHerramientas), icon: <FolderTree className="w-5 h-5" />, color: 'cyan' },
         ]}
       />
       <Tabs defaultValue="inventario" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3">
           <TabsTrigger value="inventario" className="flex items-center gap-2">
             <Package className="w-4 h-4" />
-            Inventario
+            Consumibles
+            {materiales.length > 0 && (
+              <span className="ml-1 text-[10px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5 font-bold">
+                {materiales.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="herramientas" className="flex items-center gap-2">
+            <Wrench className="w-4 h-4" />
+            Herramientas
+            {herramientas.length > 0 && (
+              <span className="ml-1 text-[10px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5 font-bold">
+                {herramientas.length}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="movimientos" className="flex items-center gap-2">
             <History className="w-4 h-4" />
-            Historial de Movimientos
+            Movimientos
           </TabsTrigger>
         </TabsList>
 
-        {/* INVENTARIO TAB */}
+        {/* INVENTARIO TAB - CONSUMIBLES */}
         <TabsContent value="inventario" className="space-y-5 mt-4">
           {/* Filters */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
-                placeholder="Buscar material..."
+                placeholder="Buscar consumible..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
@@ -411,7 +494,7 @@ export function InventarioModule() {
           {/* Table */}
           <Card>
             <CardHeader className="py-3">
-              <CardTitle className="text-sm">Inventario de Materiales ({filteredMateriales.length})</CardTitle>
+              <CardTitle className="text-sm">Consumibles ({filteredMateriales.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -530,6 +613,118 @@ export function InventarioModule() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* HERRAMIENTAS TAB - independiente de consumibles */}
+        <TabsContent value="herramientas" className="space-y-5 mt-4">
+          {/* Filters propios para herramientas */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Buscar herramienta por nombre, código, marca..."
+                value={searchHerr}
+                onChange={(e) => setSearchHerr(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={filterEstadoHerr} onValueChange={setFilterEstadoHerr}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los estados</SelectItem>
+                <SelectItem value="Operativo">Operativo</SelectItem>
+                <SelectItem value="Bueno">Bueno</SelectItem>
+                <SelectItem value="Regular">Regular</SelectItem>
+                <SelectItem value="Malo">Malo</SelectItem>
+                <SelectItem value="Falta Mantención">Falta Mantención</SelectItem>
+                <SelectItem value="En reparación">En reparación</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={() => { setSearchHerr(''); setFilterEstadoHerr('todos') }}>
+              <RefreshCw className="w-4 h-4 mr-1" /> Limpiar
+            </Button>
+          </div>
+
+          {/* Tabla de herramientas */}
+          <Card>
+            <CardHeader className="py-3">
+              <CardTitle className="text-sm">Herramientas ({filteredHerramientas.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Herramienta</th>
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Marca / Modelo</th>
+                      <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Cantidad</th>
+                      <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                      <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
+                      <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Manual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {herrLoading ? (
+                      <tr><td colSpan={8} className="p-8 text-center text-slate-400">Cargando herramientas...</td></tr>
+                    ) : filteredHerramientas.length === 0 ? (
+                      <tr><td colSpan={8} className="p-8 text-center text-slate-400">
+                        {herramientas.length === 0
+                          ? 'No hay herramientas registradas'
+                          : 'Sin resultados para la búsqueda'}
+                      </td></tr>
+                    ) : (
+                      filteredHerramientas.map((h) => (
+                        <tr key={h.id} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
+                            {h.codigo || '–'}
+                          </td>
+                          <td className="p-3">
+                            <div className="font-semibold">{h.nombre}</div>
+                            {h.descripcion && (
+                              <div className="text-xs text-slate-500 truncate max-w-[200px]">{h.descripcion}</div>
+                            )}
+                          </td>
+                          <td className="p-3 text-xs">
+                            {h.marca || h.modelo ? (
+                              <div>
+                                {h.marca && <div className="font-medium">{h.marca}</div>}
+                                {h.modelo && <div className="text-slate-500">{h.modelo}</div>}
+                              </div>
+                            ) : '–'}
+                          </td>
+                          <td className="p-3 text-center font-bold">{h.cantidad}</td>
+                          <td className="p-3 text-center">
+                            <Badge className={estadoHerramientaColors[h.estado] || 'bg-slate-100 text-slate-700'}>
+                              {h.estado}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-right font-mono text-xs">
+                            {h.valorReposicion > 0 ? formatCLP(h.valorReposicion) : '–'}
+                          </td>
+                          <td className="p-3 text-xs">{h.ubicacion || '–'}</td>
+                          <td className="p-3 text-center">
+                            {h.tieneManual ? (
+                              <Badge className="bg-green-100 text-green-700">Sí</Badge>
+                            ) : (
+                              <span className="text-slate-400 text-xs">–</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          <p className="text-xs text-slate-500">
+            💡 Para editar herramientas, registrar salidas del pañol o imprimir Listas de Verificación,
+            usa el módulo <strong>Herramientas</strong> en el menú lateral.
+          </p>
         </TabsContent>
 
         {/* MOVIMIENTOS TAB */}
