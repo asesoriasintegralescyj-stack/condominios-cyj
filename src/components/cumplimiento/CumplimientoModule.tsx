@@ -381,10 +381,14 @@ export function CumplimientoModule() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // Validar tamaño máximo (10MB)
-    const MAX_SIZE = 10 * 1024 * 1024
+    // Validar tamaño máximo (3MB).
+    // IMPORTANTE: Vercel Hobby plan tiene límite de 4.5MB por request.
+    // El archivo se convierte a base64 que aumenta el tamaño ~33%,
+    // así que un PDF de 3MB se convierte en ~4MB en el request.
+    // 3MB es el límite seguro para no exceder el bodySizeLimit de Vercel.
+    const MAX_SIZE = 3 * 1024 * 1024
     if (file.size > MAX_SIZE) {
-      toast.error('El archivo es demasiado grande. Máximo 10MB.')
+      toast.error(`El archivo es demasiado grande (${(file.size / 1024 / 1024).toFixed(2)}MB). Máximo 3MB. Si necesitas subir un archivo más grande, comprímelo primero o divídelo en partes.`)
       e.target.value = ''
       return
     }
@@ -474,6 +478,10 @@ export function CumplimientoModule() {
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}))
+        // Manejo específico de error 413 (Payload Too Large)
+        if (response.status === 413) {
+          throw new Error('El archivo es demasiado grande para subir (límite del servidor). Por favor comprime el PDF a menos de 3MB o divide el contenido en varios documentos.')
+        }
         throw new Error(err.error || `Error ${response.status} al guardar documento`)
       }
 
@@ -1202,7 +1210,7 @@ export function CumplimientoModule() {
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                Formatos permitidos: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG. Máx 10MB.
+                Formatos permitidos: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG. Máx 3MB.
               </p>
               {editingDocumento && !documentoForm.archivoNombre && !documentoForm.archivoRemoved && (
                 <p className="text-xs text-amber-600">
