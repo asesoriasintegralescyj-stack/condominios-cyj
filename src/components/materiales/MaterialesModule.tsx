@@ -18,6 +18,7 @@ import { Plus, Edit, Trash2, Package, Search, Upload, Download, AlertCircle, Che
 import { toast } from 'sonner'
 import * as XLSX from 'xlsx'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Material {
   id: string
@@ -67,11 +68,11 @@ export function MaterialesModule() {
 
   const fetchMateriales = async () => {
     try {
-      const res = await fetch('/api/catalogos/materiales')
-      const data = await res.json()
+      const data = await apiFetch<Material[] | { data?: Material[] }>('/api/catalogos/materiales', [])
       setMateriales(Array.isArray(data) ? data : data.data || [])
     } catch (error) {
       console.error('Error:', error)
+      setMateriales([])
     }
     setLoading(false)
   }

@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Pencil, Trash2, Search, Download, Package, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Proveedor {
   id: string
@@ -70,11 +71,11 @@ export function ProveedoresModule() {
     setLoading(true)
     try {
       const url = searchTerm ? `/api/proveedores?search=${encodeURIComponent(searchTerm)}` : '/api/proveedores'
-      const res = await fetch(url)
-      const data = await res.json()
+      const data = await apiFetch<Proveedor[]>(url, [])
       setProveedores(data)
     } catch (error) {
       console.error('Error fetching proveedores:', error)
+      setProveedores([])
     }
     setLoading(false)
   }

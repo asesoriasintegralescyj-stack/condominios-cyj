@@ -56,6 +56,7 @@ import {
   CheckCheck
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Notificacion {
   id: string
@@ -142,8 +143,10 @@ export function NotificacionesModule() {
 
   const fetchData = async () => {
     try {
-      const res = await fetch('/api/notificaciones')
-      const data = await res.json()
+      const data = await apiFetch<{ notificaciones?: Notificacion[]; stats?: typeof stats }>(
+        '/api/notificaciones',
+        { notificaciones: [], stats }
+      )
       setNotificaciones(data.notificaciones || [])
       setStats(data.stats || stats)
     } catch (error) {

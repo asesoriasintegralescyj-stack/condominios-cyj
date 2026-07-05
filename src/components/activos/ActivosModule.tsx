@@ -38,6 +38,7 @@ import {
   DollarSign,
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Activo {
   id: string
@@ -207,11 +208,11 @@ export function ActivosModule() {
       const url = searchTerm
         ? `/api/activos?search=${encodeURIComponent(searchTerm)}`
         : '/api/activos'
-      const res = await fetch(url)
-      const data = await res.json()
+      const data = await apiFetch<Activo[]>(url, [])
       setActivos(data)
     } catch (error) {
       console.error('Error fetching activos:', error)
+      setActivos([])
     }
     setLoading(false)
   }
@@ -220,9 +221,7 @@ export function ActivosModule() {
     void (async () => {
       await fetchActivos()
     })()
-    fetch('/api/personal')
-      .then((res) => res.json())
-      .then(setPersonal)
+    apiFetch<{ id: string; nombre: string }[]>('/api/personal', []).then(setPersonal)
   }, [])
 
   useEffect(() => {

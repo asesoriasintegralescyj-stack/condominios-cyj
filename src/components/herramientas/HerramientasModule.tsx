@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useSession } from '@/hooks/use-session'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 import { imprimirLVHerramienta } from '@/components/herramientas/LVHerramientas'
 
 interface CentroCosto {
@@ -199,11 +200,11 @@ export function HerramientasModule() {
   const fetchHerramientas = async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/catalogos/herramientas')
-      const data = await res.json()
+      const data = await apiFetch<Herramienta[]>('/api/catalogos/herramientas', [])
       setHerramientas(data)
     } catch (error) {
       console.error('Error fetching herramientas:', error)
+      setHerramientas([])
     }
     setLoading(false)
   }

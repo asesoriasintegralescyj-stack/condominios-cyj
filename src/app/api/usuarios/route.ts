@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { db, withRetry } from '@/lib/db';
 import { 
   getCurrentSession, 
   updateUser, 
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    const users = await db.user.findMany({
+    const users = await withRetry(() => db.user.findMany({
       select: {
         id: true,
         email: true,
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
         passwordTemp: true,
       },
       orderBy: { createdAt: 'desc' },
-    });
+    }));
 
     // Desencriptar passwordTemp para que el admin pueda verla
     const usersWithDecrypted = users.map((u) => ({

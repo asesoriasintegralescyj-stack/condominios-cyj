@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
@@ -19,11 +19,10 @@ export async function GET() {
   if (!session) return apiError('No autenticado', 401);
 
   try {
-    // Ejecutar queries en lotes pequeños para evitar agotar el pool de conexiones
-    // de Aiven (free tier tiene pool muy limitado y el Promise.all con 16 queries
-    // a veces falla con "Error de base de datos" o timeout)
-
-    // Lote 1: Counts simples (rápidos)
+    // Ejecutar queries con withRetry para reintentar automáticamente
+    // cuando el pool de Aiven se agota intermitentemente.
+    // Se dividen en 2 lotes para no saturar el pool.
+    // Lote 1: Counts y aggregates (10 queries, rápidas)
     const [
       totalPersonal,
       totalActivos,
@@ -36,13 +35,13 @@ export async function GET() {
       scTotal,
       scMontoAgg,
     ] = await Promise.all([
-      db.personal.count(),
-      db.activo.count(),
-      db.activo.aggregate({ _sum: { valorActual: true } }),
-      db.cajaChica.findFirst(),
-      db.centroCostoMaster.count(),
-      db.ordenTrabajo.count({ where: { estado: 'Completado' } }),
-      db.documentoCumplimiento.findMany({
+      withRetry(() => db.personal.count()),
+      withRetry(() => db.activo.count()),
+      withRetry(() => db.activo.aggregate({ _sum: { valorActual: true } })),
+      withRetry(() => db.cajaChica.findFirst()),
+      withRetry(() => db.centroCostoMaster.count()),
+      withRetry(() => db.ordenTrabajo.count({ where: { estado: 'Completado' } })),
+      withRetry(() => db.documentoCumplimiento.findMany({
         select: {
           id: true,
           titulo: true,
@@ -51,13 +50,13 @@ export async function GET() {
           fechaVencimiento: true,
           categoriaId: true,
         },
-      }),
-      db.resumenCumplimiento.findFirst(),
-      db.solicitudCompra.count(),
-      db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } }),
+      })),
+      withRetry(() => db.resumenCumplimiento.findFirst()),
+      withRetry(() => db.solicitudCompra.count()),
+      withRetry(() => db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } })),
     ]);
 
-    // Lote 2: GroupBy y findMany (más pesados)
+    // Lote 2: GroupBy y findMany con relaciones (6 queries, más pesadas)
     const [
       otGroupByEstado,
       otGroupByAprobacion,
@@ -66,16 +65,16 @@ export async function GET() {
       scRecent,
       centros,
     ] = await Promise.all([
-      db.ordenTrabajo.groupBy({
+      withRetry(() => db.ordenTrabajo.groupBy({
         by: ['estado'],
         _count: true,
-      }),
-      db.ordenTrabajo.groupBy({
+      })),
+      withRetry(() => db.ordenTrabajo.groupBy({
         by: ['estadoAprobacion'],
         where: { estado: 'Completado' },
         _count: true,
-      }),
-      db.ordenTrabajo.findMany({
+      })),
+      withRetry(() => db.ordenTrabajo.findMany({
         include: {
           propiedad: { select: { id: true, nombre: true } },
           asignado: { select: { id: true, nombre: true, cargo: true } },
@@ -83,12 +82,12 @@ export async function GET() {
         },
         orderBy: { createdAt: 'desc' },
         take: 6,
-      }),
-      db.solicitudCompra.groupBy({
+      })),
+      withRetry(() => db.solicitudCompra.groupBy({
         by: ['estado'],
         _count: true,
-      }),
-      db.solicitudCompra.findMany({
+      })),
+      withRetry(() => db.solicitudCompra.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
         select: {
@@ -102,8 +101,8 @@ export async function GET() {
           createdAt: true,
           origenCodigo: true,
         },
-      }),
-      db.centroCostoMaster.findMany(),
+      })),
+      withRetry(() => db.centroCostoMaster.findMany()),
     ]);
 
     const countByEstado = (estado: string): number =>
@@ -142,7 +141,7 @@ export async function GET() {
     const solicitudesRecientes = scRecent;
 
     // Centros de costo (sin gastos, que fueron eliminados)
-    // (centros ya fue obtenido en el Lote 2)
+    // (centros ya fue obtenido en el Lote 2 con withRetry)
     const centrosConGasto = centros.map(cc => ({
       ...cc,
       gastado: 0,

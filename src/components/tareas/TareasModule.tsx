@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select'
 import { Plus, Edit, Trash2, ClipboardList, Search, ListChecks, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Tarea {
   id: string
@@ -53,11 +54,11 @@ export function TareasModule() {
 
   const fetchTareas = useCallback(async () => {
     try {
-      const res = await fetch('/api/catalogos/tareas')
-      const data = await res.json()
+      const data = await apiFetch<Tarea[] | { data?: Tarea[] }>('/api/catalogos/tareas', [])
       setTareas(Array.isArray(data) ? data : data.data || [])
     } catch (error) {
       console.error('Error:', error)
+      setTareas([])
     } finally {
       setLoading(false)
     }

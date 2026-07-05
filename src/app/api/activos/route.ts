@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
 
-    const activos = await db.activo.findMany({
+    const activos = await withRetry(() => db.activo.findMany({
       where: search ? {
         OR: [
           { nombre: { contains: search } },
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         asignado: true
       },
       orderBy: { createdAt: 'desc' }
-    })
+    }))
 
     // Ocultar manualBase64 e informeMantencionBase64 en la lista (puede ser muy pesado);
     // solo enviar metadatos y banderas tieneManual / tieneInformeMantencion

@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
@@ -65,35 +65,35 @@ export async function GET(request: NextRequest) {
     }
     
     // Obtener total
-    const total = await db.auditoriaSistema.count({ where })
+    const total = await withRetry(() => db.auditoriaSistema.count({ where }))
     
     // Obtener registros
-    const registros = await db.auditoriaSistema.findMany({
+    const registros = await withRetry(() => db.auditoriaSistema.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
-    })
+    }))
     
     // Calcular estadísticas
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
-    const accionesHoy = await db.auditoriaSistema.count({
+    const accionesHoy = await withRetry(() => db.auditoriaSistema.count({
       where: { createdAt: { gte: hoy } }
-    })
+    }))
     
     const semanaAtras = new Date()
     semanaAtras.setDate(semanaAtras.getDate() - 7)
-    const accionesSemana = await db.auditoriaSistema.count({
+    const accionesSemana = await withRetry(() => db.auditoriaSistema.count({
       where: { createdAt: { gte: semanaAtras } }
-    })
+    }))
     
-    const erroresRecientes = await db.auditoriaSistema.count({
+    const erroresRecientes = await withRetry(() => db.auditoriaSistema.count({
       where: { 
         resultado: 'Fallido',
         createdAt: { gte: semanaAtras }
       }
-    })
+    }))
     
     // Acciones por módulo (top 10) - usar groupBy en vez de findMany completo
     const modulosGroup = await db.auditoriaSistema.groupBy({

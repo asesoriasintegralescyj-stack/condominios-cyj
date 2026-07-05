@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     if (frecuencia) where.frecuencia = frecuencia
     if (soloActivas) where.activa = true
 
-    const lvs = await db.listaVerificacion.findMany({
+    const lvs = await withRetry(() => db.listaVerificacion.findMany({
       where,
       orderBy: [{ codigo: 'asc' }],
       include: {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
           take: 5,
         },
       },
-    })
+    }))
 
     const parsed = lvs.map(lv => ({
       ...lv,

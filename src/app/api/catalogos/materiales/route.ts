@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
@@ -12,9 +12,9 @@ export async function GET() {
     return apiError('Sin permisos', 403)
   }
   try {
-    const materiales = await db.catMaterial.findMany({
+    const materiales = await withRetry(() => db.catMaterial.findMany({
       orderBy: { nombre: 'asc' }
-    })
+    }))
     
     return NextResponse.json(materiales)
   } catch (error) {

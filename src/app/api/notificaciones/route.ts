@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
@@ -8,9 +8,9 @@ export async function GET() {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
   try {
-    const notificaciones = await db.notificacion.findMany({
+    const notificaciones = await withRetry(() => db.notificacion.findMany({
       orderBy: { createdAt: 'desc' }
-    })
+    }))
 
     // Calcular estadísticas
     const total = notificaciones.length

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     
-    const personal = await db.personal.findMany({
+    const personal = await withRetry(() => db.personal.findMany({
       where: search ? {
         OR: [
           { nombre: { contains: search } },
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
         ]
       } : undefined,
       orderBy: { createdAt: 'desc' }
-    })
+    }))
     
     return NextResponse.json(personal)
   } catch (error) {

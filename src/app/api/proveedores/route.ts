@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     
-    const proveedores = await db.proveedor.findMany({
+    const proveedores = await withRetry(() => db.proveedor.findMany({
       where: search ? {
         OR: [
           { razonSocial: { contains: search } },
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         ]
       } : undefined,
       orderBy: { createdAt: 'desc' }
-    })
+    }))
     
     return NextResponse.json(proveedores)
   } catch (error) {

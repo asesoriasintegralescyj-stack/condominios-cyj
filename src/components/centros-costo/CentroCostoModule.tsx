@@ -23,6 +23,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Plus, Pencil, Trash2, Wallet, DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface CentroCosto {
   id: string
@@ -62,8 +63,8 @@ export function CentroCostoModule() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const centrosRes = await fetch('/api/centros-costo')
-      setCentros(await centrosRes.json())
+      const centros = await apiFetch<CentroCosto[]>('/api/centros-costo', [])
+      setCentros(centros)
       // Módulo de gastos fue eliminado; setear array vacío
       setGastos([])
     } catch (error) {

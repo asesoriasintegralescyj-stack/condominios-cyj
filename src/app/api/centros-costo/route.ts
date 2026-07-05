@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
@@ -11,9 +11,9 @@ export async function GET() {
     return apiError('Sin permisos', 403)
   }
   try {
-    const centros = await db.centroCostoMaster.findMany({
+    const centros = await withRetry(() => db.centroCostoMaster.findMany({
       orderBy: { codigo: 'asc' }
-    })
+    }))
     
     return NextResponse.json(centros)
   } catch (error) {

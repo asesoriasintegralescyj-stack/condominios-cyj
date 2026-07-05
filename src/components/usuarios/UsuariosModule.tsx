@@ -63,6 +63,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores';
+import { apiFetch } from '@/lib/api-client';
 
 // Definición de categorías de permisos
 const CATEGORIAS_PERMISOS = {
@@ -320,13 +321,8 @@ export function UsuariosModule() {
 
   const fetchUsuarios = async () => {
     try {
-      const response = await fetch('/api/usuarios');
-      if (response.ok) {
-        const data = await response.json();
-        setUsuarios(data);
-      } else {
-        toast.error('Error al cargar usuarios');
-      }
+      const data = await apiFetch<Usuario[]>('/api/usuarios', []);
+      setUsuarios(data);
     } catch (error) {
       console.error('Error:', error);
       toast.error('Error de conexión');

@@ -53,6 +53,7 @@ import {
   Users
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { apiFetch } from '@/lib/api-client'
 
 interface Auditoria {
   id: string
@@ -178,8 +179,10 @@ export function AuditorModule() {
       params.append('page', pagination.page.toString())
       params.append('limit', pagination.limit.toString())
 
-      const res = await fetch(`/api/auditoria?${params.toString()}`)
-      const data = await res.json()
+      const data = await apiFetch<{ auditorias?: Auditoria[]; stats?: typeof stats; filtros?: typeof filtros; pagination?: typeof pagination }>(
+        `/api/auditoria?${params.toString()}`,
+        { auditorias: [], stats, filtros, pagination }
+      )
       setAuditorias(data.auditorias || [])
       setStats(data.stats || stats)
       setFiltros(data.filtros || filtros)
