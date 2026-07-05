@@ -1,18 +1,44 @@
 /**
- * Configuración de cargos excludos de la asignación de Órdenes de Trabajo.
+ * Configuración de cargos del personal y exclusión de OT.
  *
- * Estos cargos corresponden a roles operativos que NO ejecutan OT
- * (conserjes, guardias, encargados de cámaras).
+ * CARGOS_VALIDOS: lista oficial de cargos que pueden asignarse en el formulario
+ * de Personal. Sincronizada con los cargos reales del Condominio Laguna Norte.
  *
- * El resto del personal (Jardinero, Mantenciones, Servicios Generales,
- * Jefe de Operaciones, Supervisor, Operario de Laguna y Piscinas, etc.)
- * SÍ puede ser asignado a OT.
+ * CARGOS_EXCLUIDOS_OT: cargos operativos que NO ejecutan OT (conserjes, guardias,
+ * encargados de cámaras). El resto (Jardinero, Mantenciones, etc.) SÍ puede.
  *
  * La comparación es case-insensitive y normaliza acentos y espacios
  * para que coincida con variantes como "CONSERJE", "conserje", "Conserje ",
  * "Conserje Full Time", "Guardia", "Guardia Full Time",
  * "Encargado Control Cámaras", "Encargado de Camaras", etc.
  */
+
+// Cargos válidos que se pueden seleccionar en el formulario de Personal.
+// Ordenados por área operativa para facilitar la selección.
+export const CARGOS_VALIDOS = [
+  // Operativos - Mantención
+  'Jardinero',
+  'Mantenciones',
+  'Servicios Generales',
+  'Operario de Laguna y Piscinas (Lagunero)',
+  // Operativos - Vigilancia
+  'Conserje',
+  'Conserje Full Time',
+  'Guardia',
+  'Guardia Full Time',
+  'Encargado Control Cámaras',
+  // Administrativos
+  'Jefe de Operaciones',
+  'Supervisor',
+  'Administrador',
+  'Contador',
+  // Especialistas
+  'Electricista',
+  'Plomero',
+  'Pintor',
+  'Albañil',
+  'Auxiliar',
+] as const
 
 // Cargos que NO pueden ser asignados a Órdenes de Trabajo
 export const CARGOS_EXCLUIDOS_OT = [
@@ -65,4 +91,63 @@ export function filtrarPersonalAsignableOT<T extends { cargo?: string | null }>(
   personal: T[]
 ): T[] {
   return personal.filter((p) => !isCargoExcluidoOT(p.cargo))
+}
+
+/**
+ * Normaliza un cargo al formato canónico definido en CARGOS_VALIDOS.
+ * Si el cargo no coincide con ninguno, lo devuelve sin cambios.
+ *
+ * Ejemplos:
+ *   "conserje"        → "Conserje"
+ *   "CONSERJE FT"     → "Conserje Full Time"
+ *   "guardia ft"      → "Guardia Full Time"
+ *   "Jefe De Operaciones" → "Jefe de Operaciones"
+ *
+ * Útil para limpiar datos históricos cargados sin validación.
+ */
+export function normalizarCargo(cargo?: string | null): string | null {
+  if (!cargo) return null
+  const c = normalize(cargo)
+  if (!c) return null
+
+  // Mapeo manual de variantes conocidas al formato canónico
+  const mapeos: Record<string, string> = {
+    'conserje': 'Conserje',
+    'conserje full time': 'Conserje Full Time',
+    'conserje ft': 'Conserje Full Time',
+    'guardia': 'Guardia',
+    'guardia full time': 'Guardia Full Time',
+    'guardia ft': 'Guardia Full Time',
+    'jardinero': 'Jardinero',
+    'mantenciones': 'Mantenciones',
+    'servicios generales': 'Servicios Generales',
+    'operario de laguna y piscinas': 'Operario de Laguna y Piscinas (Lagunero)',
+    'operario de laguna y piscinas (lagunero)': 'Operario de Laguna y Piscinas (Lagunero)',
+    'lagunero': 'Operario de Laguna y Piscinas (Lagunero)',
+    'encargado control camaras': 'Encargado Control Cámaras',
+    'encargado control cámaras': 'Encargado Control Cámaras',
+    'encargado de camaras': 'Encargado Control Cámaras',
+    'encargado de cámaras': 'Encargado Control Cámaras',
+    'jefe de operaciones': 'Jefe de Operaciones',
+    'jefe operaciones': 'Jefe de Operaciones',
+    'supervisor': 'Supervisor',
+    'administrador': 'Administrador',
+    'contador': 'Contador',
+    'electricista': 'Electricista',
+    'plomero': 'Plomero',
+    'pintor': 'Pintor',
+    'albanil': 'Albañil',
+    'auxiliar': 'Auxiliar',
+  }
+
+  // Coincidencia exacta normalizada
+  if (mapeos[c]) return mapeos[c]
+
+  // Buscar en CARGOS_VALIDOS por texto normalizado
+  for (const valido of CARGOS_VALIDOS) {
+    if (normalize(valido) === c) return valido
+  }
+
+  // Si no coincide, devolver original (preserva datos personalizados)
+  return cargo.trim()
 }

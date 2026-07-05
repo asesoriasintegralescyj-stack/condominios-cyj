@@ -23,10 +23,30 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Pencil, Trash2, Search, DollarSign, Upload, Download, FileSpreadsheet, Camera, X, Users, CheckCircle, XCircle, Briefcase } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, DollarSign, Upload, Download, FileSpreadsheet, Camera, X, Users, CheckCircle, XCircle, Briefcase, AlertTriangle } from 'lucide-react'
 import { useSession } from '@/hooks/use-session'
 import { formatCLP } from '@/lib/utils'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
+import { CARGOS_VALIDOS, normalizarCargo } from '@/lib/personal-cargos'
+
+// Valida formato de RUT chileno: 12.345.678-9 o 12345678-9
+function validarRUT(rut: string): boolean {
+  if (!rut) return true // RUT es opcional
+  const limpio = rut.replace(/[.\s-]/g, '').toUpperCase()
+  if (!/^\d{7,8}[0-9K]$/.test(limpio)) return false
+  const cuerpo = limpio.slice(0, -1)
+  const dv = limpio.slice(-1)
+  // Algoritmo módulo 11
+  let suma = 0
+  let factor = 2
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    suma += parseInt(cuerpo[i], 10) * factor
+    factor = factor === 7 ? 2 : factor + 1
+  }
+  const dvEsperado = 11 - (suma % 11)
+  const dvCalc = dvEsperado === 11 ? '0' : dvEsperado === 10 ? 'K' : String(dvEsperado)
+  return dv === dvCalc
+}
 
 interface Personal {
   id: string
@@ -211,6 +231,12 @@ export function PersonalModule() {
   const handleSave = async () => {
     if (!formData.nombre.trim()) return
 
+    // Validar RUT si se ingresó
+    if (formData.rut && !validarRUT(formData.rut)) {
+      alert('El RUT ingresado no es válido. Verifique el dígito verificador.')
+      return
+    }
+
     try {
       if (editingPer) {
         await fetch(`/api/personal/${editingPer.id}`, {
@@ -229,6 +255,7 @@ export function PersonalModule() {
       fetchPersonal(search)
     } catch (error) {
       console.error('Error saving personal:', error)
+      alert('Error al guardar el empleado')
     }
   }
 
@@ -335,7 +362,18 @@ export function PersonalModule() {
 
   const activosCount = personal.filter(p => p.estado === 'Activo').length
   const inactivosCount = personal.filter(p => p.estado === 'Inactivo').length
-  const cargosDiferentes = new Set(personal.map(p => p.cargo).filter(Boolean)).size
+  // Normaliza cargos antes de contar para evitar duplicados conceptuales
+  // ("Conserje" y "Conserje Full Time" cuentan como 2 cargos distintos)
+  const cargosDiferentes = new Set(
+    personal.map(p => normalizarCargo(p.cargo)).filter(Boolean)
+  ).size
+  // Total remuneración mensual = sueldo + mov + col + viático + asig familiar
+  const totalRemuneraciones = personal.reduce(
+    (acc, p) => acc + (p.sueldoBase || 0) + (p.movilizacion || 0) + (p.colacion || 0) + (p.viatico || 0) + (p.asigFamiliar || 0),
+    0
+  )
+  // Detecta registros con datos incompletos (sin RUT o sin sueldo)
+  const incompletosCount = personal.filter(p => !p.rut || !p.sueldoBase).length
 
   return (
     <div className="space-y-5">
@@ -345,6 +383,8 @@ export function PersonalModule() {
           { titulo: 'Activos', numero: activosCount, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
           { titulo: 'Inactivos', numero: inactivosCount, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
           { titulo: 'Cargos Diferentes', numero: cargosDiferentes, icon: <Briefcase className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Remuneración Mensual', numero: formatCLP(totalRemuneraciones), icon: <DollarSign className="w-5 h-5" />, color: 'cyan' },
+          { titulo: 'Datos Incompletos', numero: incompletosCount, icon: <AlertTriangle className="w-5 h-5" />, color: 'naranja' },
         ]}
       />
       {/* Actions */}
@@ -389,15 +429,16 @@ export function PersonalModule() {
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Contrato</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">AFP</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Sueldo Base</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ingreso</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : personal.length === 0 ? (
-                  <tr><td colSpan={8} className="p-8 text-center text-slate-400">Sin personal</td></tr>
+                  <tr><td colSpan={9} className="p-8 text-center text-slate-400">Sin personal</td></tr>
                 ) : (
                   personal.map((per) => (
                     <tr key={per.id} className="border-b last:border-0 hover:bg-slate-50">
@@ -422,22 +463,14 @@ export function PersonalModule() {
                       </td>
                       <td className="p-3 text-xs whitespace-nowrap">{per.afp}</td>
                       <td className="p-3 font-mono text-xs whitespace-nowrap">{formatCLP(per.sueldoBase)}</td>
+                      <td className="p-3 text-xs whitespace-nowrap" title={per.fechaIngreso || ''}>
+                        {per.fechaIngreso || '–'}
+                      </td>
                       <td className="p-3">
                         <Badge className={estadoColors[per.estado] || 'bg-slate-100'}>{per.estado}</Badge>
                       </td>
                       <td className="p-3">
                         <div className="flex justify-center gap-1">
-                          <Button 
-                            size="icon" 
-                            variant="ghost" 
-                            className="h-7 w-7 text-amber-600 hover:text-amber-700" 
-                            title="Descargar Liquidación"
-                            onClick={() => {
-                              window.open(`/api/pdf/liquidacion/${per.id}`, '_blank')
-                            }}
-                          >
-                            <DollarSign className="w-3.5 h-3.5" />
-                          </Button>
                           <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openDialog(per)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
@@ -534,13 +567,30 @@ export function PersonalModule() {
               </div>
               <div className="space-y-2 min-w-0">
                 <Label>RUT</Label>
-                <Input className="w-full" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
+                <Input className="w-full" placeholder="12.345.678-9" value={formData.rut} onChange={(e) => setFormData({...formData, rut: e.target.value})} />
+                <p className="text-xs text-slate-500">Formato: 12.345.678-9 (sin RUT si no aplica)</p>
+                {formData.rut && !validarRUT(formData.rut) && (
+                  <p className="text-xs text-red-600 font-semibold">RUT inv&aacute;lido</p>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2 min-w-0">
                 <Label>Cargo</Label>
-                <Input className="w-full" value={formData.cargo} onChange={(e) => setFormData({...formData, cargo: e.target.value})} />
+                <Select value={formData.cargo} onValueChange={(v) => setFormData({...formData, cargo: v})}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar cargo..." /></SelectTrigger>
+                  <SelectContent>
+                    {CARGOS_VALIDOS.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {/* Permite editar cargos personalizados no listados */}
+                {formData.cargo && !CARGOS_VALIDOS.includes(formData.cargo as any) && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Cargo personalizado: «{formData.cargo}» (no está en la lista estándar)
+                  </p>
+                )}
               </div>
               <div className="space-y-2 min-w-0">
                 <Label>Contrato</Label>
