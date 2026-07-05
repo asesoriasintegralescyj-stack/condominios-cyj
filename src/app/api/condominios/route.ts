@@ -20,12 +20,10 @@ import { apiError, handlePrismaError } from '@/lib/api-helpers'
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9' // LAGUNA NORTE
 
 // GET - Obtener el condominio único (LAGUNA NORTE)
+// Cualquier usuario autenticado puede ver el condominio (es necesario para todos los módulos)
 export async function GET() {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.ver')) {
-    return apiError('Sin permisos', 403)
-  }
   try {
     const condominio = await db.condominio.findFirst({
       orderBy: { createdAt: 'asc' },
