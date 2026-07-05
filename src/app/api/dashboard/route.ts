@@ -19,53 +19,29 @@ export async function GET() {
   if (!session) return apiError('No autenticado', 401);
 
   try {
+    // Ejecutar queries en lotes pequeños para evitar agotar el pool de conexiones
+    // de Aiven (free tier tiene pool muy limitado y el Promise.all con 16 queries
+    // a veces falla con "Error de base de datos" o timeout)
+
+    // Lote 1: Counts simples (rápidos)
     const [
       totalPersonal,
       totalActivos,
       valorActivosAgg,
       caja,
       totalCentros,
-      otGroupByEstado,
-      otGroupByAprobacion,
       otCompletadasAprobacion,
-      recentOT,
       documentosCumplimiento,
       resumenCumplimiento,
-      // Solicitudes de Compra
-      scGroupByEstado,
       scTotal,
       scMontoAgg,
-      scRecent,
     ] = await Promise.all([
       db.personal.count(),
       db.activo.count(),
       db.activo.aggregate({ _sum: { valorActual: true } }),
       db.cajaChica.findFirst(),
       db.centroCostoMaster.count(),
-      // OT por estado
-      db.ordenTrabajo.groupBy({
-        by: ['estado'],
-        _count: true,
-      }),
-      // OT completadas por estadoAprobacion
-      db.ordenTrabajo.groupBy({
-        by: ['estadoAprobacion'],
-        where: { estado: 'Completado' },
-        _count: true,
-      }),
-      // OT completadas (count total)
       db.ordenTrabajo.count({ where: { estado: 'Completado' } }),
-      // Últimas 6 órdenes (con relaciones necesarias para la UI)
-      db.ordenTrabajo.findMany({
-        include: {
-          propiedad: { select: { id: true, nombre: true } },
-          asignado: { select: { id: true, nombre: true, cargo: true } },
-          centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 6,
-      }),
-      // Documentos de cumplimiento
       db.documentoCumplimiento.findMany({
         select: {
           id: true,
@@ -77,17 +53,41 @@ export async function GET() {
         },
       }),
       db.resumenCumplimiento.findFirst(),
-      // === SOLICITUDES DE COMPRA ===
-      // Agrupadas por estado
+      db.solicitudCompra.count(),
+      db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } }),
+    ]);
+
+    // Lote 2: GroupBy y findMany (más pesados)
+    const [
+      otGroupByEstado,
+      otGroupByAprobacion,
+      recentOT,
+      scGroupByEstado,
+      scRecent,
+      centros,
+    ] = await Promise.all([
+      db.ordenTrabajo.groupBy({
+        by: ['estado'],
+        _count: true,
+      }),
+      db.ordenTrabajo.groupBy({
+        by: ['estadoAprobacion'],
+        where: { estado: 'Completado' },
+        _count: true,
+      }),
+      db.ordenTrabajo.findMany({
+        include: {
+          propiedad: { select: { id: true, nombre: true } },
+          asignado: { select: { id: true, nombre: true, cargo: true } },
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+      }),
       db.solicitudCompra.groupBy({
         by: ['estado'],
         _count: true,
       }),
-      // Total
-      db.solicitudCompra.count(),
-      // Monto total estimado
-      db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } }),
-      // Últimas 5 solicitudes
       db.solicitudCompra.findMany({
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -103,6 +103,7 @@ export async function GET() {
           origenCodigo: true,
         },
       }),
+      db.centroCostoMaster.findMany(),
     ]);
 
     const countByEstado = (estado: string): number =>
@@ -141,7 +142,7 @@ export async function GET() {
     const solicitudesRecientes = scRecent;
 
     // Centros de costo (sin gastos, que fueron eliminados)
-    const centros = await db.centroCostoMaster.findMany();
+    // (centros ya fue obtenido en el Lote 2)
     const centrosConGasto = centros.map(cc => ({
       ...cc,
       gastado: 0,
