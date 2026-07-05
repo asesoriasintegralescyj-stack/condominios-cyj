@@ -96,12 +96,12 @@ export async function GET(request: NextRequest) {
     }))
     
     // Acciones por módulo (top 10) - usar groupBy en vez de findMany completo
-    const modulosGroup = await db.auditoriaSistema.groupBy({
+    const modulosGroup = await withRetry(() => db.auditoriaSistema.groupBy({
       by: ['modulo'],
       _count: true,
       orderBy: { _count: { modulo: 'desc' } },
       take: 10,
-    })
+    }))
     const accionesPorModulo: Record<string, number> = {}
     modulosGroup.forEach(g => {
       accionesPorModulo[g.modulo] = g._count
@@ -111,12 +111,12 @@ export async function GET(request: NextRequest) {
     const modulosUnicos = modulosGroup.map(g => g.modulo).sort()
 
     // Usuarios únicos para filtros (usar distinct en findMany con select mínimo)
-    const usuarios = await db.auditoriaSistema.findMany({
+    const usuarios = await withRetry(() => db.auditoriaSistema.findMany({
       select: { usuarioNombre: true },
       distinct: ['usuarioNombre'],
       where: { usuarioNombre: { not: null } },
       take: 100,  // Limitar para evitar cargar toda la tabla
-    })
+    }))
     const usuariosUnicos = usuarios.map(u => u.usuarioNombre).filter(Boolean).sort()
     
     return NextResponse.json({
