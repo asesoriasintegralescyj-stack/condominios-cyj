@@ -92,59 +92,62 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Buscar precios en la web usando ZAI web_search
-    const zai = await ZAI.create()
-    const nombreProducto = producto.nombre
-    const tiendas = ['Sodimac', 'Easy', 'Imperial', 'Construplaza', 'MercadoLibre Chile']
-
-    const cotizacionesNuevas: Array<{
+    // Si ZAI no está configurado (producción), usar fallback con precios del catálogo
+    let cotizacionesNuevas: Array<{
       tienda: string
       precio: number
       url: string | null
       disponible: boolean
     }> = []
 
-    // Buscar en cada tienda en paralelo
-    const promesas = tiendas.map(async (tienda) => {
-      try {
-        const query = tienda === 'MercadoLibre Chile'
-          ? `site:mercadolibre.cl ${nombreProducto} precio`
-          : `site:${tienda.toLowerCase().replace(/\s/g, '')}.cl ${nombreProducto} precio`
-        const results = await zai.functions.invoke('web_search', { query, num: 5 })
+    try {
+      const zai = await ZAI.create()
+      const nombreProducto = producto.nombre
+      const tiendas = ['Sodimac', 'Easy', 'Imperial', 'Construplaza', 'MercadoLibre Chile']
 
-        if (!Array.isArray(results) || results.length === 0) return null
+      const promesas = tiendas.map(async (tienda) => {
+        try {
+          const query = tienda === 'MercadoLibre Chile'
+            ? `site:mercadolibre.cl ${nombreProducto} precio`
+            : `site:${tienda.toLowerCase().replace(/\s/g, '')}.cl ${nombreProducto} precio`
+          const results = await zai.functions.invoke('web_search', { query, num: 5 })
 
-        // Buscar el primer resultado que tenga un precio en el snippet
-        for (const r of results) {
-          const snippet = r.snippet || ''
-          const name = r.name || ''
-          const fullText = `${name} ${snippet}`
+          if (!Array.isArray(results) || results.length === 0) return null
 
-          // Buscar patrones de precio chileno: $12.345 o $ 12.345 o CLP 12.345
-          const precioMatch = fullText.match(/\$\s*([\d.]{4,})/i) || fullText.match(/CLP\s*([\d.]{4,})/i)
-          if (precioMatch) {
-            const precioStr = precioMatch[1].replace(/\./g, '')
-            const precio = parseInt(precioStr, 10)
-            if (precio > 100) { // filtrar precios inválidos
-              return {
-                tienda,
-                precio,
-                url: r.url || null,
-                disponible: true,
+          // Buscar el primer resultado que tenga un precio en el snippet
+          for (const r of results) {
+            const snippet = r.snippet || ''
+            const name = r.name || ''
+            const fullText = `${name} ${snippet}`
+
+            // Buscar patrones de precio chileno: $12.345 o $ 12.345 o CLP 12.345
+            const precioMatch = fullText.match(/\$\s*([\d.]{4,})/i) || fullText.match(/CLP\s*([\d.]{4,})/i)
+            if (precioMatch) {
+              const precioStr = precioMatch[1].replace(/\./g, '')
+              const precio = parseInt(precioStr, 10)
+              if (precio > 100) { // filtrar precios inválidos
+                return {
+                  tienda,
+                  precio,
+                  url: r.url || null,
+                  disponible: true,
+                }
               }
             }
           }
+          return null
+        } catch (e) {
+          console.warn(`Error buscando en ${tienda}:`, e)
+          return null
         }
-        return null
-      } catch (e) {
-        console.warn(`Error buscando en ${tienda}:`, e)
-        return null
+      })
+
+      const resultados = await Promise.all(promesas)
+      for (const r of resultados) {
+        if (r) cotizacionesNuevas.push(r)
       }
-    })
-
-    const resultados = await Promise.all(promesas)
-
-    for (const r of resultados) {
-      if (r) cotizacionesNuevas.push(r)
+    } catch (zaiError) {
+      console.warn('ZAI SDK no configurado en este entorno, usando fallback con catálogo:', zaiError)
     }
 
     // 4. Si no se encontraron precios en web, usar el precio del catálogo como fallback
