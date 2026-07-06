@@ -70,6 +70,16 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
 
+    // Capturar estado anterior para detectar cambios de etapa
+    const proyectoAnterior = await db.proyecto.findUnique({
+      where: { id },
+      select: { estadoAprobacion: true, codigo: true, nombre: true, prioridad: true },
+    })
+
+    if (!proyectoAnterior) {
+      return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+    }
+
     // Extract resources from data
     const {
       materiales,
@@ -132,6 +142,10 @@ export async function PUT(
             precioUnit: parseFloat(String(m.precioUnit)) || 0,
             total: parseFloat(String(m.total)) || 0,
             linkCompra: m.linkCompra || null,
+            materialId: (m as any).materialId || null,
+            mejorPrecio: (m as any).mejorPrecio || null,
+            mejorTienda: (m as any).mejorTienda || null,
+            mejorUrl: (m as any).mejorUrl || null,
           })),
         })
       }
@@ -211,6 +225,81 @@ export async function PUT(
         documentos: true,
       },
     })
+
+    // ===== Generar Solicitud de Compra automática cuando la etapa del proyecto
+    // pasa a "Completado" y tiene materiales vinculados =====
+    const etapaAnterior = proyectoAnterior?.estadoAprobacion
+    const nuevaEtapa = proyectoData.estadoAprobacion
+
+    if (
+      nuevaEtapa === 'Completado' &&
+      etapaAnterior !== 'Completado' &&
+      updatedProyecto &&
+      updatedProyecto.materiales.length > 0
+    ) {
+      try {
+        // Verificar si ya existe una SC para este proyecto
+        const scExistente = await db.solicitudCompra.findFirst({
+          where: {
+            origenTipo: 'Proyecto',
+            origenId: id,
+          },
+        })
+
+        if (!scExistente) {
+          // Generar código SC-XXXX
+          const ultimaSC = await db.solicitudCompra.findFirst({
+            orderBy: { createdAt: 'desc' },
+          })
+          let nuevoNum = 1
+          if (ultimaSC?.codigo) {
+            const match = ultimaSC.codigo.match(/SC-(\d+)/)
+            if (match) nuevoNum = parseInt(match[1]) + 1
+          }
+          const nuevoCodigo = `SC-${String(nuevoNum).padStart(4, '0')}`
+
+          // Construir array de materiales para la SC
+          const materialesJSON = updatedProyecto.materiales.map(m => ({
+            nombre: m.descripcion,
+            cantidad: m.cantidad,
+            unidad: m.unidad,
+            precioEstimado: m.precioUnit,
+            total: m.total,
+            mejorPrecio: m.mejorPrecio,
+            mejorTienda: m.mejorTienda,
+            mejorUrl: m.mejorUrl,
+            linkCompra: m.linkCompra,
+          }))
+
+          const totalEstimado = updatedProyecto.materiales.reduce(
+            (sum, m) => sum + (m.total || 0),
+            0
+          )
+
+          await db.solicitudCompra.create({
+            data: {
+              codigo: nuevoCodigo,
+              titulo: `Materiales para ${updatedProyecto.nombre || 'Proyecto ' + (updatedProyecto.codigo || '')}`,
+              descripcion: `Solicitud generada automáticamente desde el Proyecto ${updatedProyecto.codigo || ''} al completar su etapa de presupuesto.`,
+              estado: 'Solicitado',
+              prioridad: updatedProyecto.prioridad || 'Media',
+              origenTipo: 'Proyecto',
+              origenId: id,
+              origenCodigo: updatedProyecto.codigo || '',
+              materiales: JSON.stringify(materialesJSON),
+              totalEstimado,
+              solicitadoPor: session.user.nombre + ' ' + (session.user.apellido || ''),
+              solicitadoPorId: session.user.id,
+              etapaAprobacion: 'Pendiente Supervisor',
+            },
+          })
+
+          console.log(`SC automática creada: ${nuevoCodigo} para Proyecto ${updatedProyecto.codigo}`)
+        }
+      } catch (scError) {
+        console.error('Error creando SC automática desde proyecto (no crítico):', scError)
+      }
+    }
 
     return NextResponse.json(updatedProyecto)
   } catch (error) {

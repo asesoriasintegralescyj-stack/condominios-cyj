@@ -411,6 +411,11 @@ model OTMaterial {
   unidad        String   @default("unidad")
   otId          String
   ot            OrdenTrabajo @relation(fields: [otId], references: [id], onDelete: Cascade)
+  // Enlace al inventario (CatMaterial) y mejor precio encontrado
+  materialId    String?
+  mejorPrecio   Float?
+  mejorTienda   String?
+  mejorUrl      String?
 }
 
 model OTHerramienta {
@@ -521,6 +526,11 @@ model ProyectoMaterial {
   linkCompra  String?  // URL de compra del material
   proyectoId  String
   proyecto    Proyecto @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+  // Enlace al inventario (CatMaterial) y mejor precio encontrado
+  materialId    String?
+  mejorPrecio   Float?
+  mejorTienda   String?
+  mejorUrl      String?
 }
 
 model ProyectoHerramienta {
@@ -661,7 +671,10 @@ model CatMaterial {
   // Centro de Costo de imputación
   centroCostoId String?
   centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
-  
+
+  // Cotizaciones de múltiples tiendas para este material
+  cotizaciones    CotizacionMercado[] @relation("CotizacionesMaterial")
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -707,8 +720,36 @@ model CatHerramienta {
   // Relación con salidas de pañol
   salidas         SalidaPanol[]
 
+  // Cotizaciones de múltiples tiendas para esta herramienta
+  cotizaciones    CotizacionMercado[] @relation("CotizacionesHerramienta")
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// ============================================
+// COTIZACIONES DE MERCADO (multi-tienda)
+// ============================================
+// Para cada material o herramienta se guardan N cotizaciones de distintas
+// tiendas (Sodimac, Easy, Imperial, Construplaza, MercadoLibre).
+// El sistema devuelve el "mejor precio" (= el más bajo disponible).
+model CotizacionMercado {
+  id           String   @id @default(cuid())
+  // Relación polimórfica: solo uno de los dos tendrá valor
+  materialId   String?
+  material     CatMaterial? @relation("CotizacionesMaterial", fields: [materialId], references: [id], onDelete: Cascade)
+  herramientaId String?
+  herramienta  CatHerramienta? @relation("CotizacionesHerramienta", fields: [herramientaId], references: [id], onDelete: Cascade)
+
+  tienda       String   // "Sodimac", "Easy", "Imperial", "Construplaza", "MercadoLibre"
+  url          String?  // URL del producto en la tienda
+  precio       Float    // Precio en CLP
+  disponible   Boolean  @default(true) // false si está agotado
+  fechaConsulta DateTime @default(now())
+
+  @@index([materialId])
+  @@index([herramientaId])
+  @@index([tienda])
 }
 
 // ============================================

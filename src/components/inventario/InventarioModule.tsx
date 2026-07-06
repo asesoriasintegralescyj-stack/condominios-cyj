@@ -26,10 +26,11 @@ import {
   Plus, Pencil, Search, AlertTriangle, Package, 
   Minus, History, Download,
   ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
-  FolderTree, Boxes, Wrench
+  FolderTree, Boxes, Wrench, DollarSign
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { apiFetch } from '@/lib/api-client'
+import { toast } from 'sonner'
 
 interface Material {
   id: string
@@ -195,6 +196,55 @@ export function InventarioModule() {
   const [herrLoading, setHerrLoading] = useState(true)
   const [searchHerr, setSearchHerr] = useState('')
   const [filterEstadoHerr, setFilterEstadoHerr] = useState('todos')
+
+  // ===== Estado para refresco de valores =====
+  const [refreshing, setRefreshing] = useState(false)
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<string | null>(null)
+
+  // Función para refrescar valores (botón "Refrescar valores")
+  const handleRefreshValues = async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/actualizar-precios', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setUltimaActualizacion(data.fecha_actualizacion)
+        toast.success(`Valores actualizados. Total inventario: ${formatCLP(data.estadisticas.valor_total_inventario)}`)
+        // Recargar datos
+        await Promise.all([fetchMateriales(), fetchHerramientas()])
+      } else {
+        toast.error(data.error || 'Error al refrescar valores')
+      }
+    } catch (error) {
+      console.error('Error refrescando valores:', error)
+      toast.error('Error de conexión al refrescar valores')
+    }
+    setRefreshing(false)
+  }
+
+  // Función para obtener el mejor precio de un material
+  const [buscandoMejorPrecio, setBuscandoMejorPrecio] = useState<string | null>(null)
+  const handleMejorPrecio = async (material: Material) => {
+    setBuscandoMejorPrecio(material.id)
+    try {
+      const res = await fetch(`/api/mejor-precio?materialId=${material.id}&forzar=true`)
+      const data = await res.json()
+      if (data.success) {
+        toast.success(
+          `Mejor precio: ${formatCLP(data.mejor_precio)} en ${data.mejor_tienda}`,
+          { duration: 6000 }
+        )
+        // Recargar materiales para reflejar el nuevo precio si se actualizó
+        await fetchMateriales()
+      } else {
+        toast.warning(data.mensaje || 'No se encontraron precios')
+      }
+    } catch (error) {
+      console.error('Error obteniendo mejor precio:', error)
+      toast.error('Error al buscar mejor precio')
+    }
+    setBuscandoMejorPrecio(null)
+  }
 
   const fetchMateriales = async () => {
     setLoading(true)
@@ -425,6 +475,26 @@ export function InventarioModule() {
 
   return (
     <div className="space-y-5">
+      {/* Botón para refrescar valores del inventario */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs text-slate-500">
+          {ultimaActualizacion ? (
+            <span>Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-CL')}</span>
+          ) : (
+            <span>Sincroniza los precios con Sodimac, Easy, Imperial, Construplaza y MercadoLibre</span>
+          )}
+        </div>
+        <Button
+          onClick={handleRefreshValues}
+          disabled={refreshing}
+          variant="default"
+          className="bg-[#0f2044] hover:bg-[#0a1628]"
+        >
+          <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Actualizando...' : 'Refrescar valores'}
+        </Button>
+      </div>
+
       <TableroIndicadores
         cards={[
           { titulo: 'Consumibles', numero: materiales.length, icon: <Package className="w-5 h-5" />, color: 'azul' },
@@ -432,7 +502,7 @@ export function InventarioModule() {
           { titulo: 'Stock Bajo', numero: stockBajoCount, icon: <AlertTriangle className="w-5 h-5" />, color: 'rojo' },
           { titulo: 'Herr. Operativas', numero: herrOperativas, icon: <Boxes className="w-5 h-5" />, color: 'verde' },
           { titulo: 'En Reparación', numero: herrReparacion, icon: <RefreshCw className="w-5 h-5" />, color: 'naranja' },
-          { titulo: 'Valor Herramientas', numero: formatCLP(valorTotalHerramientas), icon: <FolderTree className="w-5 h-5" />, color: 'cyan' },
+          { titulo: 'Valor Herramientas', numero: formatCLP(valorTotalHerramientas), icon: <DollarSign className="w-5 h-5" />, color: 'cyan' },
         ]}
       />
       <Tabs defaultValue="inventario" className="w-full">
@@ -602,6 +672,21 @@ export function InventarioModule() {
                             </td>
                             <td className="p-3">
                               <div className="flex justify-center gap-1">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-green-600 hover:text-green-700"
+                                  onClick={() => handleMejorPrecio(mat)}
+                                  disabled={buscandoMejorPrecio === mat.id}
+                                  title="Buscar mejor precio en tiendas"
+                                  aria-label="Mejor precio"
+                                >
+                                  {buscandoMejorPrecio === mat.id ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                  )}
+                                </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"

@@ -248,6 +248,89 @@ export async function PUT(
       return updatedWithRelations
     })
 
+    // ===== Generar Solicitud de Compra automática al aprobar la OT =====
+    // Si el estadoAprobacion pasó a "Aprobada" y la OT tiene materiales,
+    // crear una SC con origen "OT" y los materiales de la OT.
+    const estadoAprobacionAnterior = currentOT?.estadoAprobacion
+    const nuevoEstadoAprobacion = updateData.estadoAprobacion
+
+    if (
+      nuevoEstadoAprobacion === 'Aprobada' &&
+      estadoAprobacionAnterior !== 'Aprobada' &&
+      (session.user.rol === 'admin' || session.user.rol === 'supervisor')
+    ) {
+      try {
+        // Obtener la OT actualizada con sus materiales
+        const otConMateriales = await db.ordenTrabajo.findUnique({
+          where: { id },
+          include: { materiales: true },
+        })
+
+        if (otConMateriales && otConMateriales.materiales.length > 0) {
+          // Verificar si ya existe una SC para esta OT
+          const scExistente = await db.solicitudCompra.findFirst({
+            where: {
+              origenTipo: 'OT',
+              origenId: id,
+            },
+          })
+
+          if (!scExistente) {
+            // Generar código SC-XXXX
+            const ultimaSC = await db.solicitudCompra.findFirst({
+              orderBy: { createdAt: 'desc' },
+            })
+            let nuevoNum = 1
+            if (ultimaSC?.codigo) {
+              const match = ultimaSC.codigo.match(/SC-(\d+)/)
+              if (match) nuevoNum = parseInt(match[1]) + 1
+            }
+            const nuevoCodigo = `SC-${String(nuevoNum).padStart(4, '0')}`
+
+            // Construir array de materiales para la SC
+            const materialesJSON = otConMateriales.materiales.map(m => ({
+              nombre: m.descripcion,
+              cantidad: m.cantidad,
+              unidad: m.unidad,
+              precioEstimado: m.precioUnit,
+              total: m.total,
+              mejorPrecio: m.mejorPrecio,
+              mejorTienda: m.mejorTienda,
+              mejorUrl: m.mejorUrl,
+            }))
+
+            const totalEstimado = otConMateriales.materiales.reduce(
+              (sum, m) => sum + (m.total || 0),
+              0
+            )
+
+            await db.solicitudCompra.create({
+              data: {
+                codigo: nuevoCodigo,
+                titulo: `Materiales para ${otConMateriales.titulo || 'OT ' + otConMateriales.otNum}`,
+                descripcion: `Solicitud generada automáticamente desde la OT ${otConMateriales.otNum} al ser aprobada.`,
+                estado: 'Solicitado',
+                prioridad: otConMateriales.prioridad || 'Media',
+                origenTipo: 'OT',
+                origenId: id,
+                origenCodigo: otConMateriales.otNum,
+                materiales: JSON.stringify(materialesJSON),
+                totalEstimado,
+                solicitadoPor: session.user.nombre + ' ' + (session.user.apellido || ''),
+                solicitadoPorId: session.user.id,
+                etapaAprobacion: 'Pendiente Supervisor',
+              },
+            })
+
+            console.log(`SC automática creada: ${nuevoCodigo} para OT ${otConMateriales.otNum}`)
+          }
+        }
+      } catch (scError) {
+        // Si falla la creación de la SC, no afectar la actualización de la OT
+        console.error('Error creando SC automática (no crítico):', scError)
+      }
+    }
+
     return NextResponse.json(orden)
   } catch (error) {
     console.error('Error updating orden:', error)
