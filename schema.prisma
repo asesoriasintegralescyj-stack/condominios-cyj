@@ -650,6 +650,9 @@ model CatMaterial {
   stockActual   Int      @default(0)
   ubicacion     String?
   descripcion   String?
+  imagenUrl     String?  // URL de la imagen del producto (sfile.chatglm.cn o del proveedor)
+  fuente        String?  // Tienda origen: Sodimac, Easy, Imperial, Construplaza
+  ultimaActPrecio DateTime? @default(now()) // Última actualización de precio
   
   // Relación con Condominio
   condominioId  String?
@@ -675,6 +678,9 @@ model CatHerramienta {
   valorReposicion Float    @default(0)
   fechaAdquisicion String?
   descripcion     String?
+  imagenUrl       String?  // URL de la imagen (sfile.chatglm.cn o del proveedor)
+  fuente          String?  // Tienda origen: Sodimac, Easy, Imperial, Construplaza
+  ultimaActPrecio DateTime? @default(now()) // Última actualización de valor
 
   // Manual de usuario (PDF adjunto en base64)
   manualBase64    String?  // PDF en base64

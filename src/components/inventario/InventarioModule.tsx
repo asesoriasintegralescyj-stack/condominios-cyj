@@ -47,6 +47,9 @@ interface Material {
     codigo: string
     nombre: string
   } | null
+  imagenUrl?: string | null
+  fuente?: string | null
+  ultimaActPrecio?: string | null
 }
 
 interface Movimiento {
@@ -87,6 +90,9 @@ interface Herramienta {
   fechaAdquisicion: string | null
   descripcion: string | null
   tieneManual?: boolean
+  imagenUrl?: string | null
+  fuente?: string | null
+  ultimaActPrecio?: string | null
 }
 
 const formatCLP = (n: number) => 
@@ -501,6 +507,7 @@ export function InventarioModule() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-slate-50">
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Imagen</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Material</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Categoría</th>
@@ -508,24 +515,39 @@ export function InventarioModule() {
                       <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Stock Mínimo</th>
                       <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Unidad</th>
                       <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Precio Unit.</th>
-                      <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Total</th>
-                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
-                      <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fuente</th>
                       <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
-                      <tr><td colSpan={11} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                      <tr><td colSpan={10} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                     ) : filteredMateriales.length === 0 ? (
-                      <tr><td colSpan={11} className="p-8 text-center text-slate-400">Sin materiales</td></tr>
+                      <tr><td colSpan={10} className="p-8 text-center text-slate-400">Sin materiales</td></tr>
                     ) : (
                       filteredMateriales.map((mat) => {
                         const isLowStock = mat.stockActual <= mat.stockMinimo
                         const valorTotal = mat.stockActual * mat.precioUnit
-                        
+
                         return (
                           <tr key={mat.id} className={`border-b last:border-0 hover:bg-slate-50 ${isLowStock ? 'bg-red-50' : ''}`}>
+                            <td className="p-3">
+                              {mat.imagenUrl ? (
+                                <img
+                                  src={mat.imagenUrl}
+                                  alt={mat.nombre}
+                                  className="w-12 h-12 object-cover rounded border border-slate-200"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    ;(e.target as HTMLImageElement).style.display = 'none'
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-slate-100 rounded flex items-center justify-center text-slate-400">
+                                  <Package className="w-5 h-5" />
+                                </div>
+                              )}
+                            </td>
                             <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
                               {mat.codigo || '–'}
                             </td>
@@ -567,35 +589,33 @@ export function InventarioModule() {
                             </td>
                             <td className="p-3 text-center font-semibold">{mat.stockMinimo}</td>
                             <td className="p-3 text-center text-xs">{mat.unidad}</td>
-                            <td className="p-3 text-right font-mono text-xs">{formatCLP(mat.precioUnit)}</td>
-                            <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(valorTotal)}</td>
-                            <td className="p-3 text-xs">{mat.ubicacion || '–'}</td>
-                            <td className="p-3 text-center">
-                              {isLowStock ? (
-                                <Badge className="bg-red-100 text-red-700">
-                                  <AlertTriangle className="w-3 h-3 mr-1" />
-                                  Bajo
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-green-100 text-green-700">OK</Badge>
+                            <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(mat.precioUnit)}</td>
+                            <td className="p-3 text-xs">
+                              {mat.fuente ? (
+                                <Badge className="bg-slate-100 text-slate-700">{mat.fuente}</Badge>
+                              ) : '–'}
+                              {mat.ultimaActPrecio && (
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  {new Date(mat.ultimaActPrecio).toLocaleDateString('es-CL')}
+                                </div>
                               )}
                             </td>
                             <td className="p-3">
                               <div className="flex justify-center gap-1">
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7" 
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
                                   onClick={() => openAdjustDialog(mat)}
                                   title="Ajustar Stock"
                                   aria-label="Ver movimientos"
                                 >
                                   <RefreshCw className="w-3.5 h-3.5" />
                                 </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7" 
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7"
                                   onClick={() => openDialog(mat)}
                                   title="Editar"
                                   aria-label="Editar"
@@ -657,14 +677,14 @@ export function InventarioModule() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-slate-50">
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Imagen</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Herramienta</th>
                       <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Marca / Modelo</th>
                       <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Cantidad</th>
                       <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
                       <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
-                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
-                      <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Manual</th>
+                      <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fuente</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -679,6 +699,23 @@ export function InventarioModule() {
                     ) : (
                       filteredHerramientas.map((h) => (
                         <tr key={h.id} className="border-b last:border-0 hover:bg-slate-50">
+                          <td className="p-3">
+                            {h.imagenUrl ? (
+                              <img
+                                src={h.imagenUrl}
+                                alt={h.nombre}
+                                className="w-12 h-12 object-cover rounded border border-slate-200"
+                                loading="lazy"
+                                onError={(e) => {
+                                  ;(e.target as HTMLImageElement).style.display = 'none'
+                                }}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-slate-100 rounded flex items-center justify-center text-slate-400">
+                                <Wrench className="w-5 h-5" />
+                              </div>
+                            )}
+                          </td>
                           <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
                             {h.codigo || '–'}
                           </td>
@@ -687,6 +724,7 @@ export function InventarioModule() {
                             {h.descripcion && (
                               <div className="text-xs text-slate-500 truncate max-w-[200px]">{h.descripcion}</div>
                             )}
+                            <div className="text-[10px] text-slate-400">{h.ubicacion}</div>
                           </td>
                           <td className="p-3 text-xs">
                             {h.marca || h.modelo ? (
@@ -705,13 +743,17 @@ export function InventarioModule() {
                           <td className="p-3 text-right font-mono text-xs">
                             {h.valorReposicion > 0 ? formatCLP(h.valorReposicion) : '–'}
                           </td>
-                          <td className="p-3 text-xs">{h.ubicacion || '–'}</td>
-                          <td className="p-3 text-center">
-                            {h.tieneManual ? (
-                              <Badge className="bg-green-100 text-green-700">Sí</Badge>
-                            ) : (
-                              <span className="text-slate-400 text-xs">–</span>
-                            )}
+                          <td className="p-3 text-xs">
+                            {h.fuente ? (
+                              <div>
+                                <Badge className="bg-slate-100 text-slate-700">{h.fuente}</Badge>
+                                {h.ultimaActPrecio && (
+                                  <div className="text-[10px] text-slate-400 mt-0.5">
+                                    {new Date(h.ultimaActPrecio).toLocaleDateString('es-CL')}
+                                  </div>
+                                )}
+                              </div>
+                            ) : '–'}
                           </td>
                         </tr>
                       ))
