@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,11 +22,11 @@ import {
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { 
-  Plus, Pencil, Search, AlertTriangle, Package, 
+import {
+  Plus, Pencil, Search, AlertTriangle, Package,
   Minus, History, Download,
   ArrowUpRight, ArrowDownRight, RefreshCw, Calendar,
-  FolderTree, Boxes, Wrench, DollarSign
+  FolderTree, Boxes, Wrench, DollarSign, Upload, FileSpreadsheet, X
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { apiFetch } from '@/lib/api-client'
@@ -201,6 +201,15 @@ export function InventarioModule() {
   const [refreshing, setRefreshing] = useState(false)
   const [ultimaActualizacion, setUltimaActualizacion] = useState<string | null>(null)
 
+  // ===== Estado para importación masiva de catálogo =====
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importTipo, setImportTipo] = useState<'material' | 'herramienta'>('material')
+  const [importFuente, setImportFuente] = useState('Sodimac')
+  const [importData, setImportData] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: string[]; creados: number; actualizados: number } | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
+
   // Función para refrescar valores (botón "Refrescar valores")
   const handleRefreshValues = async () => {
     setRefreshing(true)
@@ -244,6 +253,215 @@ export function InventarioModule() {
       toast.error('Error al buscar mejor precio')
     }
     setBuscandoMejorPrecio(null)
+  }
+
+  // ===== Funciones para importación masiva de catálogo =====
+
+  // Manejar selección de archivo Excel/CSV
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const XLSX = await import('xlsx')
+      const data = await file.arrayBuffer()
+      const workbook = XLSX.read(data)
+      const sheetName = workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetName]
+      const jsonData = XLSX.utils.sheet_to_json(worksheet)
+
+      // Convertir a formato CSV pegable en el textarea
+      if (jsonData.length > 0) {
+        const headers = Object.keys(jsonData[0] as Record<string, unknown>)
+        const csvLines = [headers.join(',')]
+        for (const row of jsonData) {
+          const values = headers.map(h => {
+            const v = (row as Record<string, unknown>)[h]
+            return v === null || v === undefined ? '' : `"${String(v).replace(/"/g, '""')}"`
+          })
+          csvLines.push(values.join(','))
+        }
+        setImportData(csvLines.join('\n'))
+        toast.success(`${jsonData.length} filas cargadas del archivo`)
+      }
+    } catch (error) {
+      console.error('Error leyendo archivo:', error)
+      toast.error('Error al leer el archivo. Asegúrate de que sea Excel o CSV válido.')
+    }
+
+    if (importFileRef.current) {
+      importFileRef.current.value = ''
+    }
+  }
+
+  // Parsear CSV pegado a array de objetos
+  const parseCSV = (csv: string): Record<string, string>[] => {
+    const lines = csv.trim().split('\n')
+    if (lines.length < 2) return []
+
+    const parseLine = (line: string): string[] => {
+      const result: string[] = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i]
+        if (char === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"'
+            i++
+          } else {
+            inQuotes = !inQuotes
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim())
+          current = ''
+        } else {
+          current += char
+        }
+      }
+      result.push(current.trim())
+      return result
+    }
+
+    const headers = parseLine(lines[0]).map(h => h.toLowerCase().trim())
+    const rows: Record<string, string>[] = []
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (!line) continue
+      const values = parseLine(line)
+      const row: Record<string, string> = {}
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] || ''
+      })
+      rows.push(row)
+    }
+
+    return rows
+  }
+
+  // Ejecutar importación
+  const handleImport = async () => {
+    if (!importData.trim()) {
+      toast.error('Pega datos CSV o sube un archivo primero')
+      return
+    }
+
+    setImporting(true)
+    setImportResult(null)
+
+    try {
+      const rows = parseCSV(importData)
+
+      if (rows.length === 0) {
+        toast.error('No se pudieron parsear los datos. Verifica el formato CSV.')
+        setImporting(false)
+        return
+      }
+
+      // Mapear filas a objetos según el tipo
+      const items = rows.map(r => {
+        // Buscar campos por nombres comunes (flexible)
+        const get = (...keys: string[]) => {
+          for (const k of keys) {
+            for (const rk of Object.keys(r)) {
+              if (rk.includes(k)) return r[rk]
+            }
+          }
+          return ''
+        }
+
+        if (importTipo === 'material') {
+          return {
+            codigo: get('codigo', 'code', 'sku') || undefined,
+            nombre: get('nombre', 'name', 'producto', 'descripcion'),
+            categoria: get('categoria', 'category', 'rubro') || 'General',
+            unidad: get('unidad', 'unit') || 'unidad',
+            precioUnit: get('precio', 'price', 'valor', 'preciounit') || '0',
+            stockMinimo: get('stockmin', 'min', 'stock') || '0',
+            ubicacion: get('ubicacion', 'location') || '',
+            imagenUrl: get('imagen', 'image', 'foto', 'url') || '',
+            fuente: get('fuente', 'tienda', 'store') || importFuente,
+          }
+        } else {
+          return {
+            codigo: get('codigo', 'code', 'sku') || undefined,
+            nombre: get('nombre', 'name', 'producto'),
+            marca: get('marca', 'brand') || '',
+            modelo: get('modelo', 'model') || '',
+            cantidad: get('cantidad', 'quantity', 'qty') || '1',
+            estado: get('estado', 'status') || 'Bueno',
+            valorReposicion: get('valor', 'precio', 'price', 'valorreposicion') || '0',
+            ubicacion: get('ubicacion', 'location') || '',
+            imagenUrl: get('imagen', 'image', 'foto') || '',
+            fuente: get('fuente', 'tienda') || importFuente,
+          }
+        }
+      })
+
+      // Filtrar items sin nombre
+      const validos = items.filter(i => i.nombre && i.nombre.trim())
+      if (validos.length === 0) {
+        toast.error('No hay filas válidas con nombre de producto')
+        setImporting(false)
+        return
+      }
+
+      // Enviar al endpoint
+      const url = importTipo === 'material'
+        ? '/api/catalogos/materiales/importar'
+        : '/api/catalogos/herramientas/importar'
+
+      const body = importTipo === 'material'
+        ? { materiales: validos, fuente: importFuente }
+        : { herramientas: validos, fuente: importFuente }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setImportResult({
+          success: data.resultados.creados + data.resultados.actualizados,
+          errors: data.resultados.errores,
+          creados: data.resultados.creados,
+          actualizados: data.resultados.actualizados,
+        })
+        toast.success(data.mensaje)
+        // Recargar datos
+        await Promise.all([fetchMateriales(), fetchHerramientas()])
+      } else {
+        toast.error(data.error || 'Error en la importación')
+      }
+    } catch (error) {
+      console.error('Error importando:', error)
+      toast.error('Error al importar catálogo')
+    }
+    setImporting(false)
+  }
+
+  // Descargar plantilla CSV
+  const downloadTemplate = () => {
+    const headers = importTipo === 'material'
+      ? 'codigo,nombre,categoria,unidad,precioUnit,stockMinimo,ubicacion,imagenUrl,fuente'
+      : 'codigo,nombre,marca,modelo,cantidad,estado,valorReposicion,ubicacion,imagenUrl,fuente'
+
+    const ejemplo = importTipo === 'material'
+      ? 'MAT-SOD-001,Cemento Polpaico 25kg,Ferretería,saco,5180,5,Bodega Central,https://imagen.jpg,Sodimac'
+      : 'HERR-SOD-001,Taladro Percutor 13mm,Bosch,GSB-13-RE,1,Bueno,89990,Pañol,https://imagen.jpg,Sodimac'
+
+    const csv = `${headers}\n${ejemplo}\n`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `plantilla_${importTipo}_catalogo.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const fetchMateriales = async () => {
@@ -492,6 +710,14 @@ export function InventarioModule() {
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
           {refreshing ? 'Actualizando...' : 'Refrescar valores'}
+        </Button>
+        <Button
+          onClick={() => { setImportResult(null); setImportData(''); setImportDialogOpen(true) }}
+          variant="outline"
+          className="border-[#0f2044] text-[#0f2044] hover:bg-[#0f2044] hover:text-white"
+        >
+          <Upload className="w-4 h-4 mr-2" />
+          Importar Catálogo
         </Button>
       </div>
 
@@ -1123,6 +1349,140 @@ export function InventarioModule() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAdjustDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleAdjustSave}>Registrar Ajuste</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Diálogo de Importación Masiva de Catálogo ===== */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              Importar Catálogo Completo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Instrucciones */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 space-y-1">
+              <p className="font-bold">Cómo importar el catálogo completo de una tienda:</p>
+              <p>1. Ve al sitio web de la tienda (Sodimac, Easy, Imperial, Construplaza o MercadoLibre)</p>
+              <p>2. Navega a la categoría de productos que quieres importar</p>
+              <p>3. Copia los datos de los productos (nombre, precio, etc.) o exporta a Excel/CSV</p>
+              <p>4. Pega los datos abajo o sube el archivo Excel/CSV</p>
+              <p>5. Selecciona el tipo (Consumible o Herramienta) y la tienda origen</p>
+              <p>6. Haz clic en "Importar"</p>
+              <p className="mt-1">💡 <strong>Formato flexible:</strong> el sistema detecta automáticamente las columnas por nombre (codigo, nombre, precio, imagen, etc.)</p>
+            </div>
+
+            {/* Tipo y fuente */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Tipo de producto</Label>
+                <Select value={importTipo} onValueChange={(v) => setImportTipo(v as 'material' | 'herramienta')}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="material">Consumibles / Materiales</SelectItem>
+                    <SelectItem value="herramienta">Herramientas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Tienda origen</Label>
+                <Select value={importFuente} onValueChange={setImportFuente}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Sodimac">Sodimac</SelectItem>
+                    <SelectItem value="Easy">Easy</SelectItem>
+                    <SelectItem value="Imperial">Imperial</SelectItem>
+                    <SelectItem value="Construplaza">Construplaza</SelectItem>
+                    <SelectItem value="MercadoLibre">MercadoLibre</SelectItem>
+                    <SelectItem value="Otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Botones de archivo y plantilla */}
+            <div className="flex gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                ref={importFileRef}
+                onChange={handleImportFile}
+                className="hidden"
+              />
+              <Button variant="outline" onClick={() => importFileRef.current?.click()} className="flex-1">
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Subir Excel/CSV
+              </Button>
+              <Button variant="outline" onClick={downloadTemplate}>
+                <Download className="w-4 h-4 mr-2" />
+                Descargar Plantilla
+              </Button>
+            </div>
+
+            {/* Textarea para pegar CSV */}
+            <div className="space-y-1">
+              <Label className="text-xs">
+                Datos CSV (pega aquí o sube un archivo arriba)
+              </Label>
+              <Textarea
+                className="w-full font-mono text-xs"
+                value={importData}
+                onChange={(e) => setImportData(e.target.value)}
+                placeholder={
+                  importTipo === 'material'
+                    ? 'codigo,nombre,categoria,unidad,precioUnit,stockMinimo,ubicacion,imagenUrl,fuente\nMAT-001,Cemento 25kg,Ferretería,saco,5180,5,Bodega,,Sodimac\nMAT-002,Tubo PVC 25mm,Fontanería,metro,1090,20,Bodega,,Sodimac'
+                    : 'codigo,nombre,marca,modelo,cantidad,estado,valorReposicion,ubicacion,imagenUrl,fuente\nHERR-001,Taladro Percutor,Bosch,GSB-13,1,Bueno,89990,Pañol,,Sodimac'
+                }
+                rows={10}
+              />
+              {importData && (
+                <p className="text-[10px] text-slate-500">
+                  {importData.trim().split('\n').length - 1} filas detectadas
+                </p>
+              )}
+            </div>
+
+            {/* Resultados */}
+            {importResult && (
+              <div className={`p-3 rounded-lg text-sm ${importResult.errors.length > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
+                <p className="font-bold mb-1">Resultado de la importación:</p>
+                <p>✓ Creados: {importResult.creados}</p>
+                <p>↻ Actualizados: {importResult.actualizados}</p>
+                {importResult.errors.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-amber-700">
+                      ⚠ {importResult.errors.length} errores
+                    </summary>
+                    <ul className="text-xs mt-1 space-y-0.5 max-h-32 overflow-y-auto">
+                      {importResult.errors.slice(0, 50).map((e, i) => (
+                        <li key={i} className="text-red-600">• {e}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
+
+            {/* Columnas soportadas */}
+            <div className="text-[10px] text-slate-400 border-t pt-2">
+              <p className="font-medium">Columnas detectadas automáticamente:</p>
+              <p>{importTipo === 'material'
+                ? 'codigo, nombre, categoria, unidad, precioUnit/precio/valor, stockMinimo/stock, ubicacion, imagenUrl/imagen/url, fuente/tienda'
+                : 'codigo, nombre, marca, modelo, cantidad, estado, valorReposicion/valor/precio, ubicacion, imagenUrl/imagen, fuente/tienda'}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Cerrar</Button>
+            <Button onClick={handleImport} disabled={importing || !importData.trim()}>
+              {importing ? (
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Importando...</>
+              ) : (
+                <><Upload className="w-4 h-4 mr-2" />Importar</>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
