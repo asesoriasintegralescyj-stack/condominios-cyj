@@ -29,6 +29,9 @@ interface Material {
   precioUnit: number
   stockActual: number
   stockMin: number
+  imagenUrl?: string | null
+  fuente?: string | null
+  ultimaActPrecio?: string | null
 }
 
 interface BulkMaterial {
@@ -307,11 +310,13 @@ export function MaterialesModule() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-slate-50">
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Foto</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Código</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Nombre</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Categoría</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Unidad</th>
-                  <th className="text-right p-3 text-xs font-bold text-slate-500 uppercase">Precio</th>
+                  <th className="text-right p-3 text-xs font-bold text-slate-500 uppercase">Valor</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Fuente</th>
                   <th className="text-right p-3 text-xs font-bold text-slate-500 uppercase">Stock</th>
                   <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
@@ -319,11 +324,38 @@ export function MaterialesModule() {
               <tbody>
                 {filteredMateriales.map((mat) => (
                   <tr key={mat.id} className="border-b last:border-0 hover:bg-slate-50">
+                    <td className="p-3">
+                      {mat.imagenUrl ? (
+                        <img
+                          src={mat.imagenUrl}
+                          alt={mat.nombre}
+                          className="w-10 h-10 object-cover rounded border border-slate-200"
+                          loading="lazy"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-400">
+                          <Package className="w-4 h-4" />
+                        </div>
+                      )}
+                    </td>
                     <td className="p-3 font-mono text-xs font-bold text-[#0f2044]">{mat.codigo}</td>
                     <td className="p-3 font-medium">{mat.nombre}</td>
                     <td className="p-3 text-slate-600">{mat.categoria || '–'}</td>
                     <td className="p-3 text-slate-600">{mat.unidad}</td>
-                    <td className="p-3 text-right font-medium">{formatCLP(mat.precioUnit)}</td>
+                    <td className="p-3 text-right font-bold text-[#0f2044]">{formatCLP(mat.precioUnit)}</td>
+                    <td className="p-3 text-xs">
+                      {mat.fuente ? (
+                        <div>
+                          <Badge className="bg-slate-100 text-slate-700">{mat.fuente}</Badge>
+                          {mat.ultimaActPrecio && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              {new Date(mat.ultimaActPrecio).toLocaleDateString('es-CL')}
+                            </div>
+                          )}
+                        </div>
+                      ) : '–'}
+                    </td>
                     <td className="p-3 text-right">
                       <Badge className={
                         mat.stockActual <= (mat.stockMin || 5) 

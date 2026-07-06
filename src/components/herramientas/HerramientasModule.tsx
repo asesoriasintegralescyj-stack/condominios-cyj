@@ -69,6 +69,10 @@ interface Herramienta {
   informeMantencionTipo?: string | null
   tieneInformeMantencion?: boolean
   centroCosto: CentroCosto | null
+  // Mercado
+  imagenUrl?: string | null
+  fuente?: string | null
+  ultimaActPrecio?: string | null
 }
 
 interface ManualState {
@@ -632,27 +636,43 @@ export function HerramientasModule() {
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b bg-slate-50">
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Foto</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Código</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Marca</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Modelo</th>
-                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Cantidad</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Cant.</th>
                   <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Ubicación</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Estado</th>
-                  <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor Reposición</th>
-                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Últ. Mant.</th>
+                  <th className="text-right p-3 text-[10px] font-bold text-slate-500 uppercase">Valor</th>
+                  <th className="text-left p-3 text-[10px] font-bold text-slate-500 uppercase">Fuente</th>
                   <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Manual</th>
-                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acciones</th>
+                  <th className="text-center p-3 text-[10px] font-bold text-slate-500 uppercase">Acc.</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={12} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : filteredHerramientas.length === 0 ? (
-                  <tr><td colSpan={11} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
+                  <tr><td colSpan={12} className="p-8 text-center text-slate-400">Sin herramientas</td></tr>
                 ) : (
                   filteredHerramientas.map((herr) => (
                     <tr key={herr.id} className="border-b last:border-0 hover:bg-slate-50">
+                      <td className="p-3">
+                        {herr.imagenUrl ? (
+                          <img
+                            src={herr.imagenUrl}
+                            alt={herr.nombre}
+                            className="w-10 h-10 object-cover rounded border border-slate-200"
+                            loading="lazy"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-slate-100 rounded flex items-center justify-center text-slate-400">
+                            <Wrench className="w-4 h-4" />
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 font-mono text-xs font-semibold text-[#0f2044]">
                         {herr.codigo || '–'}
                       </td>
@@ -678,12 +698,17 @@ export function HerramientasModule() {
                         })()}
                       </td>
                       <td className="p-3 text-right font-mono text-xs font-bold">{formatCLP(herr.valorReposicion)}</td>
-                      <td className="p-3 text-center text-xs whitespace-nowrap">
-                        {herr.fechaUltimoMantencion ? (
-                          <span title={herr.fechaUltimoMantencion}>{herr.fechaUltimoMantencion}</span>
-                        ) : (
-                          <span className="text-slate-300">–</span>
-                        )}
+                      <td className="p-3 text-xs">
+                        {herr.fuente ? (
+                          <div>
+                            <Badge className="bg-slate-100 text-slate-700">{herr.fuente}</Badge>
+                            {herr.ultimaActPrecio && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {new Date(herr.ultimaActPrecio).toLocaleDateString('es-CL')}
+                              </div>
+                            )}
+                          </div>
+                        ) : '–'}
                       </td>
                       <td className="p-3 text-center">
                         {herr.tieneManual ? (

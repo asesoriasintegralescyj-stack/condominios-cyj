@@ -52,6 +52,10 @@ interface MaterialSolicitud {
   unidad: string
   precioEstimado: number
   total: number
+  mejorPrecio?: number | null
+  mejorTienda?: string | null
+  mejorUrl?: string | null
+  linkCompra?: string | null
 }
 
 interface SolicitudCompra {
@@ -1143,6 +1147,145 @@ export function SolicitudesComprasModule() {
                     </table>
                   </div>
                 </div>
+
+                {/* ===== CUADRO COMPARATIVO DE PRECIOS POR TIENDA ===== */}
+                {detail.materiales && detail.materiales.some(m => m.mejorPrecio || m.mejorTienda) && (
+                  <div>
+                    <Label className="text-xs flex items-center gap-1">
+                      <DollarSign className="w-3 h-3" />
+                      Comparativo de Precios por Tienda
+                    </Label>
+                    <div className="border rounded-lg overflow-hidden mt-1">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-100">
+                          <tr>
+                            <th className="text-left p-2">Material</th>
+                            <th className="text-center p-2">Cant.</th>
+                            <th className="text-right p-2">P. Estimado</th>
+                            <th className="text-right p-2">Mejor Precio</th>
+                            <th className="text-left p-2">Mejor Tienda</th>
+                            <th className="text-right p-2">Diferencia</th>
+                            <th className="text-center p-2">Ahorro</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.materiales.map((m, i) => {
+                            const dif = m.mejorPrecio ? (m.precioEstimado - m.mejorPrecio) * m.cantidad : 0
+                            const tieneMejor = m.mejorPrecio && m.mejorPrecio < m.precioEstimado
+                            return (
+                              <tr key={i} className="border-t">
+                                <td className="p-2">
+                                  <div className="font-medium">{m.nombre}</div>
+                                  {m.mejorUrl && (
+                                    <a href={m.mejorUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline">
+                                      Ver en tienda →
+                                    </a>
+                                  )}
+                                </td>
+                                <td className="p-2 text-center">{m.cantidad}</td>
+                                <td className="p-2 text-right font-mono">{formatCLP(m.precioEstimado)}</td>
+                                <td className="p-2 text-right font-mono font-bold text-green-700">
+                                  {m.mejorPrecio ? formatCLP(m.mejorPrecio) : '–'}
+                                </td>
+                                <td className="p-2">
+                                  {m.mejorTienda ? (
+                                    <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-medium">
+                                      {m.mejorTienda}
+                                    </span>
+                                  ) : '–'}
+                                </td>
+                                <td className={`p-2 text-right font-mono ${tieneMejor ? 'text-green-600' : 'text-slate-400'}`}>
+                                  {tieneMejor ? formatCLP(dif) : '–'}
+                                </td>
+                                <td className="p-2 text-center">
+                                  {tieneMejor ? (
+                                    <span className="inline-block px-2 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-bold">
+                                      ✓ {((dif / (m.precioEstimado * m.cantidad)) * 100).toFixed(0)}%
+                                    </span>
+                                  ) : '–'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-100">
+                          <tr>
+                            <td colSpan={5} className="p-2 text-right font-bold">
+                              Ahorro total comprando en mejores tiendas:
+                            </td>
+                            <td colSpan={2} className="p-2 text-right font-mono font-bold text-green-700">
+                              {formatCLP(
+                                detail.materiales.reduce((sum, m) => {
+                                  if (!m.mejorPrecio || m.mejorPrecio >= m.precioEstimado) return sum
+                                  return sum + (m.precioEstimado - m.mejorPrecio) * m.cantidad
+                                }, 0)
+                              )}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+
+                    {/* ===== ANÁLISIS: ¿CONVIENE COMPRAR EN UNA O VARIAS TIENDAS? ===== */}
+                    {(() => {
+                      const tiendasConPrecios = new Map<string, { items: number; total: number }>()
+                      for (const m of detail.materiales) {
+                        if (m.mejorPrecio && m.mejorTienda) {
+                          const actual = tiendasConPrecios.get(m.mejorTienda) || { items: 0, total: 0 }
+                          actual.items += 1
+                          actual.total += m.mejorPrecio * m.cantidad
+                          tiendasConPrecios.set(m.mejorTienda, actual)
+                        }
+                      }
+
+                      if (tiendasConPrecios.size <= 1) return null
+
+                      const totalMejoresPrecios = Array.from(tiendasConPrecios.values()).reduce((s, t) => s + t.total, 0)
+                      const totalUnaTienda = detail.materiales.reduce((s, m) => s + (m.precioEstimado || 0) * m.cantidad, 0)
+                      const tiendasArray = Array.from(tiendasConPrecios.entries()).sort((a, b) => b[1].total - a[1].total)
+                      const tiendaPrincipal = tiendasArray[0]
+                      const porcentajeTiendaPrincipal = (tiendaPrincipal[1].total / totalMejoresPrecios) * 100
+
+                      return (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                            <div className="text-xs">
+                              <p className="font-bold text-amber-900 mb-1">
+                                Análisis de Compra: ¿una tienda o varias?
+                              </p>
+                              <p className="text-amber-800 mb-2">
+                                Los mejores precios están distribuidos en <strong>{tiendasConPrecios.size} tiendas</strong>:
+                              </p>
+                              <ul className="space-y-1 mb-2">
+                                {tiendasArray.map(([tienda, info]) => (
+                                  <li key={tienda} className="flex justify-between">
+                                    <span>• {tienda}: {info.items} producto(s)</span>
+                                    <span className="font-mono font-medium">{formatCLP(info.total)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                              {porcentajeTiendaPrincipal >= 70 ? (
+                                <p className="text-green-700 font-medium">
+                                  ✓ <strong>Recomendación: comprar todo en {tiendaPrincipal[0]}</strong> ({porcentajeTiendaPrincipal.toFixed(0)}% del total).
+                                  Simplifica logística, unify envíos y probablemente califica para descuento por volumen.
+                                  Pérdida por no comprar en tiendas menores: ~{formatCLP(totalUnaTienda - totalMejoresPrecios - tiendaPrincipal[1].total * 0.05)}.
+                                </p>
+                              ) : (
+                                <p className="text-blue-700 font-medium">
+                                  ⓘ <strong>Recomendación: comprar en varias tiendas</strong>.
+                                  La distribución está balanceada (mayor tienda = {porcentajeTiendaPrincipal.toFixed(0)}% del total),
+                                  por lo que conviene aprovechar los mejores precios individuales.
+                                  Ahorro estimado vs comprar todo al precio estimado: <strong>{formatCLP(totalUnaTienda - totalMejoresPrecios)}</strong>.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )}
 
                 {detail.observaciones && (
                   <div>
