@@ -1509,3 +1509,70 @@ model Secuencia {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ============================================
+// MODELOS DE LA APP MÓVIL
+// ============================================
+
+model MovilProfile {
+  id          String   @id @default(cuid())
+  name        String
+  password    String   @default("")
+  accessCode  String   @default("")
+  color       String   @default("")
+  icon        String   @default("")
+  workAreaIds String[] @default([])
+  permissions String[] @default(["view"])
+  personalId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([accessCode])
+}
+
+model MovilQrLocation {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  location    String   @default("")
+  code        String   @unique
+  active      Boolean  @default(true)
+  createdBy   String   @default("admin")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([active])
+}
+
+model MovilQrScan {
+  id           String    @id @default(cuid())
+  qrLocationId String
+  scannedBy    String    @default("")
+  profileId    String?
+  latitude     Float?
+  longitude    Float?
+  notes        String    @default("")
+  createdAt    DateTime  @default(now())
+
+  @@index([qrLocationId])
+  @@index([scannedBy])
+  @@index([createdAt])
+}
+
+model MovilAuditLog {
+  id          String   @id @default(cuid())
+  action      String
+  entityType  String
+  entityId    String
+  entityName  String   @default("")
+  changes     String   @default("{}")
+  performedBy String   @default("admin")
+  profileId   String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType])
+  @@index([action])
+  @@index([createdAt])
+}
