@@ -1385,6 +1385,200 @@ export function ProyectosModule() {
   // ============================================
   // Exportar Excel (dynamic import)
   // ============================================
+  // ============================================
+  // EXPORTAR GANTT (PDF + Excel)
+  // ============================================
+  const exportGanttToPDF = async () => {
+    // Filtrar proyectos igual que el Gantt
+    let proysGantt = [...proyectos]
+    if (ganttFiltroEtapa !== 'todas') {
+      proysGantt = proysGantt.filter(p => (p.estadoAprobacion || 'Sin etapa') === ganttFiltroEtapa)
+    }
+    if (ganttFiltroEstado !== 'todos') {
+      proysGantt = proysGantt.filter(p => p.estado === ganttFiltroEstado)
+    }
+    const proysConFechas = proysGantt.filter(p => p.fechaInicio || p.fechaFin)
+    if (proysConFechas.length === 0) { toast.error('No hay proyectos con fechas para exportar'); return }
+
+    try {
+      const { default: jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' })
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const pageHeight = doc.internal.pageSize.getHeight()
+
+      // Header
+      doc.setFillColor(15, 32, 68)
+      doc.rect(0, 0, pageWidth, 15, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(13)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Diagrama de Gantt — Cronograma de Proyectos', pageWidth / 2, 9, { align: 'center' })
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'normal')
+      const filtrosStr = `Filtros: Etapa=${ganttFiltroEtapa === 'todas' ? 'Todas' : ganttFiltroEtapa}  |  Estado=${ganttFiltroEstado === 'todos' ? 'Todos' : ganttFiltroEstado}  |  ${proysConFechas.length} proyectos  |  Generado: ${new Date().toLocaleDateString('es-CL')}`
+      doc.text(filtrosStr, pageWidth / 2, 13, { align: 'center' })
+
+      // Calcular rango de fechas
+      const fechas = proysConFechas.flatMap(p => [p.fechaInicio, p.fechaFin].filter(Boolean).map(f => new Date(f).getTime()))
+      const minFecha = new Date(Math.min(...fechas))
+      const maxFecha = new Date(Math.max(...fechas))
+      minFecha.setDate(minFecha.getDate() - 2)
+      maxFecha.setDate(maxFecha.getDate() + 2)
+      const totalDias = Math.max(1, Math.ceil((maxFecha - minFecha) / (1000 * 60 * 60 * 24)))
+
+      // Layout
+      const colNombreW = 70
+      const timelineX = colNombreW + 5
+      const timelineW = pageWidth - timelineX - 10
+      let y = 22
+      const rowH = 6
+
+      // Header de columnas
+      doc.setFillColor(241, 245, 249)
+      doc.rect(10, y - 3, colNombreW, 6, 'F')
+      doc.rect(timelineX, y - 3, timelineW, 6, 'F')
+      doc.setTextColor(15, 32, 68)
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'bold')
+      doc.text('PROYECTO', 12, y + 0.5)
+
+      // Marcar meses en el header del timeline
+      const monthLabels: { x: number; label: string }[] = []
+      let lastMonth = -1
+      for (let d = 0; d <= totalDias; d += Math.max(1, Math.floor(totalDias / 30))) {
+        const fecha = new Date(minFecha)
+        fecha.setDate(fecha.getDate() + d)
+        const x = timelineX + (d / totalDias) * timelineW
+        if (fecha.getMonth() !== lastMonth) {
+          const label = fecha.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' })
+          monthLabels.push({ x, label })
+          lastMonth = fecha.getMonth()
+        }
+      }
+      for (const ml of monthLabels) {
+        doc.text(ml.label, ml.x, y + 0.5)
+      }
+      y += 5
+
+      // Colores por estado (RGB)
+      const estadoRGB: Record<string, [number, number, number]> = {
+        'Planificado': [59, 130, 246],
+        'En Ejecución': [245, 158, 11],
+        'Completado': [34, 197, 94],
+        'Cancelado': [248, 113, 113],
+        'Pausado': [148, 163, 184],
+      }
+
+      // Filas de proyectos
+      doc.setFontSize(5)
+      for (const p of proysConFechas) {
+        if (y > pageHeight - 15) { doc.addPage(); y = 15 }
+
+        // Nombre del proyecto
+        doc.setFont('helvetica', 'normal')
+        doc.setTextColor(0, 0, 0)
+        const nombre = `${p.codigo || ''} ${p.nombre || ''}`.substring(0, 45)
+        doc.text(nombre, 12, y + 1)
+        doc.setFontSize(4)
+        doc.setTextColor(120, 120, 120)
+        doc.text(`${p.estado} · ${p.estadoAprobacion || 'Sin etapa'}`, 12, y + 3.5)
+        doc.setFontSize(5)
+
+        // Barra del Gantt
+        const inicio = p.fechaInicio ? new Date(p.fechaInicio) : minFecha
+        const fin = p.fechaFin ? new Date(p.fechaFin) : maxFecha
+        const offsetDias = Math.max(0, Math.ceil((inicio - minFecha) / (1000 * 60 * 60 * 24)))
+        const duracionDias = Math.max(1, Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)))
+        const barX = timelineX + (offsetDias / totalDias) * timelineW
+        const barW = Math.max(1, (duracionDias / totalDias) * timelineW)
+        const rgb = estadoRGB[p.estado] || [59, 130, 246]
+
+        doc.setFillColor(rgb[0], rgb[1], rgb[2])
+        doc.rect(barX, y - 1.5, barW, 4, 'F')
+
+        // Duración dentro de la barra si hay espacio
+        if (barW > 8) {
+          doc.setTextColor(255, 255, 255)
+          doc.setFont('helvetica', 'bold')
+          doc.text(`${duracionDias}d`, barX + 1, y + 0.5)
+          doc.setFont('helvetica', 'normal')
+        }
+
+        y += rowH
+      }
+
+      // Leyenda
+      y += 3
+      if (y > pageHeight - 15) { doc.addPage(); y = 15 }
+      doc.setFontSize(6)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(15, 32, 68)
+      doc.text('Leyenda:', 12, y)
+      let lx = 30
+      for (const [estado, rgb] of Object.entries(estadoRGB)) {
+        doc.setFillColor(rgb[0], rgb[1], rgb[2])
+        doc.rect(lx, y - 3, 4, 3, 'F')
+        doc.setTextColor(0, 0, 0)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(5)
+        doc.text(estado, lx + 5, y - 0.5)
+        lx += 35
+      }
+
+      // Footer
+      doc.setFontSize(5)
+      doc.setTextColor(120, 120, 120)
+      doc.text(`Rango: ${minFecha.toLocaleDateString('es-CL')} — ${maxFecha.toLocaleDateString('es-CL')}  |  ${totalDias} días  |  Generado por Sistema de Gestión Laguna Norte`, pageWidth / 2, pageHeight - 5, { align: 'center' })
+
+      doc.save(`Gantt_Proyectos_${new Date().toISOString().split('T')[0]}.pdf`)
+      toast.success('Gantt exportado a PDF')
+    } catch (error) {
+      console.error('Error exportando Gantt PDF:', error)
+      toast.error('Error al exportar Gantt a PDF')
+    }
+  }
+
+  const exportGanttToExcel = async () => {
+    let proysGantt = [...proyectos]
+    if (ganttFiltroEtapa !== 'todas') {
+      proysGantt = proysGantt.filter(p => (p.estadoAprobacion || 'Sin etapa') === ganttFiltroEtapa)
+    }
+    if (ganttFiltroEstado !== 'todos') {
+      proysGantt = proysGantt.filter(p => p.estado === ganttFiltroEstado)
+    }
+    const proysConFechas = proysGantt.filter(p => p.fechaInicio || p.fechaFin)
+    if (proysConFechas.length === 0) { toast.error('No hay proyectos con fechas para exportar'); return }
+
+    try {
+      const XLSX = await import('xlsx')
+      const data = proysConFechas.map(p => {
+        const inicio = p.fechaInicio ? new Date(p.fechaInicio) : null
+        const fin = p.fechaFin ? new Date(p.fechaFin) : null
+        const duracion = inicio && fin ? Math.ceil((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) : 0
+        return {
+          'Código': p.codigo || '',
+          'Proyecto': p.nombre || '',
+          'Estado': p.estado || '',
+          'Etapa': p.estadoAprobacion || 'Sin etapa',
+          'Fecha Inicio': p.fechaInicio || '',
+          'Fecha Fin': p.fechaFin || '',
+          'Duración (días)': duracion,
+          'Sector': p.sector || '',
+          'Responsable': p.responsable || '',
+          'Monto': p.monto || p.presProg || 0,
+        }
+      })
+      const ws = XLSX.utils.json_to_sheet(data)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Gantt')
+      XLSX.writeFile(wb, `Gantt_Proyectos_${new Date().toISOString().split('T')[0]}.xlsx`)
+      toast.success('Gantt exportado a Excel')
+    } catch (error) {
+      console.error('Error exportando Gantt Excel:', error)
+      toast.error('Error al exportar Gantt a Excel')
+    }
+  }
+
   const exportToExcel = async () => {
     if (proyectos.length === 0) {
       toast.error('No hay proyectos para exportar')
@@ -1991,7 +2185,7 @@ export function ProyectosModule() {
               {/* Filtros del Gantt */}
               <div className="flex items-center gap-2">
                 <Select value={ganttFiltroEtapa} onValueChange={setGanttFiltroEtapa}>
-                  <SelectTrigger className="h-7 w-44 text-xs">
+                  <SelectTrigger className="h-7 w-40 text-xs">
                     <SelectValue placeholder="Etapa" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2017,6 +2211,12 @@ export function ProyectosModule() {
                     <SelectItem value="Pausado">Pausado</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button size="sm" variant="outline" onClick={exportGanttToPDF} title="Exportar Gantt a PDF" className="h-7 text-xs">
+                  <FileDown className="w-3 h-3 mr-1" /> PDF
+                </Button>
+                <Button size="sm" variant="outline" onClick={exportGanttToExcel} title="Exportar Gantt a Excel" className="h-7 text-xs">
+                  <FileSpreadsheet className="w-3 h-3 mr-1" /> Excel
+                </Button>
               </div>
             </div>
           </CardHeader>
