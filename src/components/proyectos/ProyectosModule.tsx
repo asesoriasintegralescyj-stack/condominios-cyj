@@ -346,6 +346,8 @@ export function ProyectosModule() {
   const [catalogoMateriales, setCatalogoMateriales] = useState<CatalogoMaterial[]>([])
   const [catalogoHerramientas, setCatalogoHerramientas] = useState<CatalogoHerramienta[]>([])
   const [showGantt, setShowGantt] = useState(false)
+  const [ganttFiltroEtapa, setGanttFiltroEtapa] = useState<string>('todas')
+  const [ganttFiltroEstado, setGanttFiltroEstado] = useState<string>('todos')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -1981,27 +1983,82 @@ export function ProyectosModule() {
       {showGantt && (
         <Card>
           <CardHeader className="py-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-purple-600" />
-              Diagrama de Gantt — Cronograma de Proyectos
-            </CardTitle>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-purple-600" />
+                Diagrama de Gantt — Cronograma de Proyectos
+              </CardTitle>
+              {/* Filtros del Gantt */}
+              <div className="flex items-center gap-2">
+                <Select value={ganttFiltroEtapa} onValueChange={setGanttFiltroEtapa}>
+                  <SelectTrigger className="h-7 w-44 text-xs">
+                    <SelectValue placeholder="Etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas las etapas</SelectItem>
+                    <SelectItem value="Sin etapa">Sin etapa</SelectItem>
+                    <SelectItem value="Presupuesto">Presupuesto</SelectItem>
+                    <SelectItem value="Coordinación con Proveedor">Coordinación con Proveedor</SelectItem>
+                    <SelectItem value="Estudio de Materiales">Estudio de Materiales</SelectItem>
+                    <SelectItem value="Preparación de Compra">Preparación de Compra</SelectItem>
+                    <SelectItem value="Completado">Completado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={ganttFiltroEstado} onValueChange={setGanttFiltroEstado}>
+                  <SelectTrigger className="h-7 w-36 text-xs">
+                    <SelectValue placeholder="Estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos los estados</SelectItem>
+                    <SelectItem value="Planificado">Planificado</SelectItem>
+                    <SelectItem value="En Ejecución">En Ejecución</SelectItem>
+                    <SelectItem value="Completado">Completado</SelectItem>
+                    <SelectItem value="Cancelado">Cancelado</SelectItem>
+                    <SelectItem value="Pausado">Pausado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               {(() => {
-                // Filtrar proyectos con fechas
-                const proysConFechas = proyectosFiltrados.filter(p => p.fechaInicio || p.fechaFin)
+                // Usar TODOS los proyectos (no proyectosFiltrados) y aplicar filtros propios del Gantt
+                let proysGantt = [...proyectos]
+
+                // Filtro por etapa
+                if (ganttFiltroEtapa !== 'todas') {
+                  proysGantt = proysGantt.filter(p =>
+                    (p.estadoAprobacion || 'Sin etapa') === ganttFiltroEtapa
+                  )
+                }
+
+                // Filtro por estado
+                if (ganttFiltroEstado !== 'todos') {
+                  proysGantt = proysGantt.filter(p => p.estado === ganttFiltroEstado)
+                }
+
+                // Solo proyectos con al menos una fecha
+                const proysConFechas = proysGantt.filter(p => p.fechaInicio || p.fechaFin)
+
                 if (proysConFechas.length === 0) {
-                  return <div className="p-8 text-center text-slate-400 text-sm">Sin proyectos con fechas para mostrar en el Gantt</div>
+                  return (
+                    <div className="p-8 text-center text-slate-400 text-sm">
+                      <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                      Sin proyectos con fechas para los filtros seleccionados.
+                      <br />
+                      <span className="text-xs">Cambia los filtros o asigna fechas a los proyectos.</span>
+                    </div>
+                  )
                 }
 
                 // Encontrar rango de fechas
                 const fechas = proysConFechas.flatMap(p => [p.fechaInicio, p.fechaFin].filter(Boolean).map(f => new Date(f).getTime()))
-                const minFecha = new Date(Math.min(...fechas))
-                const maxFecha = new Date(Math.max(...fechas))
-                minFecha.setDate(minFecha.getDate() - 1)
-                maxFecha.setDate(maxFecha.getDate() + 1)
-                const totalDias = Math.ceil((maxFecha - minFecha) / (1000 * 60 * 60 * 24))
+                let minFecha = new Date(Math.min(...fechas))
+                let maxFecha = new Date(Math.max(...fechas))
+                minFecha.setDate(minFecha.getDate() - 2)
+                maxFecha.setDate(maxFecha.getDate() + 2)
+                const totalDias = Math.max(1, Math.ceil((maxFecha - minFecha) / (1000 * 60 * 60 * 24)))
 
                 // Colores por estado
                 const estadoColors: Record<string, string> = {
@@ -2012,27 +2069,58 @@ export function ProyectosModule() {
                   'Pausado': 'bg-slate-400',
                 }
 
-                // Calcular columnas (días)
+                // Colores por etapa (borde izquierdo)
+                const etapaBorderColors: Record<string, string> = {
+                  'Sin etapa': 'border-l-slate-400',
+                  'Presupuesto': 'border-l-blue-600',
+                  'Coordinación con Proveedor': 'border-l-amber-600',
+                  'Estudio de Materiales': 'border-l-purple-600',
+                  'Preparación de Compra': 'border-l-orange-600',
+                  'Completado': 'border-l-green-600',
+                }
+
+                // Generar columnas — agrupar por semana si el rango es muy grande
                 const dias = []
                 const cursor = new Date(minFecha)
+                const showEveryDay = totalDias <= 60
+                const showEvery5Days = totalDias > 60 && totalDias <= 180
                 while (cursor <= maxFecha) {
                   dias.push(new Date(cursor))
                   cursor.setDate(cursor.getDate() + 1)
                 }
 
+                // Función para decidir si mostrar etiqueta de día
+                const shouldShowDay = (d: Date, i: number) => {
+                  if (showEveryDay) return true
+                  if (showEvery5Days) return d.getDate() % 5 === 0 || d.getDate() === 1
+                  return d.getDate() === 1 // Mensual
+                }
+
                 return (
-                  <div className="min-w-[800px]">
+                  <div className="min-w-[900px]">
                     {/* Header con días */}
-                    <div className="flex border-b bg-slate-50 sticky top-0">
-                      <div className="w-48 p-2 text-[10px] font-bold text-slate-500 uppercase border-r shrink-0">Proyecto</div>
+                    <div className="flex border-b bg-slate-50 sticky top-0 z-10">
+                      <div className="w-56 p-2 text-[10px] font-bold text-slate-500 uppercase border-r shrink-0">
+                        Proyecto ({proysConFechas.length})
+                      </div>
                       <div className="flex-1 flex">
                         {dias.map((d, i) => (
-                          <div key={i} className="flex-1 min-w-[24px] text-center text-[8px] text-slate-400 border-r py-1">
-                            {d.getDate() === 1 || d.getDate() % 5 === 0 ? `${d.getDate()}/${d.getMonth() + 1}` : ''}
+                          <div key={i} className="flex-1 min-w-[20px] text-center text-[8px] text-slate-400 border-r py-1">
+                            {shouldShowDay(d, i) ? (
+                              <div>
+                                <div>{d.getDate()}</div>
+                                {(d.getDate() === 1 || (showEveryDay && d.getDay() === 1)) && (
+                                  <div className="text-[7px] font-bold text-slate-600">
+                                    {d.toLocaleDateString('es-CL', { month: 'short' })}
+                                  </div>
+                                )}
+                              </div>
+                            ) : ''}
                           </div>
                         ))}
                       </div>
                     </div>
+
                     {/* Filas de proyectos */}
                     {proysConFechas.map((p) => {
                       const inicio = p.fechaInicio ? new Date(p.fechaInicio) : minFecha
@@ -2040,36 +2128,61 @@ export function ProyectosModule() {
                       const offsetDias = Math.max(0, Math.ceil((inicio - minFecha) / (1000 * 60 * 60 * 24)))
                       const duracionDias = Math.max(1, Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)))
                       const offsetPercent = (offsetDias / totalDias) * 100
-                      const widthPercent = (duracionDias / totalDias) * 100
+                      const widthPercent = Math.max(0.5, (duracionDias / totalDias) * 100)
                       const color = estadoColors[p.estado] || 'bg-blue-500'
+                      const etapa = p.estadoAprobacion || 'Sin etapa'
+                      const borderColor = etapaBorderColors[etapa] || 'border-l-slate-400'
 
                       return (
                         <div key={p.id} className="flex border-b hover:bg-slate-50">
-                          <div className="w-48 p-2 text-xs font-medium truncate border-r shrink-0" title={p.nombre}>
-                            {p.codigo || ''} {p.nombre?.substring(0, 25)}
+                          <div
+                            className={`w-56 p-2 text-xs font-medium truncate border-r shrink-0 border-l-4 ${borderColor}`}
+                            title={`${p.codigo || ''} ${p.nombre}\nEstado: ${p.estado}\nEtapa: ${etapa}\nInicio: ${p.fechaInicio || 'N/A'}\nFin: ${p.fechaFin || 'N/A'}`}
+                          >
+                            <div className="truncate">
+                              {p.codigo || ''} {p.nombre?.substring(0, 30)}
+                            </div>
+                            <div className="text-[9px] text-slate-400 truncate">
+                              {p.estado} · {etapa}
+                            </div>
                           </div>
-                          <div className="flex-1 relative h-8">
+                          <div className="flex-1 relative h-10">
                             {/* Línea de tiempo */}
                             <div
-                              className={`absolute h-5 top-1.5 rounded ${color} text-white text-[9px] font-bold px-1 flex items-center cursor-pointer overflow-hidden`}
+                              className={`absolute h-6 top-2 rounded ${color} text-white text-[9px] font-bold px-1 flex items-center cursor-pointer overflow-hidden shadow-sm hover:opacity-80 transition-opacity`}
                               style={{ left: `${offsetPercent}%`, width: `${widthPercent}%` }}
-                              title={`${p.nombre}\nInicio: ${p.fechaInicio || 'N/A'}\nFin: ${p.fechaFin || 'N/A'}\nEstado: ${p.estado}`}
+                              title={`${p.nombre}\nInicio: ${p.fechaInicio || 'N/A'}\nFin: ${p.fechaFin || 'N/A'}\nDuración: ${duracionDias} días\nEstado: ${p.estado}\nEtapa: ${etapa}`}
                             >
-                              {duracionDias > 3 ? `${duracionDias}d` : ''}
+                              {widthPercent > 3 ? `${duracionDias}d` : ''}
                             </div>
                           </div>
                         </div>
                       )
                     })}
+
                     {/* Leyenda */}
-                    <div className="flex items-center gap-4 p-2 bg-slate-50 border-t text-[10px]">
-                      <span className="font-bold text-slate-500">Leyenda:</span>
+                    <div className="flex items-center gap-4 p-2 bg-slate-50 border-t text-[10px] flex-wrap">
+                      <span className="font-bold text-slate-500">Estados:</span>
                       {Object.entries(estadoColors).map(([estado, color]) => (
                         <span key={estado} className="flex items-center gap-1">
                           <span className={`inline-block w-3 h-3 rounded ${color}`}></span>
                           {estado}
                         </span>
                       ))}
+                      <span className="font-bold text-slate-500 ml-4">Etapas:</span>
+                      {Object.entries(etapaBorderColors).map(([etapa, color]) => (
+                        <span key={etapa} className="flex items-center gap-1">
+                          <span className={`inline-block w-3 h-3 rounded border-l-2 ${color}`}></span>
+                          {etapa}
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Resumen */}
+                    <div className="p-2 bg-white border-t text-[10px] text-slate-500">
+                      Mostrando <strong>{proysConFechas.length}</strong> de <strong>{proyectos.length}</strong> proyectos ·
+                      Rango: <strong>{minFecha.toLocaleDateString('es-CL')}</strong> — <strong>{maxFecha.toLocaleDateString('es-CL')}</strong> ·
+                      <strong> {totalDias}</strong> días
                     </div>
                   </div>
                 )
