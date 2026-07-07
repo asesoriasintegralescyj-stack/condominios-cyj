@@ -29,6 +29,7 @@ import {
   CheckSquare, Users, FileText, Upload, Eye, X, Paperclip,
   FileSpreadsheet, FileDown, Camera, Image as ImageIcon,
   ShoppingCart, Link2, FolderKanban, HardHat, CheckCircle, XCircle,
+  BarChart3,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
@@ -90,6 +91,29 @@ interface PersonalItem {
   nombre: string
   cargo?: string | null
   estado?: string | null
+  sueldoBase?: number
+}
+
+// Item del catálogo de materiales (CatMaterial)
+interface CatalogoMaterial {
+  id: string
+  codigo: string | null
+  nombre: string
+  unidad: string
+  precioUnit: number
+  categoria: string
+  imagenUrl?: string | null
+  fuente?: string | null
+}
+
+// Item del catálogo de herramientas (CatHerramienta)
+interface CatalogoHerramienta {
+  id: string
+  codigo: string | null
+  nombre: string
+  marca: string | null
+  valorReposicion: number
+  imagenUrl?: string | null
 }
 
 interface Proyecto {
@@ -319,6 +343,9 @@ const documentoTipoColors: Record<string, string> = {
 export function ProyectosModule() {
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [personalList, setPersonalList] = useState<PersonalItem[]>([])
+  const [catalogoMateriales, setCatalogoMateriales] = useState<CatalogoMaterial[]>([])
+  const [catalogoHerramientas, setCatalogoHerramientas] = useState<CatalogoHerramienta[]>([])
+  const [showGantt, setShowGantt] = useState(false)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -812,12 +839,13 @@ export function ProyectosModule() {
       if (Array.isArray(data)) {
         setPersonalList(
           data
-            .filter((p: PersonalItem) => p.nombre)
-            .map((p: PersonalItem) => ({
+            .filter((p: any) => p.nombre)
+            .map((p: any) => ({
               id: p.id,
               nombre: p.nombre,
               cargo: p.cargo,
               estado: p.estado,
+              sueldoBase: p.sueldoBase || 0,
             }))
         )
       }
@@ -826,12 +854,39 @@ export function ProyectosModule() {
     }
   }, [])
 
+  // Cargar catálogos de materiales y herramientas
+  const fetchCatalogos = useCallback(async () => {
+    try {
+      const [matRes, herrRes] = await Promise.all([
+        fetch('/api/catalogos/materiales'),
+        fetch('/api/catalogos/herramientas'),
+      ])
+      const matData = await matRes.json()
+      const herrData = await herrRes.json()
+      const mats = Array.isArray(matData) ? matData : (matData?.data || [])
+      const herrs = Array.isArray(herrData) ? herrData : (herrData?.data || [])
+      setCatalogoMateriales(mats)
+      setCatalogoHerramientas(herrs)
+    } catch (error) {
+      console.error('Error fetching catálogos:', error)
+    }
+  }, [])
+
+  // Calcular valor por hora del personal: sueldoBase / 30 días / 8 horas
+  const getValorHora = (personalId: string | undefined): number => {
+    if (!personalId) return 0
+    const p = personalList.find(x => x.id === personalId || x.nombre === personalId)
+    if (!p || !p.sueldoBase) return 0
+    return Math.round(p.sueldoBase / 30 / 8)
+  }
+
   useEffect(() => {
     void (async () => {
       await fetchProyectos()
       await fetchPersonal()
+      await fetchCatalogos()
     })()
-  }, [fetchProyectos, fetchPersonal])
+  }, [fetchProyectos, fetchPersonal, fetchCatalogos])
 
   useEffect(() => {
     const timeout = setTimeout(() => fetchProyectos(search), 300)
@@ -1033,6 +1088,23 @@ export function ProyectosModule() {
       linkCompra: '',
     }])
   }
+
+  // Seleccionar material del catálogo y autocompletar campos
+  const selectMaterialFromCatalog = (index: number, materialId: string) => {
+    const mat = catalogoMateriales.find(m => m.id === materialId)
+    if (!mat) return
+    const updated = [...materiales]
+    updated[index] = {
+      ...updated[index],
+      descripcion: mat.nombre,
+      unidad: mat.unidad,
+      precioUnit: mat.precioUnit,
+      total: updated[index].cantidad * mat.precioUnit,
+      linkCompra: '',
+    }
+    setMateriales(updated)
+  }
+
   const updateMaterial = (index: number, field: string, value: string | number) => {
     const updated = [...materiales]
     updated[index] = { ...updated[index], [field]: value }
@@ -1046,6 +1118,15 @@ export function ProyectosModule() {
   // Herramienta handlers
   const addHerramienta = () => {
     setHerramientas([...herramientas, { id: `temp-${Date.now()}`, nombre: '', cantidad: 1 }])
+  }
+
+  // Seleccionar herramienta del catálogo
+  const selectHerramientaFromCatalog = (index: number, herramientaId: string) => {
+    const herr = catalogoHerramientas.find(h => h.id === herramientaId)
+    if (!herr) return
+    const updated = [...herramientas]
+    updated[index] = { ...updated[index], nombre: herr.nombre + (herr.marca ? ` (${herr.marca})` : '') }
+    setHerramientas(updated)
   }
   const updateHerramienta = (index: number, field: string, value: string | number) => {
     const updated = [...herramientas]
@@ -1076,6 +1157,20 @@ export function ProyectosModule() {
       total: 0,
     }])
   }
+
+  // Al seleccionar personal del dropdown, cargar valor por hora automáticamente
+  const selectPersonal = (index: number, nombre: string) => {
+    const valorHora = getValorHora(nombre)
+    const updated = [...personal]
+    updated[index] = {
+      ...updated[index],
+      nombre: nombre,
+      precioUnit: valorHora,
+      total: valorHora * updated[index].cantidad,
+    }
+    setPersonal(updated)
+  }
+
   const updatePersonal = (index: number, field: string, value: string | number) => {
     const updated = [...personal]
     updated[index] = { ...updated[index], [field]: value }
@@ -1868,6 +1963,9 @@ export function ProyectosModule() {
         <Button variant="outline" onClick={() => setInformeDialogOpen(true)} title="Informe de Costos de Proyectos Completados" className="border-green-300 text-green-700 hover:bg-green-50">
           <FileSpreadsheet className="w-4 h-4 mr-1" /> Informe de Costos
         </Button>
+        <Button variant="outline" onClick={() => setShowGantt(!showGantt)} title="Ver/Ocultar diagrama Gantt" className="border-purple-300 text-purple-700 hover:bg-purple-50">
+          <BarChart3 className="w-4 h-4 mr-1" /> Gantt
+        </Button>
         <Button variant="outline" onClick={exportToPDF} title="Exportar a PDF">
           <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
         </Button>
@@ -1878,6 +1976,108 @@ export function ProyectosModule() {
           <Plus className="w-4 h-4 mr-1" /> Nuevo Proyecto
         </Button>
       </div>
+
+      {/* ===== DIAGRAMA GANTT ===== */}
+      {showGantt && (
+        <Card>
+          <CardHeader className="py-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-purple-600" />
+              Diagrama de Gantt — Cronograma de Proyectos
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              {(() => {
+                // Filtrar proyectos con fechas
+                const proysConFechas = proyectosFiltrados.filter(p => p.fechaInicio || p.fechaFin)
+                if (proysConFechas.length === 0) {
+                  return <div className="p-8 text-center text-slate-400 text-sm">Sin proyectos con fechas para mostrar en el Gantt</div>
+                }
+
+                // Encontrar rango de fechas
+                const fechas = proysConFechas.flatMap(p => [p.fechaInicio, p.fechaFin].filter(Boolean).map(f => new Date(f).getTime()))
+                const minFecha = new Date(Math.min(...fechas))
+                const maxFecha = new Date(Math.max(...fechas))
+                minFecha.setDate(minFecha.getDate() - 1)
+                maxFecha.setDate(maxFecha.getDate() + 1)
+                const totalDias = Math.ceil((maxFecha - minFecha) / (1000 * 60 * 60 * 24))
+
+                // Colores por estado
+                const estadoColors: Record<string, string> = {
+                  'Planificado': 'bg-blue-500',
+                  'En Ejecución': 'bg-amber-500',
+                  'Completado': 'bg-green-500',
+                  'Cancelado': 'bg-red-400',
+                  'Pausado': 'bg-slate-400',
+                }
+
+                // Calcular columnas (días)
+                const dias = []
+                const cursor = new Date(minFecha)
+                while (cursor <= maxFecha) {
+                  dias.push(new Date(cursor))
+                  cursor.setDate(cursor.getDate() + 1)
+                }
+
+                return (
+                  <div className="min-w-[800px]">
+                    {/* Header con días */}
+                    <div className="flex border-b bg-slate-50 sticky top-0">
+                      <div className="w-48 p-2 text-[10px] font-bold text-slate-500 uppercase border-r shrink-0">Proyecto</div>
+                      <div className="flex-1 flex">
+                        {dias.map((d, i) => (
+                          <div key={i} className="flex-1 min-w-[24px] text-center text-[8px] text-slate-400 border-r py-1">
+                            {d.getDate() === 1 || d.getDate() % 5 === 0 ? `${d.getDate()}/${d.getMonth() + 1}` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Filas de proyectos */}
+                    {proysConFechas.map((p) => {
+                      const inicio = p.fechaInicio ? new Date(p.fechaInicio) : minFecha
+                      const fin = p.fechaFin ? new Date(p.fechaFin) : maxFecha
+                      const offsetDias = Math.max(0, Math.ceil((inicio - minFecha) / (1000 * 60 * 60 * 24)))
+                      const duracionDias = Math.max(1, Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)))
+                      const offsetPercent = (offsetDias / totalDias) * 100
+                      const widthPercent = (duracionDias / totalDias) * 100
+                      const color = estadoColors[p.estado] || 'bg-blue-500'
+
+                      return (
+                        <div key={p.id} className="flex border-b hover:bg-slate-50">
+                          <div className="w-48 p-2 text-xs font-medium truncate border-r shrink-0" title={p.nombre}>
+                            {p.codigo || ''} {p.nombre?.substring(0, 25)}
+                          </div>
+                          <div className="flex-1 relative h-8">
+                            {/* Línea de tiempo */}
+                            <div
+                              className={`absolute h-5 top-1.5 rounded ${color} text-white text-[9px] font-bold px-1 flex items-center cursor-pointer overflow-hidden`}
+                              style={{ left: `${offsetPercent}%`, width: `${widthPercent}%` }}
+                              title={`${p.nombre}\nInicio: ${p.fechaInicio || 'N/A'}\nFin: ${p.fechaFin || 'N/A'}\nEstado: ${p.estado}`}
+                            >
+                              {duracionDias > 3 ? `${duracionDias}d` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {/* Leyenda */}
+                    <div className="flex items-center gap-4 p-2 bg-slate-50 border-t text-[10px]">
+                      <span className="font-bold text-slate-500">Leyenda:</span>
+                      {Object.entries(estadoColors).map(([estado, color]) => (
+                        <span key={estado} className="flex items-center gap-1">
+                          <span className={`inline-block w-3 h-3 rounded ${color}`}></span>
+                          {estado}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Info banner según vista activa */}
       {vistaActiva === 'completados' && (
@@ -2592,6 +2792,25 @@ export function ProyectosModule() {
                     </div>
                     {materiales.map((m, i) => (
                       <div key={m.id} className="bg-slate-50 p-2 rounded space-y-1">
+                        {/* Select del catálogo + input manual */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <Select onValueChange={(v) => selectMaterialFromCatalog(i, v)}>
+                            <SelectTrigger className="h-7 w-full text-xs">
+                              <SelectValue placeholder="📋 Seleccionar del catálogo..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {catalogoMateriales.length === 0 ? (
+                                <SelectItem value="_empty" disabled>Cargando catálogo...</SelectItem>
+                              ) : (
+                                catalogoMateriales.slice(0, 200).map(mat => (
+                                  <SelectItem key={mat.id} value={mat.id}>
+                                    {mat.codigo ? `${mat.codigo} · ` : ''}{mat.nombre} — {formatCLP(mat.precioUnit)}/{mat.unidad}
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid grid-cols-12 gap-2 items-center">
                           <div className="col-span-4 min-w-0">
                             <Input value={m.descripcion} onChange={(e) => updateMaterial(i, 'descripcion', e.target.value)} className="h-8 w-full" placeholder="Descripción" />
@@ -2633,6 +2852,7 @@ export function ProyectosModule() {
                   <div className="text-center py-8 text-slate-400">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Sin materiales agregados</p>
+                    <p className="text-xs mt-1">Haz clic en "Agregar" y selecciona del catálogo</p>
                   </div>
                 )}
               </TabsContent>
@@ -2646,19 +2866,38 @@ export function ProyectosModule() {
                 {herramientas.length > 0 ? (
                   <div className="space-y-2">
                     {herramientas.map((h, i) => (
-                      <div key={h.id} className="grid grid-cols-6 gap-3 items-end bg-slate-50 p-2 rounded">
-                        <div className="col-span-4 min-w-0">
-                          <Label className="text-[10px]">Nombre</Label>
-                          <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8 w-full" />
-                        </div>
-                        <div className="col-span-1 min-w-0">
-                          <Label className="text-[10px]">Cantidad</Label>
-                          <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
-                        </div>
-                        <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeHerramienta(i)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                      <div key={h.id} className="space-y-1 bg-slate-50 p-2 rounded">
+                        {/* Select del catálogo */}
+                        <Select onValueChange={(v) => selectHerramientaFromCatalog(i, v)}>
+                          <SelectTrigger className="h-7 w-full text-xs">
+                            <SelectValue placeholder="🔧 Seleccionar del catálogo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {catalogoHerramientas.length === 0 ? (
+                              <SelectItem value="_empty" disabled>Cargando catálogo...</SelectItem>
+                            ) : (
+                              catalogoHerramientas.slice(0, 200).map(herr => (
+                                <SelectItem key={herr.id} value={herr.id}>
+                                  {herr.codigo ? `${herr.codigo} · ` : ''}{herr.nombre}{herr.marca ? ` (${herr.marca})` : ''}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <div className="grid grid-cols-6 gap-3 items-end">
+                          <div className="col-span-4 min-w-0">
+                            <Label className="text-[10px]">Nombre</Label>
+                            <Input value={h.nombre} onChange={(e) => updateHerramienta(i, 'nombre', e.target.value)} className="h-8 w-full" />
+                          </div>
+                          <div className="col-span-1 min-w-0">
+                            <Label className="text-[10px]">Cantidad</Label>
+                            <Input type="number" value={h.cantidad} onChange={(e) => updateHerramienta(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-center" />
+                          </div>
+                          <div className="col-span-1 min-w-0 flex justify-center items-end pb-0.5">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removeHerramienta(i)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -2667,6 +2906,7 @@ export function ProyectosModule() {
                   <div className="text-center py-8 text-slate-400">
                     <Wrench className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Sin herramientas agregadas</p>
+                    <p className="text-xs mt-1">Haz clic en "Agregar" y selecciona del catálogo</p>
                   </div>
                 )}
               </TabsContent>
@@ -2719,7 +2959,7 @@ export function ProyectosModule() {
               {/* Personal Tab */}
               <TabsContent value="personal" className="space-y-4 mt-0">
                 <div className="flex justify-between items-center">
-                  <Label>Personal</Label>
+                  <Label>Personal (valor/hora se carga automáticamente)</Label>
                   <Button size="sm" onClick={addPersonal}><Plus className="w-4 h-4 mr-1" /> Agregar</Button>
                 </div>
                 {personal.length > 0 ? (
@@ -2727,38 +2967,57 @@ export function ProyectosModule() {
                     <div className="grid grid-cols-12 gap-2 px-2 pb-1 border-b">
                       <div className="col-span-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</div>
                       <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase">Tipo</div>
-                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Cantidad</div>
-                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Precio Unit.</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Horas</div>
+                      <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">$ / Hora</div>
                       <div className="col-span-2 text-[10px] font-bold text-slate-500 uppercase text-right">Total</div>
                       <div className="col-span-1"></div>
                     </div>
                     {personal.map((p, i) => (
-                      <div key={p.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded">
-                        <div className="col-span-3 min-w-0">
-                          <Input value={p.nombre} onChange={(e) => updatePersonal(i, 'nombre', e.target.value)} className="h-8 w-full" placeholder="Nombre" />
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <Select value={p.tipo} onValueChange={(v) => updatePersonal(i, 'tipo', v)}>
-                            <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Interno">Interno</SelectItem>
-                              <SelectItem value="Externo">Externo</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <Input type="number" value={p.cantidad} onChange={(e) => updatePersonal(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-right" placeholder="1" />
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonal(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
-                        </div>
-                        <div className="col-span-2 min-w-0">
-                          <div className="h-8 px-2 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(p.total)}</div>
-                        </div>
-                        <div className="col-span-1 flex justify-center">
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removePersonal(i)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                      <div key={p.id} className="space-y-1 bg-slate-50 p-2 rounded">
+                        {/* Select del personal con valor/hora automático */}
+                        <Select value={p.nombre} onValueChange={(v) => selectPersonal(i, v)}>
+                          <SelectTrigger className="h-8 w-full text-xs">
+                            <SelectValue placeholder="👤 Seleccionar trabajador..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {personalList.length === 0 ? (
+                              <SelectItem value="_empty" disabled>Cargando personal...</SelectItem>
+                            ) : (
+                              personalList.map(pl => (
+                                <SelectItem key={pl.id} value={pl.nombre}>
+                                  {pl.nombre}{pl.cargo ? ` · ${pl.cargo}` : ''}{pl.sueldoBase ? ` · ${formatCLP(Math.round(pl.sueldoBase / 30 / 8))}/hr` : ''}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-3 min-w-0">
+                            <Input value={p.nombre} onChange={(e) => updatePersonal(i, 'nombre', e.target.value)} className="h-8 w-full" placeholder="Nombre" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Select value={p.tipo} onValueChange={(v) => updatePersonal(i, 'tipo', v)}>
+                              <SelectTrigger className="h-8 w-full"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Interno">Interno</SelectItem>
+                                <SelectItem value="Externo">Externo</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Input type="number" value={p.cantidad} onChange={(e) => updatePersonal(i, 'cantidad', parseInt(e.target.value) || 1)} className="h-8 w-full text-right" placeholder="1" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <Input type="number" value={p.precioUnit} onChange={(e) => updatePersonal(i, 'precioUnit', parseFloat(e.target.value) || 0)} className="h-8 w-full text-right" placeholder="$0" />
+                          </div>
+                          <div className="col-span-2 min-w-0">
+                            <div className="h-8 px-2 py-1.5 bg-slate-200 rounded text-xs font-bold text-right truncate">{formatCLP(p.total)}</div>
+                          </div>
+                          <div className="col-span-1 flex justify-center">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600" onClick={() => removePersonal(i)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
