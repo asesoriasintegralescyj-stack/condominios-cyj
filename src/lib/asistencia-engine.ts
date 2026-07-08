@@ -768,3 +768,147 @@ export function analizarAsistencia(
     resumenPorTrabajador,
   }
 }
+
+// ============================================
+// Parser de archivo Excel de horarios de trabajadores
+// ============================================
+
+export function parseHorariosExcel(data: any[]): HorarioTrabajadorInput[] {
+  const horarios: HorarioTrabajadorInput[] = []
+  let currentNombre = ''
+
+  for (const row of data) {
+    if (row.Nombre && String(row.Nombre).trim() !== 'nan') {
+      currentNombre = String(row.Nombre).trim()
+    }
+    if (!currentNombre) continue
+    const turno = String(row.Turno || '').trim()
+    if (!turno) continue
+
+    const parseHoras = (val: any): { inicio: string | null; fin: string | null } => {
+      if (!val || String(val).trim() === 'nan' || String(val).trim() === 'Libre') {
+        return { inicio: null, fin: null }
+      }
+      const str = String(val).trim()
+      const m = str.match(/(\d{1,2}:\d{2})\s*a\s*(\d{1,2}:\d{2})/)
+      if (m) return { inicio: m[1], fin: m[2] }
+      return { inicio: null, fin: null }
+    }
+
+    const tipoTurno = String(row.Lunes || '').includes('4x4') ? '4x4' : 'fijo'
+
+    let ciclo4x4Turno: string | null = null
+    if (tipoTurno === '4x4') {
+      const str = String(row.Lunes || '')
+      if (str.startsWith('19:00')) ciclo4x4Turno = 'noche'
+      else if (str.startsWith('07:00')) ciclo4x4Turno = 'dia'
+    }
+
+    const lunes = parseHoras(row.Lunes)
+    const martes = parseHoras(row.Martes)
+    const miercoles = parseHoras(row.Miércoles)
+    const jueves = parseHoras(row.Jueves)
+    const viernes = parseHoras(row.Viernes)
+    const sabado = parseHoras(row.Sábado)
+
+    horarios.push({
+      nombreTrabajador: currentNombre, turno, tipoTurno,
+      lunesInicio: lunes.inicio, lunesFin: lunes.fin,
+      martesInicio: martes.inicio, martesFin: martes.fin,
+      miercolesInicio: miercoles.inicio, miercolesFin: miercoles.fin,
+      juevesInicio: jueves.inicio, juevesFin: jueves.fin,
+      viernesInicio: viernes.inicio, viernesFin: viernes.fin,
+      sabadoInicio: sabado.inicio, sabadoFin: sabado.fin,
+      ciclo4x4Turno,
+    })
+  }
+  return horarios
+}
+
+// ============================================
+// Parser de archivo Excel/XLS de registro de asistencia
+// ============================================
+
+export function parseRegistroAsistenciaExcel(data: any[]): RegistroRelojInput[] {
+  const registros: RegistroRelojInput[] = []
+  for (const row of data) {
+    if (!row.Nombre || !row['Fecha/Hora']) continue
+    let fechaHora: Date
+    const raw = row['Fecha/Hora']
+    if (raw instanceof Date) {
+      fechaHora = raw
+    } else if (typeof raw === 'number') {
+      const excelEpoch = new Date(1899, 11, 30)
+      fechaHora = new Date(excelEpoch.getTime() + raw * 24 * 60 * 60 * 1000)
+    } else if (typeof raw === 'string') {
+      fechaHora = new Date(raw)
+      if (isNaN(fechaHora.getTime())) {
+        const m = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/)
+        if (m) fechaHora = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6]))
+      }
+    } else continue
+    if (isNaN(fechaHora.getTime())) continue
+
+    const yyyy = fechaHora.getFullYear()
+    const mm = String(fechaHora.getMonth() + 1).padStart(2, '0')
+    const dd = String(fechaHora.getDate()).padStart(2, '0')
+    const fecha = `${yyyy}-${mm}-${dd}`
+    const hh = String(fechaHora.getHours()).padStart(2, '0')
+    const min = String(fechaHora.getMinutes()).padStart(2, '0')
+    const hora = `${hh}:${min}`
+
+    registros.push({
+      nombre: String(row.Nombre).trim(),
+      rut: row.RUT ? String(row.RUT).trim() : null,
+      fechaHora, fecha, hora,
+      tipoRegistro: row['Tipo registro'] ? String(row['Tipo registro']).trim() : null,
+      departamento: row.Departamento ? String(row.Departamento).trim() : null,
+    })
+  }
+  return registros
+}
+
+// ============================================
+// Calcular ciclo4x4Inicio basado en el primer registro
+// ============================================
+
+export function calcularCiclo4x4Inicio(
+  horario: HorarioTrabajadorInput,
+  registros: RegistroRelojInput[]
+): string | null {
+  if (horario.tipoTurno !== '4x4') return null
+
+  const nombreNorm = normalizeName(horario.nombreTrabajador)
+  const registrosTrabajador = registros.filter((r) => {
+    if (normalizeName(r.nombre) === nombreNorm) return true
+    return matchTrabajador(horario.nombreTrabajador, r.nombre)
+  })
+
+  registrosTrabajador.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+
+  const primerEntrada = registrosTrabajador.find((r) => r.tipoRegistro === 'Entrada')
+  if (primerEntrada) {
+    if (horario.ciclo4x4Turno === 'noche') {
+      const primerSalidaMatutina = registrosTrabajador.find(
+        (r) => r.tipoRegistro === 'Salida' && r.hora < '12:00'
+      )
+      if (primerSalidaMatutina && primerSalidaMatutina.fecha < primerEntrada.fecha) {
+        const [y, m, d] = primerSalidaMatutina.fecha.split('-').map(Number)
+        const fechaAnterior = new Date(y, m - 1, d - 1)
+        return dateToFechaStr(fechaAnterior)
+      }
+    }
+    return primerEntrada.fecha
+  }
+
+  const primerRegistro = registrosTrabajador[0]
+  if (primerRegistro) {
+    if (horario.ciclo4x4Turno === 'noche') {
+      const [y, m, d] = primerRegistro.fecha.split('-').map(Number)
+      const fechaAnterior = new Date(y, m - 1, d - 1)
+      return dateToFechaStr(fechaAnterior)
+    }
+    return primerRegistro.fecha
+  }
+  return null
+}
