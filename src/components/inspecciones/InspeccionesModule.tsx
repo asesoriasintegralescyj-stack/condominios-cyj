@@ -101,6 +101,9 @@ export function InspeccionesModule() {
     notas: '',
   })
   const [fotos, setFotos] = useState<string[]>([])
+  const [fotosAntes, setFotosAntes] = useState<string[]>([])
+  const [fotosDurante, setFotosDurante] = useState<string[]>([])
+  const [fotosDespues, setFotosDespues] = useState<string[]>([])
 
   const fetchInspecciones = async (searchTerm = '') => {
     setLoading(true)
