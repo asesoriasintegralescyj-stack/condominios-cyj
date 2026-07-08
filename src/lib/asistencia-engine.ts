@@ -53,77 +53,153 @@ interface InasistenciaDetectada {
   horaRealFin?: string | null
   minutosAtraso: number
   tipoTurno: string
-  // Marcas del reloj (4 marcas: 1a entrada, 1a salida, 2a entrada, 2a salida)
   primeraEntrada?: string | null
-  primeraSalida?: string | null   // salida a colacion
-  segundaEntrada?: string | null  // regreso de colacion
-  segundaSalida?: string | null   // fin de jornada
-  minutosColacion?: number | null // tiempo real de colacion (1a salida -> 2a entrada)
+  primeraSalida?: string | null
+  segundaEntrada?: string | null
+  segundaSalida?: string | null
+  minutosColacion?: number | null
+}
+
+interface HorarioEsperado {
+  inicio: string | null
+  fin: string | null
+  esLibre: boolean
+  esNoche: boolean
+}
+
+export interface HorarioTrabajadorInput {
+  nombreTrabajador: string
+  rut?: string | null
+  turno: string
+  tipoTurno: string
+  lunesInicio?: string | null
+  lunesFin?: string | null
+  martesInicio?: string | null
+  martesFin?: string | null
+  miercolesInicio?: string | null
+  miercolesFin?: string | null
+  juevesInicio?: string | null
+  juevesFin?: string | null
+  viernesInicio?: string | null
+  viernesFin?: string | null
+  sabadoInicio?: string | null
+  sabadoFin?: string | null
+  ciclo4x4Inicio?: string | null
+  ciclo4x4Turno?: string | null
+}
+
+export interface RegistroRelojInput {
+  nombre: string
+  rut?: string | null
+  fechaHora: Date
+  fecha: string
+  hora: string
+  tipoRegistro: string | null
+  departamento?: string | null
+}
+
+export interface ResultadoAnalisis {
+  totalTrabajadores: number
+  totalDiasAnalizados: number
+  totalAtrasos: number
+  totalAusencias: number
+  totalSalidasTempranas: number
+  totalDiasLibres: number
+  totalDiasPresentes: number
+  totalColacionesExcedidas: number
+  inasistencias: InasistenciaDetectada[]
+  resumenPorTrabajador: Array<{
+    nombre: string
+    departamento?: string | null
+    diasPresentes: number
+    atrasos: number
+    ausencias: number
+    salidasTempranas: number
+    colacionesExcedidas: number
+    diasLibres: number
+    totalMinutosAtraso: number
+  }>
 }
 
 // ============================================
 // Helpers
 // ============================================
 
-const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-
-function getDiaSemana(fecha: Date): string {
-  return DIAS_SEMANA[fecha.getDay()]
-}
-
-function getDiaSemanaFromStr(fechaStr: string): string {
-  const [y, m, d] = fechaStr.split('-').map(Number)
-  return DIAS_SEMANA[new Date(y, m - 1, d).getDay()]
-}
-
-function parseHora(horaStr: string): number {
-  // "07:30" → 450 (minutos desde medianoche)
-  const [h, m] = horaStr.split(':').map(Number)
-  return h * 60 + m
-}
-
-function formatHora(minutos: number): string {
-  const h = Math.floor(minutos / 60) % 24
-  const m = minutos % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
+const TOLERANCIA_MINUTOS = 5
 
 function fechaStrToDate(fechaStr: string): Date {
   const [y, m, d] = fechaStr.split('-').map(Number)
   return new Date(y, m - 1, d)
 }
 
-function addDays(fechaStr: string, days: number): string {
-  const d = fechaStrToDate(fechaStr)
-  d.setDate(d.getDate() + days)
-  return d.toISOString().split('T')[0]
+function getDiaSemanaFromStr(fechaStr: string): string {
+  const [y, m, d] = fechaStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+  return dias[date.getDay()]
 }
 
-// Normaliza nombre para comparación (mayúsculas, sin espacios extra, sin acentos)
-function normalizeName(nombre: string): string {
-  return (nombre || '')
-    .toUpperCase()
+function parseHora(horaStr: string): number {
+  if (!horaStr) return -1
+  const parts = horaStr.split(':')
+  if (parts.length < 2) return -1
+  const h = parseInt(parts[0], 10)
+  const m = parseInt(parts[1], 10)
+  if (isNaN(h) || isNaN(m)) return -1
+  return h * 60 + m
+}
+
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
 
-// Genera un conjunto de "tokens" de búsqueda (palabras de 3+ caracteres)
-function getNameTokens(nombre: string): string[] {
-  const norm = normalizeName(nombre)
-  return norm.split(' ').filter((t) => t.length > 2)
+function getNameTokens(name: string): string[] {
+  return normalizeName(name).split(' ').filter((t) => t.length > 1)
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function dateToFechaStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * Calcula la diferencia en días entre dos fechas (sin contar horas).
+ * Usa mediodía para evitar problemas de DST.
+ */
+function diffDays(fechaInicio: Date, fechaActual: Date): number {
+  const inicio = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate())
+  const actual = new Date(fechaActual.getFullYear(), fechaActual.getMonth(), fechaActual.getDate())
+  const diffMs = actual.getTime() - inicio.getTime()
+  return Math.round(diffMs / (1000 * 60 * 60 * 24))
+}
+
+function getLunesDeSemana(fechaStr: string): string {
+  const [y, m, d] = fechaStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const dia = date.getDay()
+  const diff = dia === 0 ? -6 : 1 - dia
+  const lunes = addDays(date, diff)
+  return dateToFechaStr(lunes)
 }
 
 // ============================================
 // Obtener horario esperado para un día específico (turno fijo)
 // ============================================
 
-function getHorarioEsperadoFijo(horario: HorarioTrabajador, fechaStr: string): {
-  inicio: string | null
-  fin: string | null
-  esLibre: boolean
-} {
+function getHorarioEsperadoFijo(horario: HorarioTrabajador, fechaStr: string): HorarioEsperado {
   const dia = getDiaSemanaFromStr(fechaStr)
   let inicio: string | null = null
   let fin: string | null = null
@@ -154,48 +230,52 @@ function getHorarioEsperadoFijo(horario: HorarioTrabajador, fechaStr: string): {
       fin = horario.sabadoFin || null
       break
     case 'Domingo':
-      // Por defecto libre (a menos que el horario diga lo contrario)
-      return { inicio: null, fin: null, esLibre: true }
+      return { inicio: null, fin: null, esLibre: true, esNoche: false }
   }
 
   if (!inicio || !fin) {
-    return { inicio: null, fin: null, esLibre: true }
+    return { inicio: null, fin: null, esLibre: true, esNoche: false }
   }
-  return { inicio, fin, esLibre: false }
+  // Detectar si es turno noche (inicio > fin, ej: 19:00 - 07:00)
+  const esNoche = parseHora(inicio) > parseHora(fin)
+  return { inicio, fin, esLibre: false, esNoche }
 }
 
 // ============================================
 // Obtener horario esperado para 4x4
 // ============================================
 
-function getHorarioEsperado4x4(horario: HorarioTrabajador, fechaStr: string): {
-  inicio: string | null
-  fin: string | null
-  esLibre: boolean
-} {
+function getHorarioEsperado4x4(horario: HorarioTrabajador, fechaStr: string): HorarioEsperado {
   if (!horario.ciclo4x4Inicio) {
-    // Si no hay fecha de inicio del ciclo, no podemos calcular
-    return { inicio: null, fin: null, esLibre: false }
+    // Si no hay fecha de inicio del ciclo, asumir día de trabajo con horario por defecto
+    // para no marcar ausencia injustificada
+    if (horario.ciclo4x4Turno === 'noche') {
+      return { inicio: '19:00', fin: '07:00', esLibre: false, esNoche: true }
+    } else {
+      return { inicio: '07:00', fin: '19:00', esLibre: false, esNoche: false }
+    }
   }
 
   const cicloInicio = fechaStrToDate(horario.ciclo4x4Inicio)
   const fechaActual = fechaStrToDate(fechaStr)
-  const diffMs = fechaActual.getTime() - cicloInicio.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diasDiff = diffDays(cicloInicio, fechaActual)
 
   // Ciclo de 8 días: 4 trabajo + 4 libres
-  const diaEnCiclo = ((diffDays % 8) + 8) % 8
+  // Usar módulo con manejo de negativos
+  const diaEnCiclo = ((diasDiff % 8) + 8) % 8
 
   if (diaEnCiclo < 4) {
     // Día de trabajo
     if (horario.ciclo4x4Turno === 'noche') {
-      return { inicio: '19:00', fin: '07:00', esLibre: false }
+      // Turno noche: 19:00 a 07:00 del día siguiente
+      return { inicio: '19:00', fin: '07:00', esLibre: false, esNoche: true }
     } else {
-      return { inicio: '07:00', fin: '19:00', esLibre: false }
+      // Turno día: 07:00 a 19:00
+      return { inicio: '07:00', fin: '19:00', esLibre: false, esNoche: false }
     }
   } else {
     // Día libre
-    return { inicio: null, fin: null, esLibre: true }
+    return { inicio: null, fin: null, esLibre: true, esNoche: false }
   }
 }
 
@@ -210,10 +290,8 @@ function matchTrabajador(
   const n1 = normalizeName(nombreHorario)
   const n2 = normalizeName(nombreRegistro)
 
-  // 1. Coincidencia exacta normalizada
   if (n1 === n2) return true
 
-  // 2. Coincidencia por tokens (todos los tokens del mas corto estan en el mas largo)
   const tokens1 = getNameTokens(nombreHorario)
   const tokens2 = getNameTokens(nombreRegistro)
   const shorter = tokens1.length <= tokens2.length ? tokens1 : tokens2
@@ -221,7 +299,6 @@ function matchTrabajador(
   const allShorterInLonger = shorter.every((t) => longer.includes(t))
   if (allShorterInLonger && shorter.length >= 2) return true
 
-  // 3. Coincidencia por ultimos 2 tokens (apellidos)
   if (tokens1.length >= 2 && tokens2.length >= 2) {
     const apellidos1 = tokens1.slice(-2).join(' ')
     const apellidos2 = tokens2.slice(-2).join(' ')
@@ -235,68 +312,23 @@ function matchTrabajador(
 // Análisis principal
 // ============================================
 
-const TOLERANCIA_MINUTOS = 5
-
-export interface ResultadoAnalisis {
-  totalTrabajadores: number
-  totalDiasAnalizados: number
-  totalAtrasos: number
-  totalAusencias: number
-  totalSalidasTempranas: number
-  totalDiasLibres: number
-  totalDiasPresentes: number
-  totalColacionesExcedidas: number
-  inasistencias: InasistenciaDetectada[]
-  resumenPorTrabajador: Array<{
-    nombre: string
-    departamento?: string | null
-    diasPresentes: number
-    atrasos: number
-    ausencias: number
-    salidasTempranas: number
-    colacionesExcedidas: number
-    diasLibres: number
-    totalMinutosAtraso: number
-  }>
-}
-
-
-function getLunesDeSemana(fechaStr: string): string {
-  const [y, m, d] = fechaStr.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
-  const dia = date.getDay()
-  const diff = dia === 0 ? -6 : 1 - dia
-  date.setDate(date.getDate() + diff)
-  const yyyy = date.getFullYear()
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
-}
-
 export function analizarAsistencia(
-  horarios: HorarioTrabajador[],
-  registros: RegistroReloj[],
+  horariosInput: HorarioTrabajadorInput[],
+  registrosInput: RegistroRelojInput[],
   fechaDesde: string,
   fechaHasta: string
 ): ResultadoAnalisis {
+  const horarios: HorarioTrabajador[] = horariosInput.map((h) => ({ ...h }))
+  const registros: RegistroReloj[] = registrosInput.map((r) => ({ ...r }))
+
   const inasistencias: InasistenciaDetectada[] = []
-  const resumenPorTrabajador: ResultadoAnalisis['resumenPorTrabajador'] = []
 
-  // Agrupar registros por trabajador (nombre normalizado) y por fecha
-  const registrosPorTrabajador = new Map<string, RegistroReloj[]>()
-  for (const reg of registros) {
-    const key = normalizeName(reg.nombre)
-    if (!registrosPorTrabajador.has(key)) {
-      registrosPorTrabajador.set(key, [])
-    }
-    registrosPorTrabajador.get(key)!.push(reg)
-  }
-
-  // Generar lista de fechas en el rango
+  // Generar lista de fechas
   const fechas: string[] = []
-  let fechaActual = fechaDesde
-  while (fechaActual <= fechaHasta) {
-    fechas.push(fechaActual)
+  let fechaActual = fechaStrToDate(fechaDesde)
+  const fechaFin = fechaStrToDate(fechaHasta)
+  while (fechaActual <= fechaFin) {
+    fechas.push(dateToFechaStr(fechaActual))
     fechaActual = addDays(fechaActual, 1)
   }
 
@@ -308,7 +340,7 @@ export function analizarAsistencia(
   let totalDiasPresentes = 0
   let totalColacionesExcedidas = 0
 
-  // Agrupar horarios por trabajador (un trabajador puede tener TURNO A y TURNO B)
+  // Agrupar horarios por trabajador
   const horariosPorTrabajador = new Map<string, HorarioTrabajador[]>()
   for (const h of horarios) {
     const key = normalizeName(h.nombreTrabajador)
@@ -316,12 +348,21 @@ export function analizarAsistencia(
     horariosPorTrabajador.get(key)!.push(h)
   }
 
-  // Para cada trabajador (con todos sus turnos agrupados)
+  // Agrupar registros por trabajador
+  const registrosPorTrabajador = new Map<string, RegistroReloj[]>()
+  for (const r of registros) {
+    const key = normalizeName(r.nombre)
+    if (!registrosPorTrabajador.has(key)) registrosPorTrabajador.set(key, [])
+    registrosPorTrabajador.get(key)!.push(r)
+  }
+
+  const resumenPorTrabajador: ResultadoAnalisis['resumenPorTrabajador'] = []
+
   for (const [trabajadorKey, turnosTrabajador] of horariosPorTrabajador) {
     const horarioA = turnosTrabajador.find((h) => h.turno === 'TURNO A') || turnosTrabajador[0]
     const horarioB = turnosTrabajador.find((h) => h.turno === 'TURNO B')
 
-    // Buscar registros que coincidan con este trabajador
+    // Buscar registros que coincidan
     let registrosMatch = registrosPorTrabajador.get(trabajadorKey) || []
     if (registrosMatch.length === 0) {
       for (const [key, regs] of registrosPorTrabajador.entries()) {
@@ -332,7 +373,7 @@ export function analizarAsistencia(
       }
     }
 
-    // Agrupar registros por fecha, ordenados por hora
+    // Agrupar registros por fecha
     const registrosPorFecha = new Map<string, { entradas: RegistroReloj[]; salidas: RegistroReloj[] }>()
     for (const reg of registrosMatch) {
       if (!registrosPorFecha.has(reg.fecha)) {
@@ -359,49 +400,16 @@ export function analizarAsistencia(
     let totalMinutosAtraso = 0
     const departamento = registrosMatch[0]?.departamento || null
 
-    // Agrupar fechas por semana (lunes a sabado)
-    const semanasMap = new Map<string, string[]>()
-    for (const fecha of fechas) {
-      const lunes = getLunesDeSemana(fecha)
-      if (!semanasMap.has(lunes)) semanasMap.set(lunes, [])
-      semanasMap.get(lunes)!.push(fecha)
-    }
+    // Para 4x4: NO agrupar por semana, analizar día por día
+    // Para fijo: agrupar por semana para determinar turno A/B
+    const es4x4 = horarioA.tipoTurno === '4x4'
 
-    // Por cada semana, determinar el turno activo
-    for (const [, fechasSemana] of semanasMap) {
-      // Buscar el primer registro de entrada de la semana
-      let primerRegistroSemana: RegistroReloj | null = null
-      for (const fecha of fechasSemana) {
-        const grupo = registrosPorFecha.get(fecha)
-        if (grupo && grupo.entradas.length > 0) {
-          primerRegistroSemana = grupo.entradas[0]
-          break
-        }
-      }
-
-      // Determinar turno activo comparando el primer registro con A y B
-      let turnoActivo = horarioA
-      if (primerRegistroSemana && horarioB) {
-        const horaReal = parseHora(primerRegistroSemana.hora)
-        const inicioA = horarioA.lunesInicio ? parseHora(horarioA.lunesInicio) : 9999
-        const inicioB = horarioB.lunesInicio ? parseHora(horarioB.lunesInicio) : 9999
-        const diffA = Math.abs(horaReal - inicioA)
-        const diffB = Math.abs(horaReal - inicioB)
-        if (diffB < diffA) {
-          turnoActivo = horarioB
-        }
-      }
-
-      // Analizar cada fecha de la semana con el turno activo
-      for (const fecha of fechasSemana) {
+    if (es4x4) {
+      // === Análisis día por día para 4x4 ===
+      for (const fecha of fechas) {
         totalDiasAnalizados++
 
-        let horarioEsperado: { inicio: string | null; fin: string | null; esLibre: boolean }
-        if (turnoActivo.tipoTurno === '4x4') {
-          horarioEsperado = getHorarioEsperado4x4(turnoActivo, fecha)
-        } else {
-          horarioEsperado = getHorarioEsperadoFijo(turnoActivo, fecha)
-        }
+        const horarioEsperado = getHorarioEsperado4x4(horarioA, fecha)
 
         if (horarioEsperado.esLibre || !horarioEsperado.inicio) {
           diasLibres++
@@ -410,10 +418,29 @@ export function analizarAsistencia(
         }
 
         const grupo = registrosPorFecha.get(fecha)
-        const primeraEntrada = grupo?.entradas[0]
-        const primeraSalida = grupo?.salidas[0]
-        const segundaEntrada = grupo?.entradas[1]
-        const segundaSalida = grupo?.salidas[grupo.salidas.length - 1]
+        // Para turno noche, también buscar registros del día anterior que cricen medianoche
+        let entradas = grupo?.entradas || []
+        let salidas = grupo?.salidas || []
+
+        // Si es turno noche (19:00 - 07:00), la salida puede estar registrada al día siguiente
+        if (horarioEsperado.esNoche) {
+          const fechaSiguiente = dateToFechaStr(addDays(fechaStrToDate(fecha), 1))
+          const grupoSiguiente = registrosPorFecha.get(fechaSiguiente)
+          if (grupoSiguiente) {
+            // Las salidas tempranas del día siguiente (antes de las 12:00) son del turno noche
+            const salidasMananaSiguiente = grupoSiguiente.salidas.filter(s => parseHora(s.hora) < 12 * 60)
+            salidas = [...salidas, ...salidasMananaSiguiente]
+            // Las entradas tempranas del día siguiente también pueden ser del turno noche
+            const entradasMananaSiguiente = grupoSiguiente.entradas.filter(e => parseHora(e.hora) < 12 * 60)
+            entradas = [...entradas, ...entradasMananaSiguiente]
+          }
+        }
+
+        entradas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+        salidas.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
+
+        const primeraEntrada = entradas[0]
+        const ultimaSalida = salidas[salidas.length - 1]
 
         if (!primeraEntrada) {
           ausencias++
@@ -430,7 +457,7 @@ export function analizarAsistencia(
             horaRealInicio: null,
             horaRealFin: null,
             minutosAtraso: 0,
-            tipoTurno: turnoActivo.tipoTurno,
+            tipoTurno: '4x4',
             primeraEntrada: null,
             primeraSalida: null,
             segundaEntrada: null,
@@ -444,9 +471,15 @@ export function analizarAsistencia(
           const horaRealMin = parseHora(primeraEntrada.hora)
           const horaEsperadaMin = parseHora(horarioEsperado.inicio)
 
-          let minutosAtraso = horaRealMin - horaEsperadaMin
-          if (horarioEsperado.inicio === '19:00' && horaRealMin < 12 * 60) {
-            minutosAtraso = 0
+          // Para turno noche: si la entrada esperada es 19:00 y la real es después de medianoche
+          // (ej: 00:30), significa que llegó tarde al turno que empezó a las 19:00
+          let minutosAtraso: number
+          if (horarioEsperado.esNoche && horaRealMin < 12 * 60) {
+            // Entrada después de medianoche para turno que empezó a las 19:00
+            // Calcular atraso desde 19:00 del día anterior
+            minutosAtraso = (horaRealMin + 24 * 60) - horaEsperadaMin
+          } else {
+            minutosAtraso = horaRealMin - horaEsperadaMin
           }
 
           if (minutosAtraso > TOLERANCIA_MINUTOS) {
@@ -463,58 +496,38 @@ export function analizarAsistencia(
               horaEsperadaInicio: horarioEsperado.inicio,
               horaEsperadaFin: horarioEsperado.fin,
               horaRealInicio: primeraEntrada.hora,
-              horaRealFin: segundaSalida?.hora || null,
+              horaRealFin: ultimaSalida?.hora || null,
               minutosAtraso,
-              tipoTurno: turnoActivo.tipoTurno,
+              tipoTurno: '4x4',
               primeraEntrada: primeraEntrada.hora,
-              primeraSalida: primeraSalida?.hora || null,
-              segundaEntrada: segundaEntrada?.hora || null,
-              segundaSalida: segundaSalida?.hora || null,
+              primeraSalida: salidas[0]?.hora || null,
+              segundaEntrada: entradas[1]?.hora || null,
+              segundaSalida: ultimaSalida?.hora || null,
               minutosColacion: null,
             })
           }
 
-          // Solo calcular colacion para turnos fijos (no 4x4)
-          // En 4x4 las marcas de salida/entrada son fin de turno e inicio del siguiente
-          if (primeraSalida && segundaEntrada && turnoActivo.tipoTurno !== '4x4') {
-            const minSalidaColacion = parseHora(primeraSalida.hora)
-            const minRegresoColacion = parseHora(segundaEntrada.hora)
-            let minutosColacion = minRegresoColacion - minSalidaColacion
-            if (minutosColacion < 0) minutosColacion += 24 * 60
-            // Solo marcar colacion excedida si es mayor a 65 min Y menor a 4 horas
-            // (mas de 4 horas probablemente es un error de registro, no colacion)
-            if (minutosColacion > 65 && minutosColacion < 240) {
-              colacionesExcedidas++
-              totalColacionesExcedidas++
-              inasistencias.push({
-                nombreTrabajador: horarioA.nombreTrabajador,
-                rut: horarioA.rut,
-                departamento,
-                fecha,
-                diaSemana: getDiaSemanaFromStr(fecha),
-                tipo: 'colacion_excedida',
-                horaEsperadaInicio: horarioEsperado.inicio,
-                horaEsperadaFin: horarioEsperado.fin,
-                horaRealInicio: primeraEntrada.hora,
-                horaRealFin: segundaSalida?.hora || null,
-                minutosAtraso: minutosColacion - 60,
-                tipoTurno: turnoActivo.tipoTurno,
-                primeraEntrada: primeraEntrada.hora,
-                primeraSalida: primeraSalida.hora,
-                segundaEntrada: segundaEntrada.hora,
-                segundaSalida: segundaSalida?.hora || null,
-                minutosColacion,
-              })
-            }
-          }
-
-          if (segundaSalida && horarioEsperado.fin) {
-            const horaSalidaReal = parseHora(segundaSalida.hora)
+          // Salida temprana
+          if (ultimaSalida && horarioEsperado.fin) {
+            const horaSalidaReal = parseHora(ultimaSalida.hora)
             const horaSalidaEsperada = parseHora(horarioEsperado.fin)
-            let minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
-            if (horarioEsperado.fin === '07:00' && horaSalidaReal > 12 * 60) {
-              minutosSalidaTemprana = 0
+
+            let minutosSalidaTemprana: number
+            if (horarioEsperado.esNoche) {
+              // Turno noche: fin 07:00 del día siguiente
+              // Si la salida real es antes de medianoche (ej: 23:00), se fue temprano
+              if (horaSalidaReal > 12 * 60) {
+                // Salida antes de medianoche = muy temprano
+                minutosSalidaTemprana = (horaSalidaEsperada + 24 * 60) - horaSalidaReal
+              } else {
+                // Salida después de medianoche = comparar con 07:00
+                minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
+              }
+            } else {
+              // Turno día: comparación normal
+              minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
             }
+
             if (minutosSalidaTemprana > TOLERANCIA_MINUTOS) {
               salidasTempranas++
               totalSalidasTempranas++
@@ -528,15 +541,201 @@ export function analizarAsistencia(
                 horaEsperadaInicio: horarioEsperado.inicio,
                 horaEsperadaFin: horarioEsperado.fin,
                 horaRealInicio: primeraEntrada.hora,
-                horaRealFin: segundaSalida.hora,
+                horaRealFin: ultimaSalida.hora,
                 minutosAtraso: minutosSalidaTemprana,
+                tipoTurno: '4x4',
+                primeraEntrada: primeraEntrada.hora,
+                primeraSalida: salidas[0]?.hora || null,
+                segundaEntrada: entradas[1]?.hora || null,
+                segundaSalida: ultimaSalida.hora,
+                minutosColacion: null,
+              })
+            }
+          }
+        }
+      }
+    } else {
+      // === Análisis por semana para turno fijo ===
+      const semanasMap = new Map<string, string[]>()
+      for (const fecha of fechas) {
+        const lunes = getLunesDeSemana(fecha)
+        if (!semanasMap.has(lunes)) semanasMap.set(lunes, [])
+        semanasMap.get(lunes)!.push(fecha)
+      }
+
+      for (const [, fechasSemana] of semanasMap) {
+        // Determinar turno activo (A o B)
+        let turnoActivo = horarioA
+        if (horarioB) {
+          let primerRegistroSemana: RegistroReloj | null = null
+          for (const fecha of fechasSemana) {
+            const grupo = registrosPorFecha.get(fecha)
+            if (grupo && grupo.entradas.length > 0) {
+              primerRegistroSemana = grupo.entradas[0]
+              break
+            }
+          }
+          if (primerRegistroSemana) {
+            const horaReal = parseHora(primerRegistroSemana.hora)
+            const inicioA = horarioA.lunesInicio ? parseHora(horarioA.lunesInicio) : 9999
+            const inicioB = horarioB.lunesInicio ? parseHora(horarioB.lunesInicio) : 9999
+            const diffA = Math.abs(horaReal - inicioA)
+            const diffB = Math.abs(horaReal - inicioB)
+            if (diffB < diffA) {
+              turnoActivo = horarioB
+            }
+          }
+        }
+
+        for (const fecha of fechasSemana) {
+          totalDiasAnalizados++
+
+          const horarioEsperado = getHorarioEsperadoFijo(turnoActivo, fecha)
+
+          if (horarioEsperado.esLibre || !horarioEsperado.inicio) {
+            diasLibres++
+            totalDiasLibres++
+            continue
+          }
+
+          const grupo = registrosPorFecha.get(fecha)
+          const primeraEntrada = grupo?.entradas[0]
+          const primeraSalida = grupo?.salidas[0]
+          const segundaEntrada = grupo?.entradas[1]
+          const segundaSalida = grupo?.salidas[grupo.salidas.length - 1]
+
+          if (!primeraEntrada) {
+            ausencias++
+            totalAusencias++
+            inasistencias.push({
+              nombreTrabajador: horarioA.nombreTrabajador,
+              rut: horarioA.rut,
+              departamento,
+              fecha,
+              diaSemana: getDiaSemanaFromStr(fecha),
+              tipo: 'ausencia',
+              horaEsperadaInicio: horarioEsperado.inicio,
+              horaEsperadaFin: horarioEsperado.fin,
+              horaRealInicio: null,
+              horaRealFin: null,
+              minutosAtraso: 0,
+              tipoTurno: turnoActivo.tipoTurno,
+              primeraEntrada: null,
+              primeraSalida: null,
+              segundaEntrada: null,
+              segundaSalida: null,
+              minutosColacion: null,
+            })
+          } else {
+            diasPresentes++
+            totalDiasPresentes++
+
+            const horaRealMin = parseHora(primeraEntrada.hora)
+            const horaEsperadaMin = parseHora(horarioEsperado.inicio)
+
+            let minutosAtraso = horaRealMin - horaEsperadaMin
+
+            // Para turno noche fijo: si la entrada esperada es 19:00 y la real es después de medianoche
+            if (horarioEsperado.esNoche && horaRealMin < 12 * 60) {
+              minutosAtraso = (horaRealMin + 24 * 60) - horaEsperadaMin
+            }
+
+            if (minutosAtraso > TOLERANCIA_MINUTOS) {
+              atrasos++
+              totalAtrasos++
+              totalMinutosAtraso += minutosAtraso
+              inasistencias.push({
+                nombreTrabajador: horarioA.nombreTrabajador,
+                rut: horarioA.rut,
+                departamento,
+                fecha,
+                diaSemana: getDiaSemanaFromStr(fecha),
+                tipo: 'atraso',
+                horaEsperadaInicio: horarioEsperado.inicio,
+                horaEsperadaFin: horarioEsperado.fin,
+                horaRealInicio: primeraEntrada.hora,
+                horaRealFin: segundaSalida?.hora || null,
+                minutosAtraso,
                 tipoTurno: turnoActivo.tipoTurno,
                 primeraEntrada: primeraEntrada.hora,
                 primeraSalida: primeraSalida?.hora || null,
                 segundaEntrada: segundaEntrada?.hora || null,
-                segundaSalida: segundaSalida.hora,
+                segundaSalida: segundaSalida?.hora || null,
                 minutosColacion: null,
               })
+            }
+
+            // Colación (solo turnos fijos)
+            if (primeraSalida && segundaEntrada) {
+              const minSalidaColacion = parseHora(primeraSalida.hora)
+              const minRegresoColacion = parseHora(segundaEntrada.hora)
+              let minutosColacion = minRegresoColacion - minSalidaColacion
+              if (minutosColacion < 0) minutosColacion += 24 * 60
+              if (minutosColacion > 65 && minutosColacion < 240) {
+                colacionesExcedidas++
+                totalColacionesExcedidas++
+                inasistencias.push({
+                  nombreTrabajador: horarioA.nombreTrabajador,
+                  rut: horarioA.rut,
+                  departamento,
+                  fecha,
+                  diaSemana: getDiaSemanaFromStr(fecha),
+                  tipo: 'colacion_excedida',
+                  horaEsperadaInicio: horarioEsperado.inicio,
+                  horaEsperadaFin: horarioEsperado.fin,
+                  horaRealInicio: primeraEntrada.hora,
+                  horaRealFin: segundaSalida?.hora || null,
+                  minutosAtraso: minutosColacion - 60,
+                  tipoTurno: turnoActivo.tipoTurno,
+                  primeraEntrada: primeraEntrada.hora,
+                  primeraSalida: primeraSalida.hora,
+                  segundaEntrada: segundaEntrada.hora,
+                  segundaSalida: segundaSalida?.hora || null,
+                  minutosColacion,
+                })
+              }
+            }
+
+            // Salida temprana
+            if (segundaSalida && horarioEsperado.fin) {
+              const horaSalidaReal = parseHora(segundaSalida.hora)
+              const horaSalidaEsperada = parseHora(horarioEsperado.fin)
+
+              let minutosSalidaTemprana: number
+              if (horarioEsperado.esNoche) {
+                // Turno noche: fin al día siguiente
+                if (horaSalidaReal > 12 * 60) {
+                  minutosSalidaTemprana = (horaSalidaEsperada + 24 * 60) - horaSalidaReal
+                } else {
+                  minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
+                }
+              } else {
+                minutosSalidaTemprana = horaSalidaEsperada - horaSalidaReal
+              }
+
+              if (minutosSalidaTemprana > TOLERANCIA_MINUTOS) {
+                salidasTempranas++
+                totalSalidasTempranas++
+                inasistencias.push({
+                  nombreTrabajador: horarioA.nombreTrabajador,
+                  rut: horarioA.rut,
+                  departamento,
+                  fecha,
+                  diaSemana: getDiaSemanaFromStr(fecha),
+                  tipo: 'salida_temprana',
+                  horaEsperadaInicio: horarioEsperado.inicio,
+                  horaEsperadaFin: horarioEsperado.fin,
+                  horaRealInicio: primeraEntrada.hora,
+                  horaRealFin: segundaSalida.hora,
+                  minutosAtraso: minutosSalidaTemprana,
+                  tipoTurno: turnoActivo.tipoTurno,
+                  primeraEntrada: primeraEntrada.hora,
+                  primeraSalida: primeraSalida?.hora || null,
+                  segundaEntrada: segundaEntrada?.hora || null,
+                  segundaSalida: segundaSalida.hora,
+                  minutosColacion: null,
+                })
+              }
             }
           }
         }
@@ -557,7 +756,7 @@ export function analizarAsistencia(
   }
 
   return {
-    totalTrabajadores: horarios.length,
+    totalTrabajadores: resumenPorTrabajador.length,
     totalDiasAnalizados,
     totalAtrasos,
     totalAusencias,
@@ -568,192 +767,4 @@ export function analizarAsistencia(
     inasistencias,
     resumenPorTrabajador,
   }
-}
-
-// ============================================
-// Parser de archivo Excel de horarios
-// ============================================
-
-export function parseHorariosExcel(data: any[]): HorarioTrabajador[] {
-  const horarios: HorarioTrabajador[] = []
-  let currentNombre = ''
-
-  for (const row of data) {
-    // Ffill nombre (NaN → usar el anterior)
-    if (row.Nombre && String(row.Nombre).trim() !== 'nan') {
-      currentNombre = String(row.Nombre).trim()
-    }
-
-    if (!currentNombre) continue
-
-    const turno = String(row.Turno || '').trim()
-    if (!turno) continue
-
-    // Parsear "07:00 a 15:00" → inicio=07:00, fin=15:00
-    const parseHoras = (val: any): { inicio: string | null; fin: string | null } => {
-      if (!val || String(val).trim() === 'nan' || String(val).trim() === 'Libre') {
-        return { inicio: null, fin: null }
-      }
-      const str = String(val).trim()
-      const m = str.match(/(\d{1,2}:\d{2})\s*a\s*(\d{1,2}:\d{2})/)
-      if (m) {
-        return { inicio: m[1], fin: m[2] }
-      }
-      return { inicio: null, fin: null }
-    }
-
-    // Detectar si es 4x4
-    const tipoTurno = String(row.Lunes || '').includes('4x4') ? '4x4' : 'fijo'
-
-    // Para 4x4, extraer el turno (dia/noche) del horario
-    let ciclo4x4Turno: string | null = null
-    if (tipoTurno === '4x4') {
-      const str = String(row.Lunes || '')
-      if (str.startsWith('19:00')) {
-        ciclo4x4Turno = 'noche'
-      } else if (str.startsWith('07:00')) {
-        ciclo4x4Turno = 'dia'
-      }
-    }
-
-    const lunes = parseHoras(row.Lunes)
-    const martes = parseHoras(row.Martes)
-    const miercoles = parseHoras(row.Miércoles)
-    const jueves = parseHoras(row.Jueves)
-    const viernes = parseHoras(row.Viernes)
-    const sabado = parseHoras(row.Sábado)
-
-    horarios.push({
-      nombreTrabajador: currentNombre,
-      turno,
-      tipoTurno,
-      lunesInicio: lunes.inicio,
-      lunesFin: lunes.fin,
-      martesInicio: martes.inicio,
-      martesFin: martes.fin,
-      miercolesInicio: miercoles.inicio,
-      miercolesFin: miercoles.fin,
-      juevesInicio: jueves.inicio,
-      juevesFin: jueves.fin,
-      viernesInicio: viernes.inicio,
-      viernesFin: viernes.fin,
-      sabadoInicio: sabado.inicio,
-      sabadoFin: sabado.fin,
-      ciclo4x4Turno,
-      // ciclo4x4Inicio se calculará después (basado en el primer registro de entrada)
-    })
-  }
-
-  return horarios
-}
-
-// ============================================
-// Parser de archivo Excel/XLS de registro de asistencia del reloj
-// ============================================
-
-export function parseRegistroAsistenciaExcel(data: any[]): RegistroReloj[] {
-  const registros: RegistroReloj[] = []
-
-  for (const row of data) {
-    if (!row.Nombre || !row['Fecha/Hora']) continue
-
-    let fechaHora: Date
-
-    // Detectar si Fecha/Hora es un número (formato serial de Excel) o un string/Date
-    const raw = row['Fecha/Hora']
-    if (raw instanceof Date) {
-      fechaHora = raw
-    } else if (typeof raw === 'number') {
-      // Excel serial date: días desde 1899-12-30
-      // Excel epoch = 1899-12-30 = 25569 días antes de 1970-01-01
-      const excelEpoch = new Date(1899, 11, 30)
-      fechaHora = new Date(excelEpoch.getTime() + raw * 24 * 60 * 60 * 1000)
-    } else if (typeof raw === 'string') {
-      // Probar formatos comunes: "2026-06-30 19:16:35", "30/06/2026 19:16:35"
-      fechaHora = new Date(raw)
-      if (isNaN(fechaHora.getTime())) {
-        // Probar formato DD/MM/YYYY HH:MM:SS
-        const m = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})/)
-        if (m) {
-          fechaHora = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5]), Number(m[6]))
-        }
-      }
-    } else {
-      continue
-    }
-
-    if (isNaN(fechaHora.getTime())) continue
-
-    // Formatear fecha y hora usando métodos locales (no UTC) para evitar desfase
-    const yyyy = fechaHora.getFullYear()
-    const mm = String(fechaHora.getMonth() + 1).padStart(2, '0')
-    const dd = String(fechaHora.getDate()).padStart(2, '0')
-    const fecha = `${yyyy}-${mm}-${dd}`
-    const hh = String(fechaHora.getHours()).padStart(2, '0')
-    const min = String(fechaHora.getMinutes()).padStart(2, '0')
-    const hora = `${hh}:${min}`
-
-    registros.push({
-      nombre: String(row.Nombre).trim(),
-      rut: row.RUT ? String(row.RUT).trim() : null,
-      fechaHora,
-      fecha,
-      hora,
-      tipoRegistro: row['Tipo registro'] ? String(row['Tipo registro']).trim() : null,
-      departamento: row.Departamento ? String(row.Departamento).trim() : null,
-    })
-  }
-
-  return registros
-}
-
-// ============================================
-// Calcular ciclo4x4Inicio basado en el primer registro de entrada
-// ============================================
-
-export function calcularCiclo4x4Inicio(
-  horario: HorarioTrabajador,
-  registros: RegistroReloj[]
-): string | null {
-  if (horario.tipoTurno !== '4x4') return null
-
-  const nombreNorm = normalizeName(horario.nombreTrabajador)
-  const registrosTrabajador = registros.filter((r) => {
-    if (normalizeName(r.nombre) === nombreNorm) return true
-    return matchTrabajador(horario.nombreTrabajador, r.nombre)
-  })
-
-  registrosTrabajador.sort((a, b) => a.fechaHora.getTime() - b.fechaHora.getTime())
-
-  // Buscar el primer registro de entrada
-  const primerEntrada = registrosTrabajador.find((r) => r.tipoRegistro === 'Entrada')
-  if (primerEntrada) {
-    // Para turno noche: si hay una "Salida" matutina ANTES de la primera entrada,
-    // significa que el turno empezó el día anterior
-    if (horario.ciclo4x4Turno === 'noche') {
-      const primerSalidaMatutina = registrosTrabajador.find(
-        (r) => r.tipoRegistro === 'Salida' && r.hora < '12:00',
-      )
-      if (primerSalidaMatutina && primerSalidaMatutina.fecha < primerEntrada.fecha) {
-        // Hay una salida matutina antes que la primera entrada → el ciclo empezó el día anterior
-        const [y, m, d] = primerSalidaMatutina.fecha.split('-').map(Number)
-        const fechaAnterior = new Date(y, m - 1, d - 1)
-        return `${fechaAnterior.getFullYear()}-${String(fechaAnterior.getMonth() + 1).padStart(2, '0')}-${String(fechaAnterior.getDate()).padStart(2, '0')}`
-      }
-    }
-    return primerEntrada.fecha
-  }
-
-  // Si no hay entrada, usar la primera salida (para noche, retroceder 1 día)
-  const primerRegistro = registrosTrabajador[0]
-  if (primerRegistro) {
-    if (horario.ciclo4x4Turno === 'noche') {
-      const [y, m, d] = primerRegistro.fecha.split('-').map(Number)
-      const fechaAnterior = new Date(y, m - 1, d - 1)
-      return `${fechaAnterior.getFullYear()}-${String(fechaAnterior.getMonth() + 1).padStart(2, '0')}-${String(fechaAnterior.getDate()).padStart(2, '0')}`
-    }
-    return primerRegistro.fecha
-  }
-
-  return null
 }
