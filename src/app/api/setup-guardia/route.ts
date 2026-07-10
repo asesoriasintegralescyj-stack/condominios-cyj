@@ -22,7 +22,7 @@ export async function POST() {
       { nombre: 'Piscina 1', codigo: 'QR-PISCINA1', ubicacion: 'Costado Piscina 1', etapa: 'PISCINAS', post: 'PISCINA1' },
       { nombre: 'Piscina 2', codigo: 'QR-PISCINA2', ubicacion: 'Costado Piscina 2', etapa: 'PISCINAS', post: 'PISCINA2' },
       { nombre: 'Piscina 3', codigo: 'QR-PISCINA3', ubicacion: 'Costado Piscina 3', etapa: 'PISCINAS', post: 'PISCINA3' },
-      { nombre: 'Laguna Artificial', codigo: 'QR-LAGUNA', ubicacion:Mirador Laguna', etapa: 'LAGUNA', post: 'LAGUNA' },
+      { nombre: 'Laguna Artificial', codigo: 'QR-LAGUNA', ubicacion: 'Mirador Laguna', etapa: 'LAGUNA', post: 'LAGUNA' },
       { nombre: 'Quinchos', codigo: 'QR-QUINCHOS', ubicacion: 'Sector Quinchos', etapa: 'QUINCHOS', post: 'QUINCHOS' },
       { nombre: 'Multicancha', codigo: 'QR-MULTICANCHA', ubicacion: 'Multicancha', etapa: 'MULTICANCHA', post: 'MULTI' },
       { nombre: 'Cancha Sintética', codigo: 'QR-CANCHA', ubicacion: 'Cancha de Pasto Sintético', etapa: 'CANCHAS', post: 'SINTETICA' },
