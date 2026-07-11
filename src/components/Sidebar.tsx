@@ -63,6 +63,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   backups: 'configuracion.editar',
   cumplimiento: 'configuracion.ver',
   rondas: 'rondas.ver',
+  qrrondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
   // 'usuarios' y 'permisos' se manejan con lógica especial (solo admin)
 }
@@ -85,6 +86,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'proyectos', label: 'Proyectos', icon: <DraftingCompass className="w-4 h-4" /> },
       { id: 'inspecciones', label: 'Inspecciones', icon: <Search className="w-4 h-4" /> },
       { id: 'rondas', label: 'Rondas', icon: <QrCode className="w-4 h-4" /> },
+      { id: 'qrrondas', label: 'Rondas QR Guardias', icon: <QrCode className="w-4 h-4" /> },
       { id: 'personal', label: 'Personal', icon: <User className="w-4 h-4" /> },
       { id: 'asistencia', label: 'Control Asistencia', icon: <Calendar className="w-4 h-4" /> },
       { id: 'activos', label: 'Activos', icon: <Package className="w-4 h-4" /> },
@@ -133,9 +135,9 @@ export function Sidebar() {
   const filteredMenuItems = menuItems.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      // Guardia: solo Rondas + Manuales
+      // Guardia: solo Rondas + Rondas QR + Manuales
       if (isGuardia) {
-        return item.id === 'rondas' || item.id === 'manuales'
+        return item.id === 'rondas' || item.id === 'qrrondas' || item.id === 'manuales'
       }
 
       // 'manuales' es visible para TODOS los roles (sin excepción)

@@ -25,6 +25,7 @@ export type Module =
   | 'backups'
   | 'cumplimiento'
   | 'rondas'
+  | 'qrrondas'
   | 'solicitudescompra'
   | 'permisos'
   | 'manuales'
