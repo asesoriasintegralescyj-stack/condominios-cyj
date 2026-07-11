@@ -1394,23 +1394,34 @@ export function OrdenesTrabajoModule() {
               <TabsContent value="materiales" className="space-y-4 mt-0">
                 <div className="flex justify-between items-center flex-wrap gap-2">
                   <h3 className="font-semibold text-sm">Materiales ({materiales.length})</h3>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {catMateriales.length > 0 && (
-                      <Select onValueChange={(v) => {
-                        const mat = catMateriales.find(m => m.id === v)
-                        if (mat) addMaterialFromCatalog(mat)
-                      }}>
-                        <SelectTrigger className="w-[250px] h-8">
-                          <SelectValue placeholder="Agregar del catálogo..." />
-                        </SelectTrigger>
-                        <SelectContent>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="input-buscar-material"
+                          list="datalist-materiales"
+                          placeholder="Escribir material..."
+                          className="w-[250px] h-8"
+                          onChange={(e) => {
+                            const nombre = e.target.value.toLowerCase();
+                            const mat = catMateriales.find(m =>
+                              m.nombre.toLowerCase() === nombre ||
+                              (m.codigo && m.codigo.toLowerCase() === nombre.toUpperCase())
+                            );
+                            if (mat) {
+                              addMaterialFromCatalog(mat);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <datalist id="datalist-materiales">
                           {catMateriales.map(m => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.codigo ? `[${m.codigo}] ` : ''}{m.nombre} - {formatCLP(m.precioUnit)}
-                            </SelectItem>
+                            <option key={m.id} value={m.nombre}>
+                              {m.codigo ? `[${m.codigo}] ` : ''}{formatCLP(m.precioUnit)} - {m.unidad}
+                            </option>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </datalist>
+                      </div>
                     )}
                     <Button size="sm" onClick={addMaterial}><Plus className="w-3.5 h-3.5 mr-1" /> Manual</Button>
                   </div>
@@ -1490,23 +1501,34 @@ export function OrdenesTrabajoModule() {
               <TabsContent value="herramientas" className="space-y-4 mt-0">
                 <div className="flex justify-between items-center flex-wrap gap-2">
                   <h3 className="font-semibold text-sm">Herramientas ({herramientas.length})</h3>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {catHerramientas.length > 0 && (
-                      <Select onValueChange={(v) => {
-                        const herr = catHerramientas.find(h => h.id === v)
-                        if (herr) addHerramientaFromCatalog(herr)
-                      }}>
-                        <SelectTrigger className="w-[250px] h-8">
-                          <SelectValue placeholder="Agregar del catálogo..." />
-                        </SelectTrigger>
-                        <SelectContent>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          id="input-buscar-herramienta"
+                          list="datalist-herramientas"
+                          placeholder="Escribir herramienta..."
+                          className="w-[250px] h-8"
+                          onChange={(e) => {
+                            const nombre = e.target.value.toLowerCase();
+                            const herr = catHerramientas.find(h =>
+                              h.nombre.toLowerCase() === nombre ||
+                              (h.codigo && h.codigo.toLowerCase() === nombre.toUpperCase())
+                            );
+                            if (herr) {
+                              addHerramientaFromCatalog(herr);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                        <datalist id="datalist-herramientas">
                           {catHerramientas.map(h => (
-                            <SelectItem key={h.id} value={h.id}>
-                              {h.codigo ? `[${h.codigo}] ` : ''}{h.nombre} ({h.estado})
-                            </SelectItem>
+                            <option key={h.id} value={h.nombre}>
+                              {h.codigo ? `[${h.codigo}] ` : ''}{h.marca || ''} {h.modelo || ''} ({h.estado})
+                            </option>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </datalist>
+                      </div>
                     )}
                     <Button size="sm" onClick={addHerramienta}><Plus className="w-3.5 h-3.5 mr-1" /> Manual</Button>
                   </div>
