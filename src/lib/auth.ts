@@ -629,7 +629,7 @@ export async function deleteUser(id: string, deletedBy?: string) {
 // VERIFICACIÓN DE PERMISOS
 // ============================================
 
-export type Rol = 'admin' | 'supervisor' | 'usuario' | 'personal' | 'auditor' | 'guardia';
+export type Rol = 'admin' | 'supervisor' | 'usuario' | 'personal' | 'auditor' | 'guardia' | 'conserje';
 
 export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
   admin: [
@@ -723,6 +723,11 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     // GUARDIA — Solo puede ver el módulo de Rondas y registrar ronda escaneando QR
     'rondas.ver',
     'rondas.registrar',
+  ],
+  conserje: [
+    // CONSERJE — Solo puede ver lecturas de QR de guardias y exportar PDF
+    // No puede crear/editar/eliminar ubicaciones QR ni escaneos
+    'rondas.ver',
   ],
 };
 

@@ -76,6 +76,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  FileDown,
 } from 'lucide-react'
 
 // ─── Tipos ───
@@ -152,11 +153,146 @@ function startOfDayCL(date: Date): number {
   return Date.UTC(y, m - 1, d, 12, 0, 0)
 }
 
+// ─── Utilidades de turno 4x4 ───
+// Sistema de turnos:
+//   - 4 días de trabajo, 4 días de descanso (ciclo de 8 días)
+//   - Turno Día: 07:00 a 19:00
+//   - Turno Noche: 19:00 a 07:00 del día siguiente
+//   - Cambio de turno siempre a las 07:00 AM
+//
+// ANCHOR_DATE: fecha de inicio del primer ciclo (día 1 = primer día de trabajo).
+// Ajustar según el calendario real del condominio.
+const TURNO_ANCHOR_DATE = new Date('2025-01-06T07:00:00-04:00') // 6 enero 2025, primer día trabajo turno día
+const CICLO_DIAS = 8 // 4 trabajo + 4 descanso
+
+interface InfoTurno {
+  esDiaDeTrabajo: boolean
+  diaDelCiclo: number // 1-8
+  turno: 'dia' | 'noche' | 'descanso'
+  inicio: Date
+  fin: Date
+  label: string
+}
+
+/** Calcula la información del turno para una fecha dada (hora Chile). */
+function calcularTurno(fecha: Date): InfoTurno {
+  // Diferencia en milisegundos desde el anchor
+  const diffMs = fecha.getTime() - TURNO_ANCHOR_DATE.getTime()
+  const diffDias = Math.floor(diffMs / (24 * 60 * 60 * 1000))
+  // diaDelCiclo: 1-8 (1-4 = trabajo, 5-8 = descanso)
+  const diaDelCiclo = ((diffDias % CICLO_DIAS) + CICLO_DIAS) % CICLO_DIAS + 1
+  const esDiaDeTrabajo = diaDelCiclo <= 4
+
+  // Hora actual en Chile (sin zona horaria del objeto Date, calculada manualmente)
+  const horaChileStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(fecha)
+  const [hora, minuto] = horaChileStr.split(':').map(Number)
+  const minutosActuales = hora * 60 + minuto
+
+  // Turno día: 07:00 - 19:00 (420 - 1140 minutos)
+  // Turno noche: 19:00 - 07:00 del día siguiente
+  const esTurnoDia = minutosActuales >= 420 && minutosActuales < 1140 // 07:00 a 19:00
+
+  // Calcular inicio y fin del turno actual
+  const hoy = new Date(fecha)
+  hoy.setHours(0, 0, 0, 0)
+
+  if (esDiaDeTrabajo) {
+    if (esTurnoDia) {
+      // Turno día de hoy: 07:00 a 19:00
+      const inicio = new Date(hoy)
+      inicio.setHours(7, 0, 0, 0)
+      const fin = new Date(hoy)
+      fin.setHours(19, 0, 0, 0)
+      return {
+        esDiaDeTrabajo,
+        diaDelCiclo,
+        turno: 'dia',
+        inicio,
+        fin,
+        label: `Turno Día (07:00 - 19:00)`,
+      }
+    } else {
+      // Turno noche: si es antes de 07:00, pertenece al turno de noche que empezó ayer
+      // si es después de 19:00, pertenece al turno de noche que termina mañana
+      const inicio = new Date(hoy)
+      const fin = new Date(hoy)
+      if (minutosActuales < 420) {
+        // Antes de 07:00 → turno noche empezó ayer 19:00, termina hoy 07:00
+        inicio.setDate(inicio.getDate() - 1)
+        inicio.setHours(19, 0, 0, 0)
+        fin.setHours(7, 0, 0, 0)
+      } else {
+        // Después de 19:00 → turno noche empieza hoy 19:00, termina mañana 07:00
+        inicio.setHours(19, 0, 0, 0)
+        fin.setDate(fin.getDate() + 1)
+        fin.setHours(7, 0, 0, 0)
+      }
+      return {
+        esDiaDeTrabajo,
+        diaDelCiclo,
+        turno: 'noche',
+        inicio,
+        fin,
+        label: `Turno Noche (19:00 - 07:00)`,
+      }
+    }
+  } else {
+    // Día de descanso — pero el guardia podría haber hecho escaneos antes de las 07:00
+    // (fin del turno noche del día de trabajo anterior)
+    if (minutosActuales < 420) {
+      // Antes de 07:00 → todavía pertenece al turno noche del día anterior
+      const inicio = new Date(hoy)
+      inicio.setDate(inicio.getDate() - 1)
+      inicio.setHours(19, 0, 0, 0)
+      const fin = new Date(hoy)
+      fin.setHours(7, 0, 0, 0)
+      return {
+        esDiaDeTrabajo: false,
+        diaDelCiclo,
+        turno: 'noche',
+        inicio,
+        fin,
+        label: `Turno Noche (19:00 - 07:00) — día de descanso`,
+      }
+    }
+    return {
+      esDiaDeTrabajo,
+      diaDelCiclo,
+      turno: 'descanso',
+      inicio: hoy,
+      fin: hoy,
+      label: `Día de descanso (día ${diaDelCiclo} del ciclo)`,
+    }
+  }
+}
+
+/** Devuelve el label legible del turno para mostrar en la UI. */
+function labelTurno(info: InfoTurno): string {
+  const inicioStr = new Intl.DateTimeFormat('es-CL', {
+    timeZone: 'America/Santiago',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(info.inicio)
+  const finStr = new Intl.DateTimeFormat('es-CL', {
+    timeZone: 'America/Santiago',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(info.fin)
+  return `${info.label} · ${inicioStr} a ${finStr}`
+}
+
 // ─── Componente principal ───
 
 export function QrRondasModule() {
-  const { isAdmin } = useSession()
-  const [tab, setTab] = useState<'ubicaciones' | 'lecturas'>('ubicaciones')
+  const { user, isAdmin } = useSession()
+  const isConserje = user?.rol === 'conserje'
+  // Conserje siempre empieza en lecturas; admin en ubicaciones
+  const [tab, setTab] = useState<'ubicaciones' | 'lecturas'>(isConserje ? 'lecturas' : 'ubicaciones')
   const [locations, setLocations] = useState<QrLocation[]>([])
   const [scans, setScans] = useState<QrScan[]>([])
   const [scansTotal, setScansTotal] = useState(0)
@@ -165,6 +301,7 @@ export function QrRondasModule() {
   const [refreshingLocations, setRefreshingLocations] = useState(false)
   const [refreshingScans, setRefreshingScans] = useState(false)
   const [deletingScanId, setDeletingScanId] = useState<string | null>(null)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   // Formulario de ubicación
   const [showFormModal, setShowFormModal] = useState(false)
@@ -184,6 +321,10 @@ export function QrRondasModule() {
   const [filterGuardia, setFilterGuardia] = useState<string>('all')
   const [filterFromDate, setFilterFromDate] = useState<string>('')
   const [filterToDate, setFilterToDate] = useState<string>('')
+
+  // Turno actual (calculado automáticamente, pero el conserje puede sobreescribirlo)
+  const [turnoActual, setTurnoActual] = useState<InfoTurno>(() => calcularTurno(new Date()))
+  const [usarTurnoAuto, setUsarTurnoAuto] = useState(true)
 
   // Modal de QR
   const [showQrModal, setShowQrModal] = useState(false)
@@ -557,19 +698,197 @@ export function QrRondasModule() {
     }
   }
 
+  // ─── Aplicar turno actual a los filtros ───
+  // Cuando el conserje hace click en "Ver turno actual", se cargan las
+  // fechas desde/hasta según el turno calculado.
+  const aplicarTurnoAFiltros = (info: InfoTurno) => {
+    setFilterFromDate(formatDateInputCL(info.inicio))
+    setFilterToDate(formatDateInputCL(info.fin))
+    // Limpiar otros filtros para ver todos los guardias y ubicaciones del turno
+    setFilterLocationId('all')
+    setFilterGuardia('all')
+  }
+
+  // ─── Exportar PDF de lecturas ───
+  // Genera un PDF con todas las lecturas filtradas (por turno, fecha, guardia, etc.)
+  const exportarPdf = async () => {
+    if (scans.length === 0) {
+      toast.error('No hay lecturas para exportar con los filtros actuales')
+      return
+    }
+    setExportingPdf(true)
+    try {
+      // Importar jsPDF dinámicamente
+      const { jsPDF } = await import('jspdf')
+      const doc = new jsPDF({ unit: 'mm', format: 'letter' })
+      const pageWidth = 216 // Letter: 216mm
+      const pageHeight = 279
+      const margin = 15
+      const contentWidth = pageWidth - margin * 2
+
+      // ─── Encabezado ───
+      doc.setFillColor(15, 32, 68) // azul corporativo #0f2044
+      doc.rect(0, 0, pageWidth, 30, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(16)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Laguna Norte — Control de Rondas QR', margin, 13)
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Reporte de lecturas de guardias', margin, 20)
+      doc.text(`Generado: ${new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}`, margin, 25)
+
+      // ─── Información del turno/filtros ───
+      let y = 38
+      doc.setTextColor(40, 40, 40)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Filtros aplicados:', margin, y)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      y += 5
+      doc.text(`• Turno: ${labelTurno(turnoActual)}`, margin, y); y += 4
+      if (filterFromDate || filterToDate) {
+        doc.text(`• Rango fechas: ${filterFromDate || '—'} a ${filterToDate || '—'}`, margin, y); y += 4
+      }
+      if (filterLocationId !== 'all') {
+        const loc = locations.find((l) => l.id === filterLocationId)
+        doc.text(`• Ubicación: ${loc ? loc.name : filterLocationId}`, margin, y); y += 4
+      }
+      if (filterGuardia !== 'all') {
+        doc.text(`• Guardia: ${filterGuardia}`, margin, y); y += 4
+      }
+      doc.text(`• Total lecturas: ${scansTotal}`, margin, y); y += 8
+
+      // ─── Tabla de lecturas ───
+      // Encabezados
+      const colFecha = margin
+      const colUbicacion = margin + 35
+      const colGuardia = margin + 95
+      const colGps = margin + 135
+      const colNotas = margin + 175
+
+      doc.setFillColor(240, 240, 240)
+      doc.rect(margin - 2, y - 4, contentWidth + 4, 7, 'F')
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.text('Fecha y hora', colFecha, y)
+      doc.text('Ubicación', colUbicacion, y)
+      doc.text('Guardia', colGuardia, y)
+      doc.text('GPS', colGps, y)
+      doc.text('Notas', colNotas, y)
+      y += 5
+
+      // Filas
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      let rowCount = 0
+      for (const scan of scans) {
+        if (y > pageHeight - 20) {
+          doc.addPage()
+          y = margin
+          // Repetir encabezados
+          doc.setFillColor(240, 240, 240)
+          doc.rect(margin - 2, y - 4, contentWidth + 4, 7, 'F')
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(8)
+          doc.text('Fecha y hora', colFecha, y)
+          doc.text('Ubicación', colUbicacion, y)
+          doc.text('Guardia', colGuardia, y)
+          doc.text('GPS', colGps, y)
+          doc.text('Notas', colNotas, y)
+          y += 5
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(7)
+        }
+
+        // Fila alterna (zebra)
+        if (rowCount % 2 === 0) {
+          doc.setFillColor(248, 248, 248)
+          doc.rect(margin - 2, y - 3, contentWidth + 4, 5, 'F')
+        }
+
+        const fecha = formatDateTimeCL(scan.createdAt)
+        const ubicacion = (scan.location?.name ?? '—').substring(0, 30)
+        const codigo = scan.location?.code ?? ''
+        const guardia = (scan.scannedBy || '—').substring(0, 20)
+        const gps = scan.latitude != null && scan.longitude != null
+          ? `${scan.latitude.toFixed(5)}, ${scan.longitude.toFixed(5)}`
+          : 'Sin GPS'
+        const notas = (scan.notes || '—').substring(0, 25)
+
+        doc.text(fecha, colFecha, y)
+        doc.text(ubicacion, colUbicacion, y)
+        if (codigo) {
+          doc.setFontSize(6)
+          doc.setTextColor(100, 100, 100)
+          doc.text(codigo, colUbicacion, y + 2.5)
+          doc.setFontSize(7)
+          doc.setTextColor(40, 40, 40)
+        }
+        doc.text(guardia, colGuardia, y)
+        // GPS en verde si tiene, en ámbar si no
+        if (gps !== 'Sin GPS') {
+          doc.setTextColor(20, 120, 60)
+        } else {
+          doc.setTextColor(180, 120, 20)
+        }
+        doc.text(gps, colGps, y)
+        doc.setTextColor(40, 40, 40)
+        doc.text(notas, colNotas, y)
+
+        y += 6
+        rowCount++
+      }
+
+      // ─── Pie de página ───
+      const totalPages = doc.getNumberOfPages()
+      for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i)
+        doc.setFontSize(7)
+        doc.setTextColor(120, 120, 120)
+        doc.text(
+          `Laguna Norte · Condominio & Parque · Página ${i} de ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 8,
+          { align: 'center' },
+        )
+      }
+
+      // Generar nombre de archivo
+      const fechaArchivo = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Santiago',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date()).replace(/-/g, '')
+      const turnoLabel = turnoActual.turno === 'dia' ? 'dia' : turnoActual.turno === 'noche' ? 'noche' : 'custom'
+      doc.save(`Rondas-QR-${turnoLabel}-${fechaArchivo}.pdf`)
+
+      toast.success(`PDF generado: ${scans.length} lecturas`)
+    } catch (err) {
+      console.error('Error exportando PDF:', err)
+      toast.error('Error al generar PDF')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   // ─── Render ───
 
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Rondas QR de Guardias</h2>
+          <h2 className="text-xl font-bold text-slate-800">
+            {isConserje ? 'Control de Rondas — Vista Conserje' : 'Rondas QR de Guardias'}
+          </h2>
           <p className="text-sm text-slate-500">
-            Gestiona puntos de ronda y visualiza lecturas de guardias en tiempo real.
-            Comparte la misma base de datos que la app móvil.
+            {isConserje
+              ? 'Visualiza las lecturas de los guardias y exporta reportes en PDF.'
+              : 'Gestiona puntos de ronda y visualiza lecturas de guardias en tiempo real.'
+            }
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             onClick={() => { fetchLocations(true); fetchScans(true); }}
@@ -577,28 +896,117 @@ export function QrRondasModule() {
             title="Recargar ubicaciones y lecturas desde el servidor"
           >
             <RefreshCw className={`w-4 h-4 mr-1 ${(refreshingLocations || refreshingScans) ? 'animate-spin' : ''}`} />
-            {(refreshingLocations || refreshingScans) ? 'Actualizando...' : 'Actualizar todo'}
+            {(refreshingLocations || refreshingScans) ? 'Actualizando...' : 'Actualizar'}
           </Button>
-          <Button variant="outline" onClick={printAllQrs} title="Imprimir todos los QR activos">
-            <Printer className="w-4 h-4 mr-1" /> Imprimir todos
+          <Button
+            variant="outline"
+            onClick={exportarPdf}
+            disabled={exportingPdf || scans.length === 0}
+            title="Exportar PDF de las lecturas filtradas"
+            className="border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            {exportingPdf ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <FileDown className="w-4 h-4 mr-1" />}
+            {exportingPdf ? 'Generando...' : 'Exportar PDF'}
           </Button>
-          <Button onClick={openCreateModal}>
-            <Plus className="w-4 h-4 mr-1" /> Nueva ubicación
-          </Button>
+          {!isConserje && (
+            <>
+              <Button variant="outline" onClick={printAllQrs} title="Imprimir todos los QR activos">
+                <Printer className="w-4 h-4 mr-1" /> Imprimir todos
+              </Button>
+              <Button onClick={openCreateModal}>
+                <Plus className="w-4 h-4 mr-1" /> Nueva ubicación
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* ─── Panel de turno actual (visible para todos, destacado para conserje) ─── */}
+      <Card className={isConserje ? 'border-blue-300 bg-blue-50/50' : ''}>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <p className="text-xs font-bold text-slate-500 uppercase mb-1">Turno actual</p>
+              <p className="text-sm font-bold text-slate-800">{labelTurno(turnoActual)}</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Día {turnoActual.diaDelCiclo} del ciclo de 8 días (4 trabajo + 4 descanso) ·
+                {turnoActual.esDiaDeTrabajo ? ' día de trabajo' : ' día de descanso'}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const t = calcularTurno(new Date())
+                  setTurnoActual(t)
+                  aplicarTurnoAFiltros(t)
+                  setUsarTurnoAuto(true)
+                }}
+                title="Cargar el turno actual en los filtros"
+              >
+                <Clock className="w-3 h-3 mr-1" /> Ver turno actual
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Turno día de hoy
+                  const hoy = new Date()
+                  hoy.setHours(7, 0, 0, 0)
+                  const fin = new Date(hoy)
+                  fin.setHours(19, 0, 0, 0)
+                  const t: InfoTurno = {
+                    esDiaDeTrabajo: true, diaDelCiclo: 1, turno: 'dia',
+                    inicio: hoy, fin, label: 'Turno Día (07:00 - 19:00)',
+                  }
+                  setTurnoActual(t)
+                  aplicarTurnoAFiltros(t)
+                  setUsarTurnoAuto(false)
+                }}
+              >
+                Turno Día
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Turno noche: 19:00 hoy a 07:00 mañana
+                  const inicio = new Date()
+                  inicio.setHours(19, 0, 0, 0)
+                  const fin = new Date(inicio)
+                  fin.setDate(fin.getDate() + 1)
+                  fin.setHours(7, 0, 0, 0)
+                  const t: InfoTurno = {
+                    esDiaDeTrabajo: true, diaDelCiclo: 1, turno: 'noche',
+                    inicio, fin, label: 'Turno Noche (19:00 - 07:00)',
+                  }
+                  setTurnoActual(t)
+                  aplicarTurnoAFiltros(t)
+                  setUsarTurnoAuto(false)
+                }}
+              >
+                Turno Noche
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas')}>
         <TabsList>
-          <TabsTrigger value="ubicaciones">
-            <MapPin className="w-4 h-4 mr-1" /> Ubicaciones ({locations.length})
-          </TabsTrigger>
+          {!isConserje && (
+            <TabsTrigger value="ubicaciones">
+              <MapPin className="w-4 h-4 mr-1" /> Ubicaciones ({locations.length})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="lecturas">
             <Clock className="w-4 h-4 mr-1" /> Lecturas ({scansTotal})
           </TabsTrigger>
         </TabsList>
 
-        {/* ─── Pestaña Ubicaciones ─── */}
+        {/* ─── Pestaña Ubicaciones (oculta para conserje) ─── */}
+        {!isConserje && (
         <TabsContent value="ubicaciones" className="space-y-4">
           {loadingLocations ? (
             <div className="flex items-center justify-center p-12">
@@ -679,6 +1087,7 @@ export function QrRondasModule() {
             </div>
           )}
         </TabsContent>
+        )}
 
         {/* ─── Pestaña Lecturas ─── */}
         <TabsContent value="lecturas" className="space-y-4">

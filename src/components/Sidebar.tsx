@@ -128,13 +128,20 @@ export function Sidebar() {
 
   // Filtrar menú según permisos
   // El rol 'guardia' SOLO ve: Rondas (su página dedicada) + Manuales
+  // El rol 'conserje' SOLO ve: Rondas QR Guardias + Manuales
   const isGuardia = user?.rol === 'guardia'
+  const isConserje = user?.rol === 'conserje'
   const isPersonal = user?.rol === 'personal'
   const filteredMenuItems = menuItems.map(section => ({
     ...section,
     items: section.items.filter(item => {
       // Guardia: redirigido a app móvil, pero si llega aquí ver Rondas QR + Manuales
       if (isGuardia) {
+        return item.id === 'qrrondas' || item.id === 'manuales'
+      }
+
+      // Conserje: SOLO ve Rondas QR Guardias + Manuales
+      if (isConserje) {
         return item.id === 'qrrondas' || item.id === 'manuales'
       }
 
