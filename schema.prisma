@@ -1561,6 +1561,30 @@ model MovilQrScan {
   @@index([createdAt])
 }
 
+model MovilPatente {
+  id            String    @id @default(cuid())
+  patente       String
+  ubicacion     String
+  entradaQrCode String
+  entradaScanId String?
+  entradaAt     DateTime  @default(now())
+  salidaQrCode  String?
+  salidaScanId  String?
+  salidaAt      DateTime?
+  scannedBy     String    @default("")
+  profileId     String?
+  latitude      Float?
+  longitude     Float?
+  notes         String    @default("")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([ubicacion, salidaAt])
+  @@index([patente])
+  @@index([entradaAt])
+  @@index([scannedBy])
+}
+
 model MovilAuditLog {
   id          String   @id @default(cuid())
   action      String
