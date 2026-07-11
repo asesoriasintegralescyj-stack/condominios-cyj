@@ -1051,7 +1051,7 @@ export function QrRondasModule() {
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas')}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas' | 'patentes')}>
         <TabsList>
           {!isConserje && (
             <TabsTrigger value="ubicaciones">
