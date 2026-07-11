@@ -58,6 +58,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
+import { useSession } from '@/hooks/use-session'
 import {
   Search,
   Plus,
@@ -154,6 +155,7 @@ function startOfDayCL(date: Date): number {
 // ─── Componente principal ───
 
 export function QrRondasModule() {
+  const { isAdmin } = useSession()
   const [tab, setTab] = useState<'ubicaciones' | 'lecturas'>('ubicaciones')
   const [locations, setLocations] = useState<QrLocation[]>([])
   const [scans, setScans] = useState<QrScan[]>([])
@@ -162,6 +164,7 @@ export function QrRondasModule() {
   const [loadingScans, setLoadingScans] = useState(true)
   const [refreshingLocations, setRefreshingLocations] = useState(false)
   const [refreshingScans, setRefreshingScans] = useState(false)
+  const [deletingScanId, setDeletingScanId] = useState<string | null>(null)
 
   // Formulario de ubicación
   const [showFormModal, setShowFormModal] = useState(false)
@@ -356,6 +359,69 @@ export function QrRondasModule() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al eliminar')
     }
+  }
+
+  // ─── Eliminar un escaneo individual (solo admin) ───
+  const handleDeleteScan = async (scan: QrScan) => {
+    if (!isAdmin()) {
+      toast.error('Solo el administrador puede eliminar lecturas')
+      return
+    }
+    const guardiaName = scan.scannedBy || '(sin guardia)'
+    const fecha = formatDateTimeCL(scan.createdAt)
+    if (!confirm(`¿Eliminar esta lectura?\n\nGuardia: ${guardiaName}\nFecha: ${fecha}\nUbicación: ${scan.location?.name ?? '—'}\n\nEsta acción no se puede deshacer.`)) {
+      return
+    }
+    setDeletingScanId(scan.id)
+    try {
+      const res = await fetch(`/api/qr-rondas/scans/${scan.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Error al eliminar')
+      }
+      toast.success('Lectura eliminada')
+      // Refrescar lista (silencioso)
+      fetchScans(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al eliminar lectura')
+    } finally {
+      setDeletingScanId(null)
+    }
+  }
+
+  // ─── Eliminar todas las lecturas de prueba (solo admin) ───
+  // Se consideran "de prueba" los escaneos cuyo scannedBy contenga palabras
+  // como TEST, PRUEBA, TEST-FINAL, etc., o que no tengan profileId válido.
+  const handleDeleteTestScans = async () => {
+    if (!isAdmin()) {
+      toast.error('Solo el administrador puede eliminar lecturas')
+      return
+    }
+    const testKeywords = ['TEST', 'PRUEBA', 'TEST-FINAL', 'TEST-SISTEMA', 'TEST-VERIFICACION', 'TEST-DIRECT']
+    const testScans = scans.filter((s) => {
+      const name = (s.scannedBy || '').toUpperCase()
+      return testKeywords.some((k) => name.includes(k))
+    })
+    if (testScans.length === 0) {
+      toast.info('No se encontraron lecturas de prueba (TEST, PRUEBA, etc.)')
+      return
+    }
+    if (!confirm(`¿Eliminar ${testScans.length} lectura(s) de prueba?\n\nSe eliminarán las lecturas cuyo guardia contenga: TEST, PRUEBA, TEST-FINAL, etc.\n\nEsta acción no se puede deshacer.`)) {
+      return
+    }
+    let deleted = 0
+    let failed = 0
+    for (const s of testScans) {
+      try {
+        const res = await fetch(`/api/qr-rondas/scans/${s.id}`, { method: 'DELETE' })
+        if (res.ok) deleted++
+        else failed++
+      } catch {
+        failed++
+      }
+    }
+    toast.success(`${deleted} lectura(s) de prueba eliminada(s)${failed > 0 ? `, ${failed} fallida(s)` : ''}`)
+    fetchScans(false)
   }
 
   // ─── Ver QR grande ───
@@ -667,19 +733,32 @@ export function QrRondasModule() {
                   />
                 </div>
               </div>
-              <div className="flex justify-between items-center mt-3">
+              <div className="flex justify-between items-center mt-3 flex-wrap gap-2">
                 <p className="text-xs text-slate-500">
                   Mostrando {scans.length} de {scansTotal} lecturas · Actualización automática cada 15s
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchScans(true)}
-                  disabled={refreshingScans}
-                >
-                  <RefreshCw className={`w-3 h-3 mr-1 ${refreshingScans ? 'animate-spin' : ''}`} />
-                  {refreshingScans ? 'Actualizando...' : 'Actualizar'}
-                </Button>
+                <div className="flex gap-2">
+                  {isAdmin() && scans.length > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleDeleteTestScans}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      title="Eliminar lecturas de prueba (TEST, PRUEBA, etc.)"
+                    >
+                      <Trash2 className="w-3 h-3 mr-1" /> Eliminar pruebas
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchScans(true)}
+                    disabled={refreshingScans}
+                  >
+                    <RefreshCw className={`w-3 h-3 mr-1 ${refreshingScans ? 'animate-spin' : ''}`} />
+                    {refreshingScans ? 'Actualizando...' : 'Actualizar'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -709,6 +788,7 @@ export function QrRondasModule() {
                         <TableHead className="min-w-[140px]">Guardia</TableHead>
                         <TableHead className="min-w-[160px]">GPS</TableHead>
                         <TableHead>Notas</TableHead>
+                        {isAdmin() && <TableHead className="w-[60px]">Acciones</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -757,6 +837,24 @@ export function QrRondasModule() {
                           <TableCell className="text-xs text-slate-600">
                             {scan.notes || '—'}
                           </TableCell>
+                          {isAdmin() && (
+                            <TableCell>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteScan(scan)}
+                                disabled={deletingScanId === scan.id}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
+                                title="Eliminar lectura"
+                              >
+                                {deletingScanId === scan.id ? (
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3 h-3" />
+                                )}
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
