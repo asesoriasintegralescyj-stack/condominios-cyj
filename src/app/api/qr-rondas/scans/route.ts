@@ -52,22 +52,43 @@ export async function GET(request: NextRequest) {
       if (to) where.createdAt.lte = new Date(Number(to))
     }
 
-    // Importante: ejecutar findMany y count en SECUENCIA (no Promise.all)
-    // porque Aiven free tier con connection_limit=1 no soporta queries paralelas.
-    const scans = await withRetry(() =>
+    // Importante: el schema Prisma NO define @relation entre MovilQrScan y
+    // MovilQrLocation (mismo diseño que la app móvil). No podemos usar
+    // `include: { location }`. Hacemos lookup manual con cache.
+    const scansRaw = await withRetry(() =>
       db.movilQrScan.findMany({
         where,
-        include: {
-          location: {
-            select: { id: true, name: true, location: true, code: true },
-          },
-        },
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
       }),
     )
     const total = await withRetry(() => db.movilQrScan.count({ where }))
+
+    // Hidratar cada scan con su ubicación (lookup manual, con cache)
+    const locationCache = new Map<
+      string,
+      { id: string; name: string; location: string; code: string } | null
+    >()
+    const scans = await Promise.all(
+      scansRaw.map(async (s) => {
+        let loc = locationCache.get(s.qrLocationId)
+        if (loc === undefined) {
+          try {
+            loc = await withRetry(() =>
+              db.movilQrLocation.findUnique({
+                where: { id: s.qrLocationId },
+                select: { id: true, name: true, location: true, code: true },
+              }),
+            )
+          } catch {
+            loc = null
+          }
+          locationCache.set(s.qrLocationId, loc)
+        }
+        return { ...s, location: loc }
+      }),
+    )
 
     return NextResponse.json({ scans, total })
   } catch (error) {
