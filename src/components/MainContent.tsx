@@ -20,7 +20,6 @@ import { AprobacionesOTModule } from './aprobaciones-ot/AprobacionesOTModule'
 import { NotificacionesModule } from './notificaciones/NotificacionesModule'
 import { BackupsModule } from './backups/BackupsModule'
 import { CumplimientoModule } from './cumplimiento/CumplimientoModule'
-import { RondasModule } from './rondas/RondasModule'
 import { QrRondasModule } from './qr-rondas/QrRondasModule'
 import { SolicitudesComprasModule } from './solicitudes-compra/SolicitudesComprasModule'
 import { PermisosModule } from './permisos/PermisosModule'
@@ -48,7 +47,6 @@ const moduleTitles: Record<string, string> = {
   notificaciones: 'Notificaciones',
   backups: 'Respaldos de Base de Datos',
   cumplimiento: 'Cumplimiento Legal',
-  rondas: 'Control de Rondas',
   qrrondas: 'Rondas QR de Guardias',
   solicitudescompra: 'Solicitud de Compras',
   permisos: 'Permisos del Sistema',
@@ -100,8 +98,6 @@ export function MainContent() {
         return <BackupsModule />
       case 'cumplimiento':
         return <CumplimientoModule />
-      case 'rondas':
-        return <RondasModule />
       case 'qrrondas':
         return <QrRondasModule />
       case 'solicitudescompra':

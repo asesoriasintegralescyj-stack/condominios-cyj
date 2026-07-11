@@ -7,8 +7,12 @@ import { useAutoCondominio } from '@/hooks/use-auto-condominio'
 import { useAutoRefresh } from '@/hooks/use-auto-refresh'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, QrCode, ExternalLink } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
+
+// URL de la app móvil (comparte la misma BD Aiven)
+const APP_MOVIL_URL = 'https://laguna-norte-gestion.vercel.app'
 
 export default function SistemaPage() {
   const { user, authenticated, loading, refresh } = useSession()
@@ -30,17 +34,16 @@ export default function SistemaPage() {
     }
   }, [loading, authenticated, router])
 
-  // Si el usuario es guardia, redirigir a la página dedicada /rondas-guardia
+  // Si el usuario es guardia, mostrar pantalla de redirección a la app móvil.
+  // La app móvil (laguna-norte-gestion) está optimizada para celulares:
+  //   - Escáner QR nativo con html5-qrcode
+  //   - Captura de GPS con precisión
+  //   - Soporte offline (guarda escaneos en localStorage y sincroniza al recuperar conexión)
+  //   - Comparte la MISMA base de datos Aiven → los escaneos aparecen
+  //     instantáneamente en este sistema de escritorio (módulo "Rondas QR Guardias")
   useEffect(() => {
-    if (authenticated && user?.rol === 'guardia') {
-      router.replace('/rondas-guardia')
-    }
-  }, [authenticated, user, router])
-
-  // Si el usuario es guardia, forzar el módulo Rondas al ingresar
-  useEffect(() => {
-    if (authenticated && user?.rol === 'guardia' && currentModule !== 'rondas') {
-      setCurrentModule('rondas')
+    if (authenticated && user?.rol === 'guardia' && currentModule !== 'qrrondas') {
+      setCurrentModule('qrrondas')
     }
   }, [authenticated, user, currentModule, setCurrentModule])
 
@@ -58,6 +61,48 @@ export default function SistemaPage() {
 
   if (!authenticated) {
     return null
+  }
+
+  // Guardia: redirigir a la app móvil (mejor UX en celular)
+  if (user?.rol === 'guardia') {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-100 p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto bg-teal-100 rounded-2xl flex items-center justify-center">
+            <QrCode className="w-8 h-8 text-teal-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">
+            Hola, {user.nombre}
+          </h1>
+          <p className="text-slate-600">
+            Para escanear los QR de rondas debes usar la <strong>app móvil</strong>.
+            Está optimizada para tu celular: usa la cámara, captura el GPS y guarda
+            los escaneos incluso sin internet.
+          </p>
+          <div className="bg-slate-50 rounded-xl p-4 text-left text-sm text-slate-600 space-y-1">
+            <p><strong>App móvil:</strong></p>
+            <a
+              href={APP_MOVIL_URL}
+              className="block text-teal-600 hover:text-teal-700 hover:underline break-all"
+            >
+              {APP_MOVIL_URL}
+            </a>
+          </div>
+          <Button
+            size="lg"
+            className="w-full bg-teal-600 hover:bg-teal-700"
+            onClick={() => window.location.href = APP_MOVIL_URL}
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            Abrir app móvil
+          </Button>
+          <p className="text-xs text-slate-400">
+            Los escaneos que hagas en la app móvil aparecerán aquí en
+            tiempo real (módulo &quot;Rondas QR Guardias&quot;).
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (condominioStatus === 'loading') {

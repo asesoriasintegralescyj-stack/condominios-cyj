@@ -187,7 +187,7 @@ export default function ManualesGuardiaPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => router.push('/rondas-guardia')}
+            onClick={() => router.push('/sistema')}
             className="text-white/70 hover:text-white hover:bg-white/10"
           >
             <ArrowLeft className="w-4 h-4 mr-1.5" />

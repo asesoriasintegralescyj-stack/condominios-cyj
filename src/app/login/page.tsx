@@ -58,10 +58,10 @@ function LoginForm() {
       }
 
       // Redirigir según el rol:
-      // - Guardia → página dedicada /rondas-guardia (sin sidebar ni dashboard)
+      // - Guardia → sistema (mostrará pantalla con botón a la app móvil)
       // - Otros roles → sistema completo
       if (data.user?.rol === 'guardia') {
-        router.push('/rondas-guardia');
+        router.push('/sistema');
       } else {
         router.push(redirect);
       }
@@ -83,7 +83,7 @@ function LoginForm() {
         .then((r) => r.json())
         .then((data) => {
           if (data.authenticated && data.user?.rol === 'guardia') {
-            router.push('/rondas-guardia');
+            router.push('/sistema');
           } else {
             router.push(redirect);
           }
