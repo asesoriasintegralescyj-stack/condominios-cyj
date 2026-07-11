@@ -12,6 +12,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 
+// Forzar renderizado dinámico — sin caché
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET — Listar todas las ubicaciones QR (activas e inactivas)
 export async function GET(request: NextRequest) {
   try {

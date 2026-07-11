@@ -11,6 +11,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 
+// Forzar renderizado dinámico — sin caché
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // GET — Listar escaneos con filtros opcionales
 // Query params:
 //   - qrLocationId: filtrar por ubicación QR

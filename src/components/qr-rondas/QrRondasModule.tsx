@@ -160,6 +160,8 @@ export function QrRondasModule() {
   const [scansTotal, setScansTotal] = useState(0)
   const [loadingLocations, setLoadingLocations] = useState(true)
   const [loadingScans, setLoadingScans] = useState(true)
+  const [refreshingLocations, setRefreshingLocations] = useState(false)
+  const [refreshingScans, setRefreshingScans] = useState(false)
 
   // Formulario de ubicación
   const [showFormModal, setShowFormModal] = useState(false)
@@ -189,22 +191,26 @@ export function QrRondasModule() {
   const [guardias, setGuardias] = useState<string[]>([])
 
   // ─── Cargar ubicaciones ───
-  const fetchLocations = useCallback(async () => {
+  const fetchLocations = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshingLocations(true)
     try {
-      const res = await fetch('/api/qr-rondas/locations')
+      const res = await fetch('/api/qr-rondas/locations', { cache: 'no-store' })
       if (!res.ok) throw new Error('Error al cargar ubicaciones')
       const data = await res.json()
       setLocations(Array.isArray(data) ? data : [])
+      if (isRefresh) toast.success(`${Array.isArray(data) ? data.length : 0} ubicaciones cargadas`)
     } catch (err) {
       console.error(err)
       toast.error('Error al cargar ubicaciones QR')
     } finally {
       setLoadingLocations(false)
+      setRefreshingLocations(false)
     }
   }, [])
 
   // ─── Cargar escaneos ───
-  const fetchScans = useCallback(async () => {
+  const fetchScans = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshingScans(true)
     try {
       const params = new URLSearchParams()
       if (filterLocationId !== 'all') params.set('qrLocationId', filterLocationId)
@@ -217,21 +223,27 @@ export function QrRondasModule() {
         params.set('to', String(startOfDayCL(end)))
       }
       params.set('limit', '500')
-      const res = await fetch(`/api/qr-rondas/scans?${params.toString()}`)
+      // cache: 'no-store' + timestamp para evitar cualquier caché del navegador
+      params.set('_t', String(Date.now()))
+      const res = await fetch(`/api/qr-rondas/scans?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Error al cargar lecturas')
       const data = await res.json()
-      setScans(Array.isArray(data.scans) ? data.scans : [])
-      setScansTotal(data.total || 0)
+      const newScans = Array.isArray(data.scans) ? data.scans : []
+      const newTotal = data.total || 0
+      setScans(newScans)
+      setScansTotal(newTotal)
       // Extraer guardias únicos para el filtro
       const uniqueGuardias = Array.from(
-        new Set((data.scans || []).map((s: QrScan) => s.scannedBy).filter(Boolean)),
+        new Set(newScans.map((s: QrScan) => s.scannedBy).filter(Boolean)),
       ) as string[]
       setGuardias(uniqueGuardias.sort())
+      if (isRefresh) toast.success(`${newTotal} lecturas cargadas`)
     } catch (err) {
       console.error(err)
       toast.error('Error al cargar lecturas')
     } finally {
       setLoadingScans(false)
+      setRefreshingScans(false)
     }
   }, [filterLocationId, filterGuardia, filterFromDate, filterToDate])
 
@@ -243,10 +255,10 @@ export function QrRondasModule() {
     fetchScans()
   }, [fetchScans])
 
-  // Auto-refresh lecturas cada 15s
+  // Auto-refresh lecturas cada 15s (silencioso, sin toast ni spinner)
   useEffect(() => {
     if (tab !== 'lecturas') return
-    const interval = setInterval(fetchScans, 15000)
+    const interval = setInterval(() => { fetchScans(false) }, 15000)
     return () => clearInterval(interval)
   }, [tab, fetchScans])
 
@@ -492,6 +504,15 @@ export function QrRondasModule() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => { fetchLocations(true); fetchScans(true); }}
+            disabled={refreshingLocations || refreshingScans}
+            title="Recargar ubicaciones y lecturas desde el servidor"
+          >
+            <RefreshCw className={`w-4 h-4 mr-1 ${(refreshingLocations || refreshingScans) ? 'animate-spin' : ''}`} />
+            {(refreshingLocations || refreshingScans) ? 'Actualizando...' : 'Actualizar todo'}
+          </Button>
           <Button variant="outline" onClick={printAllQrs} title="Imprimir todos los QR activos">
             <Printer className="w-4 h-4 mr-1" /> Imprimir todos
           </Button>
@@ -650,8 +671,14 @@ export function QrRondasModule() {
                 <p className="text-xs text-slate-500">
                   Mostrando {scans.length} de {scansTotal} lecturas · Actualización automática cada 15s
                 </p>
-                <Button variant="outline" size="sm" onClick={fetchScans}>
-                  <RefreshCw className="w-3 h-3 mr-1" /> Actualizar
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchScans(true)}
+                  disabled={refreshingScans}
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${refreshingScans ? 'animate-spin' : ''}`} />
+                  {refreshingScans ? 'Actualizando...' : 'Actualizar'}
                 </Button>
               </div>
             </CardContent>
