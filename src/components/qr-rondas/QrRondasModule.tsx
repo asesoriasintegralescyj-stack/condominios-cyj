@@ -77,6 +77,7 @@ import {
   XCircle,
   AlertCircle,
   FileDown,
+  Car,
 } from 'lucide-react'
 
 // ─── Tipos ───
@@ -292,7 +293,7 @@ export function QrRondasModule() {
   const { user, isAdmin } = useSession()
   const isConserje = user?.rol === 'conserje'
   // Conserje siempre empieza en lecturas; admin en ubicaciones
-  const [tab, setTab] = useState<'ubicaciones' | 'lecturas'>(isConserje ? 'lecturas' : 'ubicaciones')
+  const [tab, setTab] = useState<'ubicaciones' | 'lecturas' | 'patentes'>(isConserje ? 'lecturas' : 'ubicaciones')
   const [locations, setLocations] = useState<QrLocation[]>([])
   const [scans, setScans] = useState<QrScan[]>([])
   const [scansTotal, setScansTotal] = useState(0)
@@ -333,6 +334,62 @@ export function QrRondasModule() {
 
   // Lista única de guardias para el filtro
   const [guardias, setGuardias] = useState<string[]>([])
+
+  // ─── Estado de patentes vehiculares ───
+  interface PatenteRecord {
+    id: string
+    patente: string
+    ubicacion: string
+    entradaQrCode: string
+    entradaAt: string
+    salidaQrCode: string | null
+    salidaAt: string | null
+    scannedBy: string
+    latitude: number | null
+    longitude: number | null
+    notes: string
+  }
+  const [patentes, setPatentes] = useState<PatenteRecord[]>([])
+  const [patentesTotal, setPatentesTotal] = useState(0)
+  const [loadingPatentes, setLoadingPatentes] = useState(true)
+  const [refreshingPatentes, setRefreshingPatentes] = useState(false)
+  const [patentesSoloAbiertas, setPatentesSoloAbiertas] = useState(true)
+  const [filterPatenteUbicacion, setFilterPatenteUbicacion] = useState<string>('all')
+
+  // ─── Cargar patentes ───
+  const fetchPatentes = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshingPatentes(true)
+    try {
+      const params = new URLSearchParams()
+      params.set('limit', '500')
+      params.set('_t', String(Date.now()))
+      if (patentesSoloAbiertas) params.set('soloAbiertas', 'true')
+      if (filterPatenteUbicacion !== 'all') params.set('ubicacion', filterPatenteUbicacion)
+      const res = await fetch(`/api/qr-rondas/patentes?${params.toString()}`, { cache: 'no-store' })
+      if (!res.ok) throw new Error('Error al cargar patentes')
+      const data = await res.json()
+      setPatentes(Array.isArray(data.patentes) ? data.patentes : [])
+      setPatentesTotal(data.total || 0)
+      if (isRefresh) toast.success(`${data.total || 0} patentes cargadas`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Error al cargar patentes')
+    } finally {
+      setLoadingPatentes(false)
+      setRefreshingPatentes(false)
+    }
+  }, [patentesSoloAbiertas, filterPatenteUbicacion])
+
+  useEffect(() => {
+    fetchPatentes()
+  }, [fetchPatentes])
+
+  // Auto-refresh patentes cada 15s
+  useEffect(() => {
+    if (tab !== 'patentes') return
+    const interval = setInterval(() => { fetchPatentes(false) }, 15000)
+    return () => clearInterval(interval)
+  }, [tab, fetchPatentes])
 
   // ─── Cargar ubicaciones ───
   const fetchLocations = useCallback(async (isRefresh = false) => {
@@ -1003,6 +1060,9 @@ export function QrRondasModule() {
           <TabsTrigger value="lecturas">
             <Clock className="w-4 h-4 mr-1" /> Lecturas ({scansTotal})
           </TabsTrigger>
+          <TabsTrigger value="patentes">
+            <Car className="w-4 h-4 mr-1" /> Patentes ({patentesTotal})
+          </TabsTrigger>
         </TabsList>
 
         {/* ─── Pestaña Ubicaciones (oculta para conserje) ─── */}
@@ -1264,6 +1324,139 @@ export function QrRondasModule() {
                               </Button>
                             </TableCell>
                           )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ─── Pestaña Patentes ─── */}
+        <TabsContent value="patentes" className="space-y-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div>
+                    <Label className="text-xs">Ubicación</Label>
+                    <Select value={filterPatenteUbicacion} onValueChange={setFilterPatenteUbicacion}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas las ubicaciones</SelectItem>
+                        {Array.from(new Set(locations
+                          .filter(l => l.code.includes('ENTRADA-') || l.code.includes('SALIDA-'))
+                          .map(l => l.code.match(/^QR-([A-ZÁÉÍÓÚÑ\s]+)-/)?.[1])
+                          .filter(Boolean)
+                        )).map((ubicacion) => (
+                          <SelectItem key={ubicacion} value={ubicacion as string}>{ubicacion}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2 mt-5">
+                    <input
+                      type="checkbox"
+                      id="soloAbiertas"
+                      checked={patentesSoloAbiertas}
+                      onChange={(e) => setPatentesSoloAbiertas(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <Label htmlFor="soloAbiertas" className="cursor-pointer text-sm">
+                      Solo adentro (sin salida)
+                    </Label>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchPatentes(true)}
+                  disabled={refreshingPatentes}
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPatentes ? 'animate-spin' : ''}`} />
+                  {refreshingPatentes ? 'Actualizando...' : 'Actualizar'}
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500 mt-3">
+                Mostrando {patentes.length} de {patentesTotal} patentes ·
+                {patentesSoloAbiertas ? ' solo vehículos adentro' : ' todas (incluye salidas')} ·
+                Auto-actualización cada 15s
+              </p>
+            </CardContent>
+          </Card>
+
+          {loadingPatentes ? (
+            <div className="flex items-center justify-center p-12">
+              <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
+              <span className="ml-2 text-slate-500">Cargando patentes...</span>
+            </div>
+          ) : patentes.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Car className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                <p className="text-slate-500">No hay patentes registradas con los filtros actuales</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[100px]">Patente</TableHead>
+                        <TableHead className="min-w-[120px]">Ubicación</TableHead>
+                        <TableHead className="min-w-[140px]">Entrada</TableHead>
+                        <TableHead className="min-w-[140px]">Salida</TableHead>
+                        <TableHead className="min-w-[120px]">Guardia</TableHead>
+                        <TableHead className="min-w-[140px]">GPS Entrada</TableHead>
+                        <TableHead>Estado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {patentes.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell>
+                            <span className="font-mono font-black text-sm bg-slate-100 px-2 py-1 rounded">
+                              {p.patente}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-semibold text-sm">{p.ubicacion}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {formatDateTimeCL(p.entradaAt)}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {p.salidaAt ? formatDateTimeCL(p.salidaAt) : (
+                              <span className="text-amber-500 font-bold">— Sin salida —</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm">{p.scannedBy || '—'}</TableCell>
+                          <TableCell>
+                            {p.latitude != null && p.longitude != null ? (
+                              <a
+                                href={`https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=18/${p.latitude}/${p.longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline"
+                              >
+                                <MapPinned className="w-3 h-3" />
+                                {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
+                              </a>
+                            ) : (
+                              <span className="text-xs text-amber-500">Sin GPS</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {p.salidaAt ? (
+                              <Badge className="bg-slate-100 text-slate-600">Salió</Badge>
+                            ) : (
+                              <Badge className="bg-emerald-100 text-emerald-700">Adentro</Badge>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
