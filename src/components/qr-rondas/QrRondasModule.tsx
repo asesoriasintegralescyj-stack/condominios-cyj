@@ -112,6 +112,20 @@ interface QrScan {
   } | null
 }
 
+interface PatenteRecord {
+  id: string
+  patente: string
+  ubicacion: string
+  entradaQrCode: string
+  entradaAt: string
+  salidaQrCode: string | null
+  salidaAt: string | null
+  scannedBy: string
+  latitude: number | null
+  longitude: number | null
+  notes: string
+}
+
 // ─── Utilidades ───
 
 /** Formatea una fecha ISO/timestamp en hora de Chile (America/Santiago). */
@@ -336,19 +350,6 @@ export function QrRondasModule() {
   const [guardias, setGuardias] = useState<string[]>([])
 
   // ─── Estado de patentes vehiculares ───
-  interface PatenteRecord {
-    id: string
-    patente: string
-    ubicacion: string
-    entradaQrCode: string
-    entradaAt: string
-    salidaQrCode: string | null
-    salidaAt: string | null
-    scannedBy: string
-    latitude: number | null
-    longitude: number | null
-    notes: string
-  }
   const [patentes, setPatentes] = useState<PatenteRecord[]>([])
   const [patentesTotal, setPatentesTotal] = useState(0)
   const [loadingPatentes, setLoadingPatentes] = useState(true)
