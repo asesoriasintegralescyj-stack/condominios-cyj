@@ -266,6 +266,10 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
     // Guardia — Solo módulo de Rondas
     'rondas.ver', 'rondas.registrar',
   ],
+  conserje: [
+    // Conserje — Solo ver lecturas de QR y exportar PDF
+    'rondas.ver',
+  ],
 };
 
 interface Usuario {
@@ -630,6 +634,10 @@ export function UsuariosModule() {
         return <UserCog className="w-4 h-4" />;
       case 'personal':
         return <Lock className="w-4 h-4" />;
+      case 'guardia':
+        return <Shield className="w-4 h-4" />;
+      case 'conserje':
+        return <Eye className="w-4 h-4" />;
       default:
         return <UserIcon className="w-4 h-4" />;
     }
@@ -643,6 +651,10 @@ export function UsuariosModule() {
         return <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">Supervisor</Badge>;
       case 'personal':
         return <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">Personal</Badge>;
+      case 'guardia':
+        return <Badge className="bg-teal-500/20 text-teal-400 border-teal-500/30">Guardia</Badge>;
+      case 'conserje':
+        return <Badge className="bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Conserje</Badge>;
       default:
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">Usuario</Badge>;
     }
@@ -941,6 +953,12 @@ export function UsuariosModule() {
                         <div className="flex items-center gap-2">
                           <Shield className="w-4 h-4" />
                           Guardia
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="conserje">
+                        <div className="flex items-center gap-2">
+                          <Eye className="w-4 h-4" />
+                          Conserje
                         </div>
                       </SelectItem>
                       <SelectItem value="supervisor">
