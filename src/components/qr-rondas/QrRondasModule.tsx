@@ -1604,15 +1604,29 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
   const [puntosGps, setPuntosGps] = useState<Array<{id: string; name: string; code: string; gpsLat: number | null; gpsLng: number | null}>>([])
   const [editMode, setEditMode] = useState(false)
 
-  // Cargar puntos GPS fijos
-  useEffect(() => {
-    fetch('/api/qr-rondas/puntos-gps', { cache: 'no-store' })
-      .then(r => r.json())
-      .then(data => {
+  // Cargar puntos GPS fijos (tambien recarga al salir del modo edicion)
+  const cargarPuntosGps = useCallback(async () => {
+    try {
+      const res = await fetch('/api/qr-rondas/puntos-gps?_t=' + Date.now(), { cache: 'no-store' })
+      if (res.ok) {
+        const data = await res.json()
         if (Array.isArray(data.puntos)) setPuntosGps(data.puntos)
-      })
-      .catch(() => {})
+      }
+    } catch {}
   }, [])
+
+  useEffect(() => {
+    cargarPuntosGps()
+  }, [cargarPuntosGps])
+
+  // Al salir del modo edicion, recargar puntos GPS guardados
+  const toggleEditMode = useCallback(() => {
+    if (editMode) {
+      // Saliendo del modo edicion → recargar
+      cargarPuntosGps()
+    }
+    setEditMode(!editMode)
+  }, [editMode, cargarPuntosGps])
 
   // Filtrar scans que tienen GPS
   const gpsScans = scans.filter(s => s.latitude != null && s.longitude != null)
@@ -1733,7 +1747,7 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setEditMode(!editMode)}
+              onClick={() => toggleEditMode()}
               className="border-blue-300 text-blue-700 hover:bg-blue-50"
             >
               <MapPinned className="w-3 h-3 mr-1" />
@@ -1753,7 +1767,7 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
                 />
               ) : (
                 <iframe
-                  src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&center=${centerLat},${centerLng}`}
+                  src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&fijos=${encodeURIComponent(JSON.stringify(puntosGps.filter(p => p.gpsLat != null && p.gpsLng != null)))}&center=${centerLat},${centerLng}`}
                   className="w-full"
                   style={{ height: '500px', border: 'none' }}
                   title="Mapa de ruta del guardia"

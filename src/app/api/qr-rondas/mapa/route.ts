@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const markersStr = searchParams.get('markers') || '[]'
   const polylineStr = searchParams.get('polyline') || ''
-  const centerStr = searchParams.get('center') || '-33.3850,-70.5890'
+  const centerStr = searchParams.get('center') || '-33.32761,-70.75842'
+  const fijosStr = searchParams.get('fijos') || '[]'
 
   let markers: any[] = []
   try {
@@ -31,6 +32,13 @@ export async function GET(request: NextRequest) {
     polyline = JSON.parse(`[${polylineStr}]`)
   } catch {
     polyline = []
+  }
+
+  let fijos: any[] = []
+  try {
+    fijos = JSON.parse(fijosStr)
+  } catch {
+    fijos = []
   }
 
   const [centerLat, centerLng] = centerStr.split(',').map(Number)
@@ -61,23 +69,35 @@ export async function GET(request: NextRequest) {
 
     const markers = ${JSON.stringify(markers)};
     const polyline = ${JSON.stringify(polyline)};
+    const fijos = ${JSON.stringify(fijos)};
+
+    // Dibujar puntos fijos guardados (azul, no arrastrables)
+    fijos.forEach((f) => {
+      if (f.lat != null && f.lng != null) {
+        const m = L.marker([f.lat, f.lng]).addTo(map);
+        m.bindPopup('<b>Punto fijo</b><br>' + f.name + '<br>Codigo: ' + f.code);
+        m.bindTooltip(f.name, { permanent: true, direction: 'top', className: 'fijo-tooltip' });
+      }
+    });
 
     // Dibujar linea de ruta
     if (polyline.length > 1) {
       L.polyline(polyline, {
-        color: '#2563eb',
+        color: '#16a34a',
         weight: 4,
         opacity: 0.7,
         dashArray: '10, 5'
       }).addTo(map);
     }
 
-    // Dibujar marcadores numerados
+    // Dibujar marcadores numerados de la ruta (verde)
     markers.forEach((m) => {
-      const marker = L.marker([m.lat, m.lng]).addTo(map);
+      const marker = L.circleMarker([m.lat, m.lng], {
+        radius: 8, color: '#16a34a', fillColor: '#16a34a', fillOpacity: 0.8
+      }).addTo(map);
       marker.bindPopup(
         '<div style="font-family: sans-serif;">' +
-        '<b>Punto #' + m.num + '</b><br>' +
+        '<b>Ruta #' + m.num + '</b><br>' +
         '<b>Ubicacion:</b> ' + m.name + '<br>' +
         '<b>Hora:</b> ' + m.time + '<br>' +
         '<b>Guardia:</b> ' + m.guardia +
@@ -87,14 +107,17 @@ export async function GET(request: NextRequest) {
     });
 
     // Ajustar zoom para ver todos los puntos
-    if (markers.length > 0) {
-      const group = L.featureGroup(markers.map(m => L.marker([m.lat, m.lng])));
-      map.fitBounds(group.getBounds(), { padding: [50, 50] });
+    const allPoints = [
+      ...markers.map(m => [m.lat, m.lng]),
+      ...fijos.filter(f => f.lat != null && f.lng != null).map(f => [f.lat, f.lng])
+    ];
+    if (allPoints.length > 0) {
+      map.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50] });
     }
 
-    // Estilo para los tooltips numerados
+    // Estilos
     const style = document.createElement('style');
-    style.textContent = '.num-tooltip { background: #2563eb; color: white; border: none; border-radius: 50%; font-weight: bold; font-size: 11px; padding: 2px 6px; }';
+    style.textContent = '.num-tooltip { background: #16a34a; color: white; border: none; border-radius: 50%; font-weight: bold; font-size: 11px; padding: 2px 6px; } .fijo-tooltip { background: #2563eb; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 10px; padding: 2px 6px; }';
     document.head.appendChild(style);
   </script>
 </body>
