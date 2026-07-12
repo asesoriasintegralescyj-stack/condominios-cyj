@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * QrRondasModule — Módulo de Rondas QR de Guardias (v2 — con pestaña Patentes)
+ * QrRondasModule — Módulo de Rondas QR de Guardias
  * Sistema de Gestión de Condominios (escritorio) — condominios-cyj
  *
  * Esta vista usa las MISMAS tablas compartidas (MovilQrLocation, MovilQrScan)

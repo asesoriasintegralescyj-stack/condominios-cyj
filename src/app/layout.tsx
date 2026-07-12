@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Condominio Laguna Norte – Sistema de Gestión v2",
+  title: "Condominio Laguna Norte – Sistema de Gestión",
   description: "Sistema integral de administración de condominios. Gestión de propiedades, residentes, órdenes de trabajo, personal y finanzas.",
   keywords: ["Condominio", "Administración", "Gestión", "Laguna Norte", "Lampa"],
   authors: [{ name: "Condominio Laguna Norte" }],

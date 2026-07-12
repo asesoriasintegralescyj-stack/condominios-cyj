@@ -11,9 +11,6 @@ import { Loader2, QrCode, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
 
-// Cache buster inline (no requiere import externo)
-const BUILD_VERSION = '2026-07-12-v2-patentes-tab'
-
 // URL de la app móvil (comparte la misma BD Aiven)
 const APP_MOVIL_URL = 'https://laguna-norte-gestion.vercel.app'
 
@@ -22,22 +19,6 @@ export default function SistemaPage() {
   const { status: condominioStatus } = useAutoCondominio()
   const router = useRouter()
   const { currentModule, setCurrentModule } = useAppStore()
-
-  // ─── Cache buster: forzar recarga si hay versión nueva ───
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('cyj_build_version')
-      if (stored !== BUILD_VERSION) {
-        localStorage.setItem('cyj_build_version', BUILD_VERSION)
-        if ('caches' in window) {
-          caches.keys().then((names) => names.forEach((name) => caches.delete(name)))
-        }
-        const url = window.location.pathname + window.location.search
-        const sep = url.includes('?') ? '&' : '?'
-        window.location.replace(url + sep + '_v=' + BUILD_VERSION)
-      }
-    } catch {}
-  }, [])
 
   // Auto-refresh global cada 5 minutos
   // Refresca la sesión y los datos del usuario

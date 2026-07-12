@@ -1565,7 +1565,7 @@ model MovilPatente {
   id            String    @id @default(cuid())
   patente       String
   ubicacion     String
-  entradaQrCode String?
+  entradaQrCode String
   entradaScanId String?
   entradaAt     DateTime  @default(now())
   salidaQrCode  String?
@@ -1575,7 +1575,6 @@ model MovilPatente {
   profileId     String?
   latitude      Float?
   longitude     Float?
-  foto          String?
   notes         String    @default("")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
