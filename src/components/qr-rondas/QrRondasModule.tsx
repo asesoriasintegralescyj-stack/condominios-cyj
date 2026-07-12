@@ -1601,6 +1601,18 @@ export function QrRondasModule() {
 function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
   const [selectedGuardia, setSelectedGuardia] = useState<string>('all')
   const [selectedDate, setSelectedDate] = useState<string>('')
+  const [puntosGps, setPuntosGps] = useState<Array<{id: string; name: string; code: string; gpsLat: number | null; gpsLng: number | null}>>([])
+  const [editMode, setEditMode] = useState(false)
+
+  // Cargar puntos GPS fijos
+  useEffect(() => {
+    fetch('/api/qr-rondas/puntos-gps', { cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.puntos)) setPuntosGps(data.puntos)
+      })
+      .catch(() => {})
+  }, [])
 
   // Filtrar scans que tienen GPS
   const gpsScans = scans.filter(s => s.latitude != null && s.longitude != null)
@@ -1661,6 +1673,15 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
   // Construir polyline para Leaflet
   const polyline = sortedScans.map(s => `[${s.latitude},${s.longitude}]`).join(',')
 
+  // Puntos GPS para mapa editable
+  const puntosParaEditar = puntosGps.map(p => ({
+    id: p.id,
+    name: p.name,
+    code: p.code,
+    lat: p.gpsLat,
+    lng: p.gpsLng,
+  }))
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1669,7 +1690,7 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
             <div>
               <h3 className="font-bold text-sm">Ruta del Guardia</h3>
               <p className="text-xs text-slate-500">
-                {sortedScans.length} puntos con GPS · {guardias.length} guardia(s)
+                {sortedScans.length} puntos con GPS · {guardias.length} guardia(s) · {puntosGps.length} puntos fijos
               </p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -1707,15 +1728,37 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
         </Card>
       ) : (
         <>
-          {/* Mapa interactivo con Leaflet via iframe */}
+          {/* Boton editar posiciones */}
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditMode(!editMode)}
+              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+            >
+              <MapPinned className="w-3 h-3 mr-1" />
+              {editMode ? 'Ver ruta' : 'Editar posiciones GPS'}
+            </Button>
+          </div>
+
+          {/* Mapa: editable o ruta */}
           <Card>
             <CardContent className="p-0 overflow-hidden">
-              <iframe
-                src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&center=${centerLat},${centerLng}`}
-                className="w-full"
-                style={{ height: '500px', border: 'none' }}
-                title="Mapa de ruta del guardia"
-              />
+              {editMode ? (
+                <iframe
+                  src={`/api/qr-rondas/mapa-editable?puntos=${encodeURIComponent(JSON.stringify(puntosParaEditar))}&ruta=${encodeURIComponent(JSON.stringify(markers))}&center=${centerLat},${centerLng}`}
+                  className="w-full"
+                  style={{ height: '600px', border: 'none' }}
+                  title="Editar puntos GPS"
+                />
+              ) : (
+                <iframe
+                  src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&center=${centerLat},${centerLng}`}
+                  className="w-full"
+                  style={{ height: '500px', border: 'none' }}
+                  title="Mapa de ruta del guardia"
+                />
+              )}
             </CardContent>
           </Card>
 
