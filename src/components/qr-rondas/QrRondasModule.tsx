@@ -123,6 +123,7 @@ interface PatenteRecord {
   scannedBy: string
   latitude: number | null
   longitude: number | null
+  foto: string | null
   notes: string
 }
 
@@ -1409,12 +1410,11 @@ export function QrRondasModule() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="min-w-[100px]">Patente</TableHead>
-                        <TableHead className="min-w-[120px]">Ubicación</TableHead>
+                        <TableHead className="min-w-[80px]">Foto</TableHead>
+                        <TableHead className="min-w-[120px]">Ubicacion</TableHead>
                         <TableHead className="min-w-[140px]">Entrada</TableHead>
                         <TableHead className="min-w-[140px]">Salida</TableHead>
                         <TableHead className="min-w-[120px]">Guardia</TableHead>
-                        <TableHead className="min-w-[140px]">GPS Entrada</TableHead>
                         <TableHead>Estado</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1422,9 +1422,18 @@ export function QrRondasModule() {
                       {patentes.map((p) => (
                         <TableRow key={p.id}>
                           <TableCell>
-                            <span className="font-mono font-black text-sm bg-slate-100 px-2 py-1 rounded">
-                              {p.patente}
-                            </span>
+                            {p.foto ? (
+                              <img
+                                src={p.foto}
+                                alt="Foto"
+                                className="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80"
+                                onClick={() => window.open(p.foto, '_blank')}
+                              />
+                            ) : (
+                              <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
+                                                                <Car className="w-5 h-5 text-slate-300" />
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="font-semibold text-sm">{p.ubicacion}</TableCell>
                           <TableCell className="font-mono text-xs">
@@ -1432,28 +1441,13 @@ export function QrRondasModule() {
                           </TableCell>
                           <TableCell className="font-mono text-xs">
                             {p.salidaAt ? formatDateTimeCL(p.salidaAt) : (
-                              <span className="text-amber-500 font-bold">— Sin salida —</span>
+                              <span className="text-amber-500 font-bold">- Sin salida -</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm">{p.scannedBy || '—'}</TableCell>
-                          <TableCell>
-                            {p.latitude != null && p.longitude != null ? (
-                              <a
-                                href={`https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=18/${p.latitude}/${p.longitude}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline"
-                              >
-                                <MapPinned className="w-3 h-3" />
-                                {p.latitude.toFixed(5)}, {p.longitude.toFixed(5)}
-                              </a>
-                            ) : (
-                              <span className="text-xs text-amber-500">Sin GPS</span>
-                            )}
-                          </TableCell>
+                          <TableCell className="text-sm">{p.scannedBy || '-'}</TableCell>
                           <TableCell>
                             {p.salidaAt ? (
-                              <Badge className="bg-slate-100 text-slate-600">Salió</Badge>
+                              <Badge className="bg-slate-100 text-slate-600">Salio</Badge>
                             ) : (
                               <Badge className="bg-emerald-100 text-emerald-700">Adentro</Badge>
                             )}
