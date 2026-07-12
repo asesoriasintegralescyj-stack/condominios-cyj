@@ -308,7 +308,7 @@ export function QrRondasModule() {
   const { user, isAdmin } = useSession()
   const isConserje = user?.rol === 'conserje'
   // Conserje siempre empieza en lecturas; admin en ubicaciones
-  const [tab, setTab] = useState<'ubicaciones' | 'lecturas' | 'patentes'>(isConserje ? 'lecturas' : 'ubicaciones')
+  const [tab, setTab] = useState<'ubicaciones' | 'lecturas' | 'patentes' | 'ruta'>(isConserje ? 'lecturas' : 'ubicaciones')
   const [locations, setLocations] = useState<QrLocation[]>([])
   const [scans, setScans] = useState<QrScan[]>([])
   const [scansTotal, setScansTotal] = useState(0)
@@ -1052,7 +1052,7 @@ export function QrRondasModule() {
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas' | 'patentes')}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas' | 'patentes' | 'ruta')}>
         <TabsList>
           {!isConserje && (
             <TabsTrigger value="ubicaciones">
@@ -1065,6 +1065,11 @@ export function QrRondasModule() {
           <TabsTrigger value="patentes">
             <Car className="w-4 h-4 mr-1" /> Patentes ({patentesTotal})
           </TabsTrigger>
+          {isAdmin() && (
+            <TabsTrigger value="ruta">
+              <MapPinned className="w-4 h-4 mr-1" /> Ruta Guardia
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ─── Pestaña Ubicaciones (oculta para conserje) ─── */}
@@ -1461,6 +1466,13 @@ export function QrRondasModule() {
             </Card>
           )}
         </TabsContent>
+
+        {/* ─── Pestaña Ruta Guardia (solo admin) ─── */}
+        {isAdmin() && (
+        <TabsContent value="ruta" className="space-y-4">
+          <RutaGuardiaMap scans={scans} />
+        </TabsContent>
+        )}
       </Tabs>
 
       {/* ─── Modal Crear/Editar ─── */}
@@ -1578,6 +1590,172 @@ export function QrRondasModule() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ─── Componente: RutaGuardiaMap ───
+// Muestra un mapa interactivo con los puntos GPS de los escaneos del guardia.
+// Usa OpenStreetMap (gratis, sin API key).
+
+function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
+  const [selectedGuardia, setSelectedGuardia] = useState<string>('all')
+  const [selectedDate, setSelectedDate] = useState<string>('')
+
+  // Filtrar scans que tienen GPS
+  const gpsScans = scans.filter(s => s.latitude != null && s.longitude != null)
+
+  // Filtrar por guardia y fecha
+  const filteredScans = gpsScans.filter(s => {
+    if (selectedGuardia !== 'all' && s.scannedBy !== selectedGuardia) return false
+    if (selectedDate) {
+      const scanDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Santiago',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date(s.createdAt))
+      if (scanDate !== selectedDate) return false
+    }
+    return true
+  })
+
+  // Ordenar por fecha
+  const sortedScans = [...filteredScans].sort((a, b) =>
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+
+  // Lista unica de guardias
+  const guardias = Array.from(new Set(gpsScans.map(s => s.scannedBy).filter(Boolean)))
+
+  // Calcular centro del mapa
+  const centerLat = sortedScans.length > 0
+    ? sortedScans.reduce((sum, s) => sum + (s.latitude || 0), 0) / sortedScans.length
+    : -33.3850
+  const centerLng = sortedScans.length > 0
+    ? sortedScans.reduce((sum, s) => sum + (s.longitude || 0), 0) / sortedScans.length
+    : -70.5890
+
+  // Generar URL de OpenStreetMap con marcadores y lineas
+  // Usamos la API de staticmap de OSM o un iframe con leaflet
+
+  // Construir parametros para el mapa
+  const bbox = sortedScans.length > 0 ? (() => {
+    const lats = sortedScans.map(s => s.latitude!)
+    const lngs = sortedScans.map(s => s.longitude!)
+    const minLat = Math.min(...lats) - 0.001
+    const maxLat = Math.max(...lats) + 0.001
+    const minLng = Math.min(...lngs) - 0.001
+    const maxLng = Math.max(...lngs) + 0.001
+    return `${minLng},${minLat},${maxLng},${maxLat}`
+  })() : `${centerLng - 0.01},${centerLat - 0.01},${centerLng + 0.01},${centerLat + 0.01}`
+
+  // Marcadores para el mapa (formato Leaflet)
+  const markers = sortedScans.map((s, i) => ({
+    lat: s.latitude!,
+    lng: s.longitude!,
+    num: i + 1,
+    name: s.location?.name || 'Punto',
+    time: formatDateTimeCL(s.createdAt),
+    guardia: s.scannedBy,
+  }))
+
+  // Construir polyline para Leaflet
+  const polyline = sortedScans.map(s => `[${s.latitude},${s.longitude}]`).join(',')
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="font-bold text-sm">Ruta del Guardia</h3>
+              <p className="text-xs text-slate-500">
+                {sortedScans.length} puntos con GPS · {guardias.length} guardia(s)
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Select value={selectedGuardia} onValueChange={setSelectedGuardia}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos los guardias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los guardias</SelectItem>
+                  {guardias.map(g => (
+                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-[150px]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {sortedScans.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <MapPinned className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+            <p className="text-slate-500">No hay puntos GPS registrados con los filtros actuales</p>
+            <p className="text-xs text-slate-400 mt-2">
+              Los puntos GPS se registran automaticamente cuando el guardia escanea un QR de ronda.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Mapa interactivo con Leaflet via iframe */}
+          <Card>
+            <CardContent className="p-0 overflow-hidden">
+              <iframe
+                src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&center=${centerLat},${centerLng}`}
+                className="w-full"
+                style={{ height: '500px', border: 'none' }}
+                title="Mapa de ruta del guardia"
+              />
+            </CardContent>
+          </Card>
+
+          {/* Lista de puntos */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]">#</TableHead>
+                      <TableHead>Ubicacion</TableHead>
+                      <TableHead className="min-w-[140px]">Hora</TableHead>
+                      <TableHead>Guardia</TableHead>
+                      <TableHead className="min-w-[160px]">Coordenadas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {markers.map((m, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold">
+                            {m.num}
+                          </span>
+                        </TableCell>
+                        <TableCell className="font-semibold text-sm">{m.name}</TableCell>
+                        <TableCell className="font-mono text-xs">{m.time}</TableCell>
+                        <TableCell className="text-sm">{m.guardia}</TableCell>
+                        <TableCell className="font-mono text-xs text-slate-500">
+                          {m.lat.toFixed(5)}, {m.lng.toFixed(5)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
 }
