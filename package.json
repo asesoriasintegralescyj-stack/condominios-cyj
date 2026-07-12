@@ -5,17 +5,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "prisma generate && next build",
+    "build": "prisma generate --schema=schema.prisma && next build",
     "start": "next start",
     "lint": "eslint .",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset",
-    "db:studio": "prisma studio",
+    "db:push": "prisma db push --schema=schema.prisma",
+    "db:generate": "prisma generate --schema=schema.prisma",
+    "db:migrate": "prisma migrate dev --schema=schema.prisma",
+    "db:reset": "prisma migrate reset --schema=schema.prisma",
+    "db:studio": "prisma studio --schema=schema.prisma",
     "db:seed": "node -e \"fetch('http://localhost:3000/api/seed', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
     "db:seed-catalogos": "node -e \"fetch('http://localhost:3000/api/seed-catalogos', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
-    "vercel-build": "prisma generate && next build"
+    "vercel-build": "prisma generate --schema=schema.prisma && next build"
   },
   "dependencies": {
     "@prisma/client": "6",
@@ -99,5 +99,8 @@
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5"
+  },
+  "prisma": {
+    "schema": "schema.prisma"
   }
 }
