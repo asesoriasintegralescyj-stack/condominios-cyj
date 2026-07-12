@@ -1384,7 +1384,7 @@ export function QrRondasModule() {
               </div>
               <p className="text-xs text-slate-500 mt-3">
                 Mostrando {patentes.length} de {patentesTotal} patentes ·
-                {patentesSoloAbiertas ? ' solo vehículos adentro' : ' todas (incluye salidas')} ·
+                {patentesSoloAbiertas ? ' solo vehiculos adentro' : ' todas, incluye salidas'} -
                 Auto-actualización cada 15s
               </p>
             </CardContent>
