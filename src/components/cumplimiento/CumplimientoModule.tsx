@@ -906,6 +906,9 @@ export function CumplimientoModule() {
                           <Progress value={porcentaje} className="w-20 h-2" />
                         </div>
                       </div>
+                      {categoria.descripcion && (
+                        <p className="text-xs text-slate-500 mt-1 italic">{categoria.descripcion}</p>
+                      )}
                     </CardHeader>
                     <CardContent className="p-0">
                       <p className="md:hidden text-xs text-slate-400 text-center py-1">← Desliza horizontalmente para ver más →</p>

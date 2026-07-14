@@ -9,7 +9,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Reglamento de Copropiedad',
     codigo: 'LEY-001',
-    descripcion: 'Reglamento de copropiedad inscrito en el Conservador de Bienes Raíces',
+    descripcion: 'Documento legal que establece las normas de convivencia, derechos y obligaciones de los copropietarios del condominio. Debe estar inscrito en el Conservador de Bienes Raices.',
     tipo: 'Legal',
     obligatorio: true,
     articuloLey: 'Art. 8 Ley 21.442',
@@ -18,7 +18,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Escritura de Constitución',
     codigo: 'LEY-002',
-    descripcion: 'Escritura pública de constitución del condominio',
+    descripcion: 'Escritura publica mediante la cual se constituyo legalmente el condominio ante notario. Contiene los estatutos y reglas originales del condominio.',
     tipo: 'Legal',
     obligatorio: true,
     articuloLey: 'Art. 7 Ley 21.442',
@@ -27,7 +27,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Inscripción Conservador',
     codigo: 'LEY-003',
-    descripcion: 'Inscripción en el Registro de Hipotecas y Gravámenes del CBRS',
+    descripcion: 'Certificado de inscripcion del condominio en el Registro de Hipotecas y Gravamenes del Conservador de Bienes Raices. Acredita la existencia legal del condominio.',
     tipo: 'Legal',
     obligatorio: true,
     articuloLey: 'Art. 8 Ley 21.442',
@@ -36,7 +36,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Acta de Asamblea Constitutiva',
     codigo: 'LEY-004',
-    descripcion: 'Acta de la primera asamblea de copropietarios',
+    descripcion: 'Acta de la primera asamblea de copropietarios donde se aprobo la constitucion del condominio, se eligio el comite de administracion y se aprobaron los reglamentos.',
     tipo: 'Legal',
     obligatorio: true,
     articuloLey: 'Art. 9 Ley 21.442',
@@ -47,7 +47,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Plan de Emergencia',
     codigo: 'SEG-001',
-    descripcion: 'Plan de emergencia ante siniestros (incendios, terremotos, tsunamis)',
+    descripcion: 'Documento que establece los procedimientos ante siniestros como incendios, sismos, tsunamis y otras emergencias. Incluye responsabilidades, protocolos de actuacion y recursos disponibles.',
     tipo: 'Seguridad',
     obligatorio: true,
     articuloLey: 'Art. 40 Ley 21.442',
@@ -57,7 +57,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Plan de Evacuación',
     codigo: 'SEG-002',
-    descripcion: 'Plan de evacuación con rutas y puntos de encuentro',
+    descripcion: 'Planilla con rutas de evacuacion señalizadas, puntos de encuentro, zonas de seguridad y procedimientos para desalojar el condominio en caso de emergencia.',
     tipo: 'Seguridad',
     obligatorio: true,
     articuloLey: 'Art. 40 Ley 21.442',
@@ -67,7 +67,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Certificado Bomberos',
     codigo: 'SEG-003',
-    descripcion: 'Certificado de aprobación del plan de emergencia por Bomberos',
+    descripcion: 'Certificado emitido por el Cuerpo de Bomberos que acredita que el plan de emergencia y las instalaciones de seguridad cumplen con la normativa vigente.',
     tipo: 'Seguridad',
     obligatorio: true,
     articuloLey: 'Art. 40 Ley 21.442',
@@ -77,7 +77,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Planos del Condominio',
     codigo: 'SEG-004',
-    descripcion: 'Planos actualizados del condominio con áreas comunes y rutas de evacuación',
+    descripcion: 'Planos arquitectonicos actualizados del condominio que muestran areas comunes, rutas de evacuacion, extintores, hidrantes y puntos de reunion.',
     tipo: 'Seguridad',
     obligatorio: true,
     articuloLey: 'Art. 40 Ley 21.442',
@@ -88,15 +88,15 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Reglamento Interno',
     codigo: 'REG-001',
-    descripcion: 'Reglamento interno de convivencia y uso de áreas comunes',
+    descripcion: 'Reglamento interno de convivencia que detalla las normas de uso de areas comunes, horarios, normas de ruido, mascotas, estacionamientos y sanciones por incumplimiento.',
     tipo: 'Reglamentario',
     obligatorio: true,
     orden: 20
   },
   {
-    nombre: 'Normas de Uuro Áreas Comunes',
+    nombre: 'Normas de Uso Áreas Comunes',
     codigo: 'REG-002',
-    descripcion: 'Normas específicas para el uso de áreas comunes',
+    descripcion: 'Normas especificas para el uso de cada area comun: piscina, quincho, gimnasio, sala de eventos, multicancha. Incluye horarios, capacidad maxima y cuidados.',
     tipo: 'Reglamentario',
     obligatorio: false,
     orden: 21
@@ -104,7 +104,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Política de Reservas',
     codigo: 'REG-003',
-    descripcion: 'Política para reserva de espacios comunes',
+    descripcion: 'Procedimiento y normas para reservar espacios comunes como quinchos, salas de eventos y areas de picnic. Incluye tarifas, plazos y cancelaciones.',
     tipo: 'Reglamentario',
     obligatorio: false,
     orden: 22
@@ -114,7 +114,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Registro de Copropietarios',
     codigo: 'INT-001',
-    descripcion: 'Registro actualizado de copropietarios con datos de contacto',
+    descripcion: 'Listado actualizado de todos los copropietarios con sus datos de contacto: nombre, rut, telefono, email, numero de departamento y porcentaje de participacion.',
     tipo: 'Interno',
     obligatorio: true,
     articuloLey: 'Art. 28 Ley 21.442',
@@ -123,7 +123,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Libro de Actas',
     codigo: 'INT-002',
-    descripcion: 'Libro de actas de asambleas y sesiones del comité',
+    descripcion: 'Registro de todas las actas de asambleas ordinarias y extraordinarias, y sesiones del comite de administracion. Debe estar foliado y firmado.',
     tipo: 'Interno',
     obligatorio: true,
     articuloLey: 'Art. 23 Ley 21.442',
@@ -132,7 +132,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Estados Financieros',
     codigo: 'INT-003',
-    descripcion: 'Estados financieros anuales del condominio',
+    descripcion: 'Estados financieros anuales del condominio: balance general, estado de resultados, flujo de efectivo y notas. Deben estar auditados o revisados.',
     tipo: 'Interno',
     obligatorio: true,
     fechaLimiteDias: 365,
@@ -141,7 +141,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Presupuesto Anual',
     codigo: 'INT-004',
-    descripcion: 'Presupuesto anual aprobado por asamblea',
+    descripcion: 'Presupuesto anual de ingresos y gastos del condominio aprobado por la asamblea de copropietarios. Incluye gastos comunes, fondo de reserva y mantenciones.',
     tipo: 'Interno',
     obligatorio: true,
     fechaLimiteDias: 365,
@@ -150,7 +150,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Inventario de Bienes',
     codigo: 'INT-005',
-    descripcion: 'Inventario actualizado de bienes del condominio',
+    descripcion: 'Inventario detallado de todos los bienes del condominio: muebles, herramientas, equipos, maquinarias y elementos de areas comunes con su valor y estado.',
     tipo: 'Interno',
     obligatorio: false,
     fechaLimiteDias: 365,
@@ -159,7 +159,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Contrato de Administración',
     codigo: 'INT-006',
-    descripcion: 'Contrato vigente con la empresa administradora',
+    descripcion: 'Contrato vigente con la empresa administradora del condominio. Especifica obligaciones, honorarios, plazo y facultades del administrador.',
     tipo: 'Interno',
     obligatorio: true,
     orden: 35
@@ -167,7 +167,7 @@ const CATEGORIAS_DEFAULT = [
   {
     nombre: 'Póliza de Seguros',
     codigo: 'INT-007',
-    descripcion: 'Póliza de seguros del condominio',
+    descripcion: 'Poliza de seguros vigente que cubre danos a edificaciones, areas comunes y responsabilidad civil del condominio. Debe estar al dia con las primas pagadas.',
     tipo: 'Interno',
     obligatorio: true,
     fechaLimiteDias: 365,
