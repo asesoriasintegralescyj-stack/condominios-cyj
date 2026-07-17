@@ -36,7 +36,7 @@ import {
   Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
   Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
-  AlertTriangle, CheckCircle
+  AlertTriangle, CheckCircle, FileText
 } from 'lucide-react'
 
 // Interfaces
@@ -1114,13 +1114,14 @@ export function OrdenesTrabajoModule() {
           </DialogHeader>
           
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="grid grid-cols-6 w-full h-9">
+            <TabsList className="grid grid-cols-7 w-full h-9">
               <TabsTrigger value="general" className="text-xs">General</TabsTrigger>
               <TabsTrigger value="materiales" className="text-xs">Materiales</TabsTrigger>
               <TabsTrigger value="herramientas" className="text-xs">Herramientas</TabsTrigger>
               <TabsTrigger value="tareas" className="text-xs">Tareas</TabsTrigger>
               <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
               <TabsTrigger value="fotos" className="text-xs">Fotos</TabsTrigger>
+              <TabsTrigger value="documentos" className="text-xs">Documentos</TabsTrigger>
             </TabsList>
             
             <div className="py-4">
@@ -1904,6 +1905,105 @@ export function OrdenesTrabajoModule() {
                     )}
                   </div>
                 </div>
+              </TabsContent>
+
+              {/* Documentos Tab */}
+              <TabsContent value="documentos" className="space-y-4 mt-0">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-semibold text-sm">Documentos Adjuntos ({(formData as any).documentos?.length || 0})</h3>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        const docs = (formData as any).documentos || [];
+                        Array.from(files).forEach(file => {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            const newDoc = {
+                              nombre: file.name,
+                              tipo: file.type || 'application/octet-stream',
+                              tamaño: file.size,
+                              data: reader.result as string,
+                              fechaSubida: new Date().toISOString(),
+                            };
+                            setFormData((prev: any) => ({
+                              ...prev,
+                              documentos: [...(prev.documentos || []), newDoc],
+                            }));
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        e.target.value = '';
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium cursor-pointer hover:bg-blue-700">
+                      <Plus className="w-3.5 h-3.5" /> Subir documento
+                    </span>
+                  </label>
+                </div>
+
+                {(formData as any).documentos?.length > 0 ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="text-left p-2 text-xs">Nombre</th>
+                          <th className="text-left p-2 text-xs w-32">Tipo</th>
+                          <th className="text-right p-2 text-xs w-24">Tamaño</th>
+                          <th className="text-center p-2 text-xs w-20">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(formData as any).documentos.map((doc: any, i: number) => (
+                          <tr key={i} className="border-t">
+                            <td className="p-2 text-xs font-medium">{doc.nombre}</td>
+                            <td className="p-2 text-xs text-slate-500">{doc.tipo?.split('/')[1]?.toUpperCase() || 'FILE'}</td>
+                            <td className="p-2 text-xs text-right text-slate-500">
+                              {doc.tamaño < 1024 ? `${doc.tamaño} B` :
+                               doc.tamaño < 1048576 ? `${(doc.tamaño/1024).toFixed(1)} KB` :
+                               `${(doc.tamaño/1048576).toFixed(1)} MB`}
+                            </td>
+                            <td className="p-2 text-center">
+                              <div className="flex gap-1 justify-center">
+                                <a
+                                  href={doc.data}
+                                  download={doc.nombre}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  title="Descargar"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  onClick={() => {
+                                    setFormData((prev: any) => ({
+                                      ...prev,
+                                      documentos: (prev.documentos || []).filter((_: any, idx: number) => idx !== i),
+                                    }));
+                                  }}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500 border-2 border-dashed rounded-lg">
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Sin documentos adjuntos</p>
+                    <p className="text-xs text-slate-400 mt-1">PDF, Word, Excel, imagenes, etc.</p>
+                  </div>
+                )}
               </TabsContent>
             </div>
           </Tabs>
