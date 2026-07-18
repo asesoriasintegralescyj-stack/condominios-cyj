@@ -117,6 +117,11 @@ export async function PUT(
     }
     
     // Prepare update data
+    // IMPORTANTE: Las fotos se manejan así:
+    // - Si el frontend envía fotosAntes/fotosDespues NO vacíos → se actualizan
+    // - Si el frontend envía arrays vacíos → NO se tocan (se preservan las existentes)
+    //   (porque el frontend las carga bajo demanda con ?fotos=true)
+    // - Si el frontend envía null explícito → se borran
     const updateData: any = {
       titulo: data.titulo,
       tipo: data.tipo,
@@ -141,8 +146,25 @@ export async function PUT(
       centroCostoId: data.centroCostoId || null,
       esRecurrente: data.esRecurrente || false,
       formaPago: data.formaPago || null,
-      fotosAntes: data.fotosAntes && data.fotosAntes.length > 0 ? JSON.stringify(data.fotosAntes) : null,
-      fotosDespues: data.fotosDespues && data.fotosDespues.length > 0 ? JSON.stringify(data.fotosDespues) : null,
+    }
+
+    // Solo actualizar fotos si el frontend las envía con contenido
+    // (no vacías) o si explícitamente las quiere borrar (null)
+    if (data.fotosAntes !== undefined) {
+      if (Array.isArray(data.fotosAntes) && data.fotosAntes.length > 0) {
+        updateData.fotosAntes = JSON.stringify(data.fotosAntes)
+      } else if (data.fotosAntes === null) {
+        updateData.fotosAntes = null
+      }
+      // Si data.fotosAntes es [] (array vacío), NO se incluye en updateData
+      // → se preservan las fotos existentes
+    }
+    if (data.fotosDespues !== undefined) {
+      if (Array.isArray(data.fotosDespues) && data.fotosDespues.length > 0) {
+        updateData.fotosDespues = JSON.stringify(data.fotosDespues)
+      } else if (data.fotosDespues === null) {
+        updateData.fotosDespues = null
+      }
     }
 
     // ===== Automatic time tracking =====
