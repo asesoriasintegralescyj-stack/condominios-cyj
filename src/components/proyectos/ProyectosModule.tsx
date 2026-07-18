@@ -2184,20 +2184,6 @@ export function ProyectosModule() {
               </CardTitle>
               {/* Filtros del Gantt */}
               <div className="flex items-center gap-2">
-                <Select value={ganttFiltroEtapa} onValueChange={setGanttFiltroEtapa}>
-                  <SelectTrigger className="h-7 w-40 text-xs">
-                    <SelectValue placeholder="Etapa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todas">Todas las etapas</SelectItem>
-                    <SelectItem value="Sin etapa">Sin etapa</SelectItem>
-                    <SelectItem value="Presupuesto">Presupuesto</SelectItem>
-                    <SelectItem value="Coordinación con Proveedor">Coordinación con Proveedor</SelectItem>
-                    <SelectItem value="Estudio de Materiales">Estudio de Materiales</SelectItem>
-                    <SelectItem value="Preparación de Compra">Preparación de Compra</SelectItem>
-                    <SelectItem value="Completado">Completado</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Select value={ganttFiltroEstado} onValueChange={setGanttFiltroEstado}>
                   <SelectTrigger className="h-7 w-36 text-xs">
                     <SelectValue placeholder="Estado" />
@@ -2427,7 +2413,6 @@ export function ProyectosModule() {
                   <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('tipoReparacion')}>Tipo <SortIcon field="tipoReparacion" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '60px' }} onClick={() => toggleSort('prioridad')}>Prior. <SortIcon field="prioridad" /></th>
                   <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '120px' }} onClick={() => toggleSort('estado')}>Estado <SortIcon field="estado" /></th>
-                  <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '140px' }} onClick={() => toggleSort('estadoAprobacion')}>Etapa <SortIcon field="estadoAprobacion" /></th>
                   <th className="text-left p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '100px' }} onClick={() => toggleSort('responsable')}>Responsable <SortIcon field="responsable" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>T.E.</th>
                   <th className="text-right p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ minWidth: '90px' }} onClick={() => toggleSort('monto')}>Monto <SortIcon field="monto" /></th>
@@ -2453,7 +2438,6 @@ export function ProyectosModule() {
                     const sector = proy.sector || proy.ubicacion || '–'
                     const tipo = proy.tipoReparacion || proy.categoria || '–'
                     const prioridad = proy.prioridad || '–'
-                    const etapa = proy.estadoAprobacion || 'Sin etapa'
                     const responsable = proy.responsable || '–'
                     const te = proy.tiempoEstimado || '–'
                     const monto = proy.monto || proy.presProg || 0
@@ -2469,9 +2453,6 @@ export function ProyectosModule() {
                         </td>
                         <td className="text-center p-2">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ${estadoBadgeColors[proy.estado] || 'bg-slate-100 text-slate-600'}`}>{proy.estado}</span>
-                        </td>
-                        <td className="p-2">
-                          <span className={`text-[10px] ${etapaColors[etapa] || 'text-slate-500'}`}>{etapa}</span>
                         </td>
                         <td className="p-2 text-slate-600">{responsable}</td>
                         <td className="text-center p-2 text-slate-500">{te}</td>
@@ -2532,10 +2513,6 @@ export function ProyectosModule() {
                 <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Estado</Label>
                   <Badge className={estadoColors[selectedProy.estado] || 'bg-slate-100'}>{selectedProy.estado}</Badge>
-                </div>
-                <div className="min-w-0">
-                  <Label className="text-xs text-slate-500">Etapa</Label>
-                  <p className={`text-sm ${etapaColors[selectedProy.estadoAprobacion || 'Sin etapa'] || 'text-slate-500'}`}>{selectedProy.estadoAprobacion || 'Sin etapa'}</p>
                 </div>
                 <div className="min-w-0">
                   <Label className="text-xs text-slate-500">Responsable Interno</Label>
@@ -2784,18 +2761,6 @@ export function ProyectosModule() {
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="space-y-2 min-w-0">
-                      <Label>Etapa</Label>
-                      <Select value={formData.estadoAprobacion || 'Sin etapa'} onValueChange={(v) => setFormData({ ...formData, estadoAprobacion: v })}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Seleccionar etapa..." /></SelectTrigger>
-                        <SelectContent>
-                          {ETAPAS_PROYECTO.map((et) => (
-                            <SelectItem key={et} value={et}>{et}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-[10px] text-slate-500">Etapa del flujo de aprobación / compra</p>
                     </div>
                     <div className="space-y-2 min-w-0">
                       <Label>Responsable Interno</Label>

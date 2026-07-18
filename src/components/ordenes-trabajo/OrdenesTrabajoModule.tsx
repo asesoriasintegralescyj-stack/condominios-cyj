@@ -341,22 +341,45 @@ export function OrdenesTrabajoModule() {
   const openDialog = async (otParam?: OrdenTrabajo) => {
     if (otParam) {
       // Cargar el detalle completo de la OT (con materiales, tareas, etc.)
-      // Por defecto el endpoint NO incluye fotos (pueden ser >1MB c/u).
-      // Las fotos se cargan por separado con ?fotos=true si hay.
+      // Estrategia:
+      // 1. Cargar primero el detalle SIN fotos (rápido, <50KB)
+      // 2. Si hay fotos (fotosAntesCount > 0 o fotosDespuesCount > 0), cargarlas automáticamente
+      //    con ?fotos=true (puede tardar varios segundos si son grandes)
+      // Las fotos quedan cargadas en el state para que se vean siempre que abras la OT
       let ot: OrdenTrabajo = otParam
       let fotosAntesCount = 0
       let fotosDespuesCount = 0
+      let fotosAntesData: string[] = []
+      let fotosDespuesData: string[] = []
+      
       try {
+        // 1. Cargar detalle sin fotos
         const res = await fetch(`/api/ordenes-trabajo/${otParam.id}`)
         if (res.ok) {
           ot = await res.json()
-          // El endpoint ligero devuelve conteo en lugar de fotos
           fotosAntesCount = (ot as any).fotosAntesCount || 0
           fotosDespuesCount = (ot as any).fotosDespuesCount || 0
+        }
+        
+        // 2. Si hay fotos, cargarlas automáticamente
+        if (fotosAntesCount > 0 || fotosDespuesCount > 0) {
+          try {
+            const resFotos = await fetch(`/api/ordenes-trabajo/${otParam.id}?fotos=true`)
+            if (resFotos.ok) {
+              const otConFotos = await resFotos.json()
+              fotosAntesData = otConFotos.fotosAntes || []
+              fotosDespuesData = otConFotos.fotosDespues || []
+            }
+          } catch (e) {
+            console.error('Error cargando fotos:', e)
+            // Si falla la carga de fotos, dejamos los arrays vacíos
+            // pero el conteo sigue disponible
+          }
         }
       } catch (e) {
         console.error('Error cargando detalle OT:', e)
       }
+      
       setEditingOT(ot)
       setFormData({
         titulo: ot.titulo,
@@ -385,10 +408,10 @@ export function OrdenesTrabajoModule() {
       setHerramientas(ot.herramientas || [])
       setTareas(ot.tareas || [])
       setPersonalOT(ot.personalOT || [])
-      // Inicializar arrays vacíos; las fotos se cargan al hacer click en "Ver fotos"
-      setFotosAntes([])
-      setFotosDespues([])
-      // Guardar conteos para mostrar "Cargar X fotos" si las hay
+      // Cargar fotos automáticamente - quedan a la vista siempre que abras la OT
+      setFotosAntes(fotosAntesData)
+      setFotosDespues(fotosDespuesData)
+      // Guardar conteos por si se necesitan
       ;(ot as any).fotosAntesCount = fotosAntesCount
       ;(ot as any).fotosDespuesCount = fotosDespuesCount
     } else {
