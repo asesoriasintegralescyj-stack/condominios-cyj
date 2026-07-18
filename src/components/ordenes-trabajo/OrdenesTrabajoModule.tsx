@@ -1078,7 +1078,13 @@ export function OrdenesTrabajoModule() {
                       <td className="p-3">
                         <Badge className={estadoColors[ot.estado] || 'bg-slate-100'}>{ot.estado}</Badge>
                       </td>
-                      <td className="p-3 text-xs font-mono">{ot.centroCosto?.codigo || '–'}</td>
+                      <td className="p-3 text-xs font-mono">
+                        {ot.centroCosto ? (
+                          <span title={ot.centroCosto.nombre}>
+                            {ot.centroCosto.codigo}
+                          </span>
+                        ) : '–'}
+                      </td>
                       <td className="p-3 text-xs">
                         <div className="flex flex-col">
                           <span>Est: {formatMinutes(ot.tiempoEst)}</span>
@@ -2118,7 +2124,7 @@ export function OrdenesTrabajoModule() {
                   <div className="min-w-0"><span className="text-slate-500 text-xs">Prioridad:</span> <Badge className={prioridadColors[selectedOT.prioridad]}>{selectedOT.prioridad}</Badge></div>
                   <div className="min-w-0"><span className="text-slate-500 text-xs">Progreso:</span> {selectedOT.progreso}%</div>
                   <div className="min-w-0 truncate"><span className="text-slate-500 text-xs">Ubicación:</span> <span className="truncate">{selectedOT.ubicacion || selectedOT.propiedad?.nombre || '–'}</span></div>
-                  <div className="min-w-0"><span className="text-slate-500 text-xs">Centro Costo:</span> {selectedOT.centroCosto?.codigo || '–'}</div>
+                  <div className="min-w-0" title={selectedOT.centroCosto?.nombre}><span className="text-slate-500 text-xs">Centro Costo:</span> {selectedOT.centroCosto ? `${selectedOT.centroCosto.codigo} · ${selectedOT.centroCosto.nombre}` : '–'}</div>
                   <div className="min-w-0 truncate"><span className="text-slate-500 text-xs">Forma de Pago:</span> <span className="truncate">{selectedOT.formaPago || '–'}</span></div>
                 </div>
                 

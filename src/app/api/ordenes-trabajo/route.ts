@@ -102,10 +102,10 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' }
     })
 
-    // Transform centroCosto to include codigo in the response for display
+    // Mantener centroCosto como objeto (codigo + nombre + id) para que el frontend
+    // pueda mostrar el código en la columna y el nombre en el detalle
     const ordenesWithCC = ordenes.map(ot => ({
       ...ot,
-      centroCosto: ot.centroCosto ? `${ot.centroCosto.codigo} - ${ot.centroCosto.nombre}` : ot.centroCosto,
       fotosAntes: [],
       fotosDespues: [],
     }))
