@@ -392,9 +392,16 @@ export async function PUT(
     }
 
     return NextResponse.json(orden)
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating orden:', error)
-    return NextResponse.json({ error: 'Error updating orden' }, { status: 500 })
+    // Devolver el error real para debugging
+    const errMsg = error?.message || 'Error al actualizar OT'
+    const errCode = error?.code || ''
+    const errDetail = error?.meta ? JSON.stringify(error.meta) : ''
+    return NextResponse.json(
+      { error: errMsg, code: errCode, detail: errDetail },
+      { status: 500 }
+    )
   }
 }
 
