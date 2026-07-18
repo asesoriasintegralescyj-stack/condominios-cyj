@@ -75,7 +75,28 @@ export async function GET() {
         _count: true,
       })),
       withRetry(() => db.ordenTrabajo.findMany({
-        include: {
+        // NO incluir fotosAntes/fotosDespues (pueden ser >1MB cada una)
+        // Las fotos se cargan individualmente al abrir el detalle de la OT
+        select: {
+          id: true,
+          otNum: true,
+          titulo: true,
+          tipo: true,
+          prioridad: true,
+          estado: true,
+          ubicacion: true,
+          fechaInicio: true,
+          fechaLimite: true,
+          fechaInicioReal: true,
+          fechaFinReal: true,
+          costoEstimado: true,
+          costoReal: true,
+          progreso: true,
+          descripcion: true,
+          estadoAprobacion: true,
+          createdAt: true,
+          updatedAt: true,
+          // Excluir explícitamente: fotosAntes, fotosDespues, notas
           propiedad: { select: { id: true, nombre: true } },
           asignado: { select: { id: true, nombre: true, cargo: true } },
           centroCosto: { select: { id: true, codigo: true, nombre: true } },
