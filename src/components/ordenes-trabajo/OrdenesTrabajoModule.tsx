@@ -36,7 +36,7 @@ import {
   Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
   Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
-  AlertTriangle, CheckCircle, FileText
+  AlertTriangle, CheckCircle, FileText, Eye
 } from 'lucide-react'
 
 // Interfaces
@@ -341,12 +341,18 @@ export function OrdenesTrabajoModule() {
   const openDialog = async (otParam?: OrdenTrabajo) => {
     if (otParam) {
       // Cargar el detalle completo de la OT (con materiales, tareas, etc.)
-      // Esto reduce la transferencia del listado (no incluye relaciones pesadas)
+      // Por defecto el endpoint NO incluye fotos (pueden ser >1MB c/u).
+      // Las fotos se cargan por separado con ?fotos=true si hay.
       let ot: OrdenTrabajo = otParam
+      let fotosAntesCount = 0
+      let fotosDespuesCount = 0
       try {
         const res = await fetch(`/api/ordenes-trabajo/${otParam.id}`)
         if (res.ok) {
           ot = await res.json()
+          // El endpoint ligero devuelve conteo en lugar de fotos
+          fotosAntesCount = (ot as any).fotosAntesCount || 0
+          fotosDespuesCount = (ot as any).fotosDespuesCount || 0
         }
       } catch (e) {
         console.error('Error cargando detalle OT:', e)
@@ -379,8 +385,12 @@ export function OrdenesTrabajoModule() {
       setHerramientas(ot.herramientas || [])
       setTareas(ot.tareas || [])
       setPersonalOT(ot.personalOT || [])
-      setFotosAntes(ot.fotosAntes || [])
-      setFotosDespues(ot.fotosDespues || [])
+      // Inicializar arrays vacíos; las fotos se cargan al hacer click en "Ver fotos"
+      setFotosAntes([])
+      setFotosDespues([])
+      // Guardar conteos para mostrar "Cargar X fotos" si las hay
+      ;(ot as any).fotosAntesCount = fotosAntesCount
+      ;(ot as any).fotosDespuesCount = fotosDespuesCount
     } else {
       setEditingOT(null)
       setFormData({
@@ -1797,6 +1807,24 @@ export function OrdenesTrabajoModule() {
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-sm flex items-center gap-2">
                       <Camera className="w-4 h-4 text-amber-500" /> Fotos ANTES ({fotosAntes.length})
+                      {(editingOT as any)?.fotosAntesCount > 0 && fotosAntes.length === 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}?fotos=true`)
+                              if (res.ok) {
+                                const ot = await res.json()
+                                setFotosAntes(ot.fotosAntes || [])
+                              }
+                            } catch (e) { console.error('Error cargando fotos:', e) }
+                          }}
+                        >
+                          <Eye className="w-3 h-3 mr-1" /> Cargar {(editingOT as any).fotosAntesCount} foto(s)
+                        </Button>
+                      )}
                     </h3>
                     <label className="cursor-pointer">
                       <input
@@ -1855,6 +1883,24 @@ export function OrdenesTrabajoModule() {
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-sm flex items-center gap-2">
                       <Camera className="w-4 h-4 text-green-500" /> Fotos DESPUÉS ({fotosDespues.length})
+                      {(editingOT as any)?.fotosDespuesCount > 0 && fotosDespues.length === 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-xs"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}?fotos=true`)
+                              if (res.ok) {
+                                const ot = await res.json()
+                                setFotosDespues(ot.fotosDespues || [])
+                              }
+                            } catch (e) { console.error('Error cargando fotos:', e) }
+                          }}
+                        >
+                          <Eye className="w-3 h-3 mr-1" /> Cargar {(editingOT as any).fotosDespuesCount} foto(s)
+                        </Button>
+                      )}
                     </h3>
                     <label className="cursor-pointer">
                       <input
