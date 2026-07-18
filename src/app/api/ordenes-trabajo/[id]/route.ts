@@ -4,6 +4,10 @@ import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
 // GET - Get orden de trabajo by ID
+// Query params:
+//   ?fotos=true  → incluye fotosAntes/fotosDespues (puede ser MUY grande, ~1MB+)
+//   sin ?fotos   → devuelve solo conteo de fotos (fotosAntesCount, fotosDespuesCount)
+// Esto evita colapsar el navegador al abrir OTs con muchas fotos
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,6 +19,9 @@ export async function GET(
   }
   try {
     const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const incluirFotos = searchParams.get('fotos') === 'true'
+
     const orden = await db.ordenTrabajo.findUnique({
       where: { id },
       include: {
@@ -29,19 +36,50 @@ export async function GET(
         documentos: true,
       }
     })
-    
+
     if (!orden) {
       return NextResponse.json({ error: 'Orden not found' }, { status: 404 })
     }
-    
-    // Parse photos from JSON strings to arrays
-    const ordenWithPhotos = {
-      ...orden,
-      fotosAntes: orden.fotosAntes ? JSON.parse(orden.fotosAntes) : [],
-      fotosDespues: orden.fotosDespues ? JSON.parse(orden.fotosDespues) : [],
+
+    // Helper para parsear fotos de forma segura (maneja JSON malformado)
+    const safeParseFotos = (str: string | null): string[] => {
+      if (!str) return []
+      try {
+        const parsed = JSON.parse(str)
+        if (Array.isArray(parsed)) return parsed
+        if (parsed && typeof parsed === 'object') return Object.values(parsed) as string[]
+        return []
+      } catch {
+        // Si JSON.parse falla, intentar extraer URLs data:image/... con regex
+        const matches = str.match(/"?(data:image\/[^"]+)"?/g)
+        if (matches) return matches.map(m => m.replace(/^"|"$/g, ''))
+        return []
+      }
     }
-    
-    return NextResponse.json(ordenWithPhotos)
+
+    if (incluirFotos) {
+      // Devolver fotos completas (para vista de detalle con fotos)
+      const ordenWithPhotos = {
+        ...orden,
+        fotosAntes: safeParseFotos(orden.fotosAntes),
+        fotosDespues: safeParseFotos(orden.fotosDespues),
+      }
+      return NextResponse.json(ordenWithPhotos)
+    } else {
+      // NO devolver fotos — solo conteo (evita payloads de varios MB)
+      const fotosAntes = safeParseFotos(orden.fotosAntes)
+      const fotosDespues = safeParseFotos(orden.fotosDespues)
+      const { fotosAntes: _fa, fotosDespues: _fd, ...ordenSinFotos } = orden
+      const ordenLight = {
+        ...ordenSinFotos,
+        fotosAntesCount: fotosAntes.length,
+        fotosDespuesCount: fotosDespues.length,
+        // Mantener arrays vacíos para compatibilidad con el frontend
+        fotosAntes: [] as string[],
+        fotosDespues: [] as string[],
+      }
+      return NextResponse.json(ordenLight)
+    }
   } catch (error) {
     console.error('Error fetching orden:', error)
     return NextResponse.json({ error: 'Error fetching orden' }, { status: 500 })
