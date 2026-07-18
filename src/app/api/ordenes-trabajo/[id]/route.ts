@@ -217,6 +217,8 @@ export async function PUT(
     }
     
     // Update main OT and all related records in a single transaction
+    // Aumentar timeout a 30s porque la transacción incluye update + deleteMany + createMany
+    // para materiales, herramientas, tareas y personalOT. El default de 5s es insuficiente.
     const orden = await db.$transaction(async (tx) => {
       const updated = await tx.ordenTrabajo.update({
         where: { id },
@@ -306,6 +308,9 @@ export async function PUT(
         }
       })
       return updatedWithRelations
+    }, {
+      timeout: 30000,  // 30 segundos (default es 5s)
+      maxWait: 35000,  // esperar hasta 35s para conseguir una conexión
     })
 
     // ===== Generar Solicitud de Compra automática al aprobar la OT =====
