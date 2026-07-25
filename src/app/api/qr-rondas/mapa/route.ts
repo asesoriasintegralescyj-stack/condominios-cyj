@@ -3,42 +3,38 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/qr-rondas/mapa
+ * POST /api/qr-rondas/mapa
  *
  * Sirve una pagina HTML con Leaflet (OpenStreetMap) que muestra
  * los marcadores y la ruta del guardia.
  *
- * Query params:
- *   - markers: JSON array de {lat, lng, num, name, time, guardia}
+ * Body (JSON):
+ *   - markers: array de {lat, lng, num, name, time, guardia}
  *   - polyline: string con coordenadas para la linea
  *   - center: "lat,lng" del centro del mapa
+ *   - fijos: array de {id, name, code, gpsLat, gpsLng}
+ *
+ * Se usa POST en lugar de GET para evitar URI_TOO_LONG cuando
+ * hay muchos puntos GPS (113+ puntos generan URLs >15KB).
  */
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const markersStr = searchParams.get('markers') || '[]'
-  const polylineStr = searchParams.get('polyline') || ''
-  const centerStr = searchParams.get('center') || '-33.32761,-70.75842'
-  const fijosStr = searchParams.get('fijos') || '[]'
-
+export async function POST(request: NextRequest) {
   let markers: any[] = []
-  try {
-    markers = JSON.parse(markersStr)
-  } catch {
-    markers = []
-  }
-
   let polyline: number[][] = []
-  try {
-    polyline = JSON.parse(`[${polylineStr}]`)
-  } catch {
-    polyline = []
-  }
-
   let fijos: any[] = []
+  let centerStr = '-33.32761,-70.75842'
+
   try {
-    fijos = JSON.parse(fijosStr)
+    const body = await request.json()
+    markers = Array.isArray(body.markers) ? body.markers : []
+    if (typeof body.polyline === 'string' && body.polyline) {
+      try { polyline = JSON.parse(`[${body.polyline}]`) } catch { polyline = [] }
+    } else if (Array.isArray(body.polyline)) {
+      polyline = body.polyline
+    }
+    fijos = Array.isArray(body.fijos) ? body.fijos : []
+    if (body.center) centerStr = body.center
   } catch {
-    fijos = []
+    // Si falla el parseo del body, usar valores vacíos
   }
 
   const [centerLat, centerLng] = centerStr.split(',').map(Number)

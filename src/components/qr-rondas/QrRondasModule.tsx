@@ -1603,6 +1603,8 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [puntosGps, setPuntosGps] = useState<Array<{id: string; name: string; code: string; gpsLat: number | null; gpsLng: number | null}>>([])
   const [editMode, setEditMode] = useState(false)
+  const [mapaHtml, setMapaHtml] = useState<string>('')
+  const [mapaLoading, setMapaLoading] = useState(false)
 
   // Cargar puntos GPS fijos (tambien recarga al salir del modo edicion)
   const cargarPuntosGps = useCallback(async () => {
@@ -1696,6 +1698,61 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
     lng: p.gpsLng,
   }))
 
+  // Cargar HTML del mapa via POST (evita URI_TOO_LONG con muchos puntos GPS)
+  useEffect(() => {
+    if (sortedScans.length === 0) {
+      setMapaHtml('')
+      return
+    }
+
+    let cancelled = false
+    setMapaLoading(true)
+
+    const loadMapa = async () => {
+      try {
+        if (editMode) {
+          // Mapa editable: POST con puntos y ruta
+          const res = await fetch('/api/qr-rondas/mapa-editable', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              puntos: puntosParaEditar,
+              ruta: markers,
+              center: `${centerLat},${centerLng}`
+            })
+          })
+          if (res.ok && !cancelled) {
+            const html = await res.text()
+            setMapaHtml(html)
+          }
+        } else {
+          // Mapa de ruta: POST con markers, polyline y fijos
+          const res = await fetch('/api/qr-rondas/mapa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              markers,
+              polyline,
+              fijos: puntosGps.filter(p => p.gpsLat != null && p.gpsLng != null),
+              center: `${centerLat},${centerLng}`
+            })
+          })
+          if (res.ok && !cancelled) {
+            const html = await res.text()
+            setMapaHtml(html)
+          }
+        }
+      } catch (err) {
+        console.error('Error cargando mapa:', err)
+      } finally {
+        if (!cancelled) setMapaLoading(false)
+      }
+    }
+
+    loadMapa()
+    return () => { cancelled = true }
+  }, [sortedScans.length, editMode, centerLat, centerLng])
+
   return (
     <div className="space-y-4">
       <Card>
@@ -1755,23 +1812,27 @@ function RutaGuardiaMap({ scans }: { scans: QrScan[] }) {
             </Button>
           </div>
 
-          {/* Mapa: editable o ruta */}
+          {/* Mapa: iframe con srcdoc via POST (evita URI_TOO_LONG) */}
           <Card>
             <CardContent className="p-0 overflow-hidden">
-              {editMode ? (
+              {mapaLoading ? (
+                <div className="flex items-center justify-center" style={{ height: editMode ? '600px' : '500px' }}>
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-xs text-slate-400">Cargando mapa...</p>
+                  </div>
+                </div>
+              ) : mapaHtml ? (
                 <iframe
-                  src={`/api/qr-rondas/mapa-editable?puntos=${encodeURIComponent(JSON.stringify(puntosParaEditar))}&ruta=${encodeURIComponent(JSON.stringify(markers))}&center=${centerLat},${centerLng}`}
+                  srcDoc={mapaHtml}
                   className="w-full"
-                  style={{ height: '600px', border: 'none' }}
-                  title="Editar puntos GPS"
+                  style={{ height: editMode ? '600px' : '500px', border: 'none' }}
+                  title={editMode ? "Editar puntos GPS" : "Mapa de ruta del guardia"}
                 />
               ) : (
-                <iframe
-                  src={`/api/qr-rondas/mapa?markers=${encodeURIComponent(JSON.stringify(markers))}&polyline=${encodeURIComponent(polyline)}&fijos=${encodeURIComponent(JSON.stringify(puntosGps.filter(p => p.gpsLat != null && p.gpsLng != null)))}&center=${centerLat},${centerLng}`}
-                  className="w-full"
-                  style={{ height: '500px', border: 'none' }}
-                  title="Mapa de ruta del guardia"
-                />
+                <div className="flex items-center justify-center" style={{ height: editMode ? '600px' : '500px' }}>
+                  <p className="text-sm text-slate-400">Error al cargar el mapa</p>
+                </div>
               )}
             </CardContent>
           </Card>

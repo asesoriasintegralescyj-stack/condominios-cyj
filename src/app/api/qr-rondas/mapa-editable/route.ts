@@ -3,23 +3,32 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/qr-rondas/mapa-editable
+ * POST /api/qr-rondas/mapa-editable
  *
  * Mapa con marcadores arrastrables. El admin puede:
  * 1. Arrastrar cada marcador a la posicion exacta
  * 2. Click "Guardar posiciones" para persistir en BD
+ *
+ * Se usa POST para evitar URI_TOO_LONG con muchos puntos.
+ *
+ * Body (JSON):
+ *   - puntos: array de {id, name, code, lat, lng}
+ *   - ruta: array de {lat, lng, num, name, time, guardia}
+ *   - center: "lat,lng" del centro del mapa
  */
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const puntosStr = searchParams.get('puntos') || '[]'
-  const rutaStr = searchParams.get('ruta') || '[]'
-  const centerStr = searchParams.get('center') || '-33.32761,-70.75842'
-
+export async function POST(request: NextRequest) {
   let puntos: any[] = []
-  try { puntos = JSON.parse(puntosStr) } catch {}
-
   let ruta: any[] = []
-  try { ruta = JSON.parse(rutaStr) } catch {}
+  let centerStr = '-33.32761,-70.75842'
+
+  try {
+    const body = await request.json()
+    puntos = Array.isArray(body.puntos) ? body.puntos : []
+    ruta = Array.isArray(body.ruta) ? body.ruta : []
+    if (body.center) centerStr = body.center
+  } catch {
+    // Si falla el parseo, usar vacíos
+  }
 
   const [centerLat, centerLng] = centerStr.split(',').map(Number)
 
