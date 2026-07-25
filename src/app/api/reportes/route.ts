@@ -112,6 +112,46 @@ export async function GET(request: NextRequest) {
           db.logAuditoria.findMany({ orderBy: { createdAt: 'desc' }, take }),
         )
 
+      case 'patentes':
+        return await queryReport(() =>
+          db.movilPatente.findMany({ orderBy: { entradaAt: 'desc' }, take }),
+        )
+
+      case 'aprobacionesot':
+        return await queryReport(() =>
+          db.historialAprobacionOT.findMany({ orderBy: { createdAt: 'desc' }, take }),
+        )
+
+      case 'pmi':
+        return await queryReport(() =>
+          db.ronda.findMany({ orderBy: { createdAt: 'desc' }, take }),
+        )
+
+      case 'cumplimiento':
+        return await queryReport(() =>
+          db.documentoCumplimiento.findMany({ orderBy: { createdAt: 'desc' }, take }),
+        )
+
+      case 'inventario':
+        return await queryReport(() =>
+          db.movimientoInventario.findMany({ orderBy: { createdAt: 'desc' }, take }),
+        )
+
+      case 'materiales':
+        return await queryReport(() =>
+          db.catMaterial.findMany({ orderBy: { nombre: 'asc' }, take }),
+        )
+
+      case 'tareas':
+        return await queryReport(() =>
+          db.catTarea.findMany({ orderBy: { nombre: 'asc' }, take }),
+        )
+
+      case 'herramientas':
+        return await queryReport(() =>
+          db.catHerramienta.findMany({ orderBy: { nombre: 'asc' }, take }),
+        )
+
       default:
         return NextResponse.json({ error: 'Tipo de reporte no válido' }, { status: 400 })
     }

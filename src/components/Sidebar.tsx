@@ -341,19 +341,6 @@ export function Sidebar() {
               </div>
               <DropdownMenuSeparator className="bg-white/10" />
 
-              {isAdmin() && (
-                <>
-                  <DropdownMenuItem
-                    className="text-white/70 focus:text-white focus:bg-white/10 cursor-pointer"
-                    onClick={() => handleNavigate('usuarios')}
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    Gestionar Usuarios
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-white/10" />
-                </>
-              )}
-
               <DropdownMenuItem
                 className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
                 onClick={handleLogout}

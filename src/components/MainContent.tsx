@@ -40,7 +40,7 @@ const moduleTitles: Record<string, string> = {
   materiales: 'Materiales',
   tareas: 'Tareas',
   reportes: 'Reportes',
-  usuarios: 'Gestión de Usuarios',
+  usuarios: 'Usuarios',
   inventario: 'Inventario',
   herramientas: 'Herramientas',
   aprobacionesot: 'Aprobaciones de Órdenes de Trabajo',

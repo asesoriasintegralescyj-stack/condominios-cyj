@@ -34,6 +34,18 @@ export async function GET(request: NextRequest) {
     // Construir filtros para LogAuditoria
     const where: Prisma.LogAuditoriaWhereInput = {}
 
+    // Supervisor NO puede ver logs del admin — solo el admin ve todo
+    if (session.user.rol === 'supervisor') {
+      where.userId = { not: undefined as any } // Excluir logs sin usuario (sistema)
+      // Buscar IDs de usuarios con rol admin
+      const admins = await withRetry(() => db.user.findMany({
+        where: { rol: 'admin' },
+        select: { id: true },
+      }))
+      const adminIds = admins.map(a => a.id)
+      where.userId = { notIn: adminIds }
+    }
+
     if (tipoAccion) {
       where.accion = tipoAccion
     }

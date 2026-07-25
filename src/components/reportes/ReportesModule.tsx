@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   Home,
@@ -14,7 +15,15 @@ import {
   QrCode,
   ShoppingCart,
   Calendar,
-  ClipboardCheck
+  ClipboardCheck,
+  Database,
+  FileCheck,
+  RefreshCw,
+  CheckCircle,
+  Settings,
+  BookOpen,
+  BarChart3,
+  Car
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -29,25 +38,46 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 const reportTypes = [
-  { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades', endpoint: 'propiedades' },
-  { icon: User, title: 'Personal', desc: 'Nómina completa', endpoint: 'personal' },
+  { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades (usado por OT)', endpoint: 'propiedades' },
+  { icon: User, title: 'Personal', desc: 'Nómina completa del personal', endpoint: 'personal' },
   { icon: Package, title: 'Activos', desc: 'Inventario con valorización', endpoint: 'activos' },
-  { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT', endpoint: 'ot' },
+  { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT registradas', endpoint: 'ot' },
+  { icon: CheckCircle, title: 'Aprobaciones OT', desc: 'OT pendientes de aprobación', endpoint: 'aprobacionesot' },
   { icon: Building2, title: 'Proveedores', desc: 'Directorio de proveedores', endpoint: 'proveedores' },
   { icon: PiggyBank, title: 'Centro de Costos', desc: 'Ejecución presupuestaria', endpoint: 'centrocostos' },
   { icon: DraftingCompass, title: 'Proyectos', desc: 'Estado de proyectos activos', endpoint: 'proyectos' },
   { icon: Search, title: 'Inspecciones', desc: 'Resultados de inspecciones', endpoint: 'inspecciones' },
   { icon: QrCode, title: 'Rondas QR', desc: 'Registros de escaneos de guardias', endpoint: 'rondas' },
+  { icon: Car, title: 'Patentes Vehiculares', desc: 'Registro de entrada/salida vehicular', endpoint: 'patentes' },
   { icon: ShoppingCart, title: 'Solicitudes de Compra', desc: 'Estado de solicitudes', endpoint: 'solicitudescompra' },
   { icon: Calendar, title: 'Asistencia', desc: 'Control de asistencia del personal', endpoint: 'asistencia' },
-  { icon: ClipboardCheck, title: 'Auditoría', desc: 'Registro de movimientos del sistema', endpoint: 'auditoria' },
+  { icon: ClipboardCheck, title: 'PMI', desc: 'Plan de Mantenimiento Integral', endpoint: 'pmi' },
+  { icon: FileCheck, title: 'Cumplimiento', desc: 'Cumplimiento legal y normativo', endpoint: 'cumplimiento' },
+  { icon: Package, title: 'Inventario', desc: 'Movimientos de inventario', endpoint: 'inventario' },
+  { icon: Wrench, title: 'Materiales', desc: 'Catálogo de materiales', endpoint: 'materiales' },
+  { icon: Wrench, title: 'Tareas', desc: 'Catálogo de tareas', endpoint: 'tareas' },
+  { icon: Wrench, title: 'Herramientas', desc: 'Catálogo de herramientas', endpoint: 'herramientas' },
+  { icon: BarChart3, title: 'Auditoría', desc: 'Registro de movimientos del sistema', endpoint: 'auditoria' },
 ]
 
 export function ReportesModule() {
+  const [loading, setLoading] = useState<string | null>(null)
+
   const handleExport = async (endpoint: string) => {
+    setLoading(endpoint)
     try {
       const res = await fetch(`/api/reportes?tipo=${endpoint}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || `Error al generar reporte de ${endpoint}`)
+        return
+      }
       const data = await res.json()
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.info(`No hay datos disponibles para el reporte de ${endpoint}`)
+        return
+      }
       
       // Generate HTML report
       const html = generateReportHTML(endpoint, data)
@@ -55,29 +85,41 @@ export function ReportesModule() {
       // Open in new window for printing
       const w = window.open('', '_blank', 'width=960,height=720')
       if (!w) {
-        toast.error('Habilita ventanas emergentes')
+        toast.error('Habilita ventanas emergentes para ver el reporte')
         return
       }
       w.document.open()
       w.document.write(html)
       w.document.close()
       w.onload = () => setTimeout(() => w.print(), 400)
+      toast.success(`Reporte de ${endpoint} generado con ${data.length} registros`)
     } catch (error) {
       console.error('Error generating report:', error)
+      toast.error('Error de conexión al generar el reporte')
+    } finally {
+      setLoading(null)
     }
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <FileCheck className="w-4 h-4" />
+        <span>{reportTypes.length} reportes disponibles para todos los módulos del sistema</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {reportTypes.map((report) => (
         <Card 
           key={report.endpoint}
-          className="cursor-pointer transition-all hover:shadow-lg hover:border-amber-300"
+          className={`cursor-pointer transition-all hover:shadow-lg hover:border-amber-300 ${loading === report.endpoint ? 'opacity-70 pointer-events-none' : ''}`}
           onClick={() => handleExport(report.endpoint)}
         >
           <CardContent className="p-4 flex items-start gap-4">
             <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
-              <report.icon className="w-6 h-6 text-[#0f2044]" />
+              {loading === report.endpoint 
+                ? <RefreshCw className="w-6 h-6 text-[#0f2044] animate-spin" />
+                : <report.icon className="w-6 h-6 text-[#0f2044]" />
+              }
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm text-[#0f2044]">{report.title}</div>
@@ -89,6 +131,7 @@ export function ReportesModule() {
           </CardContent>
         </Card>
       ))}
+    </div>
     </div>
   )
 }
@@ -301,6 +344,131 @@ function generateReportHTML(tipo: string, data: any[]): string {
               <td><b>${escapeHtml(a.accion || a.action)}</b></td>
               <td>${escapeHtml(a.entidad || a.entidadTipo || '–')}</td>
               <td>${escapeHtml(a.datosDespues || a.datos || a.changes || '').substring(0, 100)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'patentes':
+      tableContent = `
+        <table>
+          <thead><tr><th>Patente</th><th>Ubicación</th><th>Guardia</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((p: any) => `<tr>
+              <td><b>${escapeHtml(p.patente)}</b></td>
+              <td>${escapeHtml(p.ubicacion)}</td>
+              <td>${escapeHtml(p.scannedBy)}</td>
+              <td>${p.entradaAt ? new Date(p.entradaAt).toLocaleString('es-CL') : '–'}</td>
+              <td>${p.salidaAt ? new Date(p.salidaAt).toLocaleString('es-CL') : '–'}</td>
+              <td>${p.salidaAt ? 'Salida' : 'Adentro'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'aprobacionesot':
+      tableContent = `
+        <table>
+          <thead><tr><th>N° OT</th><th>Título</th><th>Prioridad</th><th>Estado</th><th>Solicitante</th><th>Fecha</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((a: any) => `<tr>
+              <td>${escapeHtml(a.otNum || a.numero || '–')}</td>
+              <td><b>${escapeHtml(a.titulo)}</b></td>
+              <td>${escapeHtml(a.prioridad)}</td>
+              <td>${escapeHtml(a.estado)}</td>
+              <td>${escapeHtml(a.solicitante || a.asignadoA || '–')}</td>
+              <td>${a.createdAt ? new Date(a.createdAt).toLocaleString('es-CL') : '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'pmi':
+      tableContent = `
+        <table>
+          <thead><tr><th>Elemento</th><th>Categoría</th><th>Frecuencia</th><th>Responsable</th><th>Último Mantención</th><th>Próximo</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((p: any) => `<tr>
+              <td><b>${escapeHtml(p.nombre || p.elemento)}</b></td>
+              <td>${escapeHtml(p.categoria)}</td>
+              <td>${escapeHtml(p.frecuencia)}</td>
+              <td>${escapeHtml(p.responsable)}</td>
+              <td>${p.ultimoMantenimiento || p.ultimaFecha ? new Date(p.ultimoMantenimiento || p.ultimaFecha).toLocaleDateString('es-CL') : '–'}</td>
+              <td>${p.proximoMantenimiento || p.proximaFecha ? new Date(p.proximoMantenimiento || p.proximaFecha).toLocaleDateString('es-CL') : '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'cumplimiento':
+      tableContent = `
+        <table>
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Estado</th><th>Responsable</th><th>Vencimiento</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((c: any) => `<tr>
+              <td><b>${escapeHtml(c.nombre || c.titulo)}</b></td>
+              <td>${escapeHtml(c.categoria)}</td>
+              <td>${escapeHtml(c.estado || c.estadoCumplimiento)}</td>
+              <td>${escapeHtml(c.responsable)}</td>
+              <td>${c.vencimiento || c.fechaVencimiento ? new Date(c.vencimiento || c.fechaVencimiento).toLocaleDateString('es-CL') : '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'inventario':
+      tableContent = `
+        <table>
+          <thead><tr><th>Producto</th><th>Tipo Movimiento</th><th>Cantidad</th><th>Bodega</th><th>Responsable</th><th>Fecha</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((i: any) => `<tr>
+              <td><b>${escapeHtml(i.producto || i.nombre || i.material)}</b></td>
+              <td>${escapeHtml(i.tipoMovimiento || i.tipo)}</td>
+              <td>${i.cantidad || '–'}</td>
+              <td>${escapeHtml(i.bodega || i.ubicacion)}</td>
+              <td>${escapeHtml(i.responsable || i.usuario)}</td>
+              <td>${i.fecha || i.createdAt ? new Date(i.fecha || i.createdAt).toLocaleString('es-CL') : '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'materiales':
+      tableContent = `
+        <table>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Unidad</th><th>Stock</th><th>Precio Unitario</th><th>Categoría</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((m: any) => `<tr>
+              <td>${escapeHtml(m.codigo)}</td>
+              <td><b>${escapeHtml(m.nombre)}</b></td>
+              <td>${escapeHtml(m.unidad)}</td>
+              <td>${m.stock || m.stockActual || '–'}</td>
+              <td style="text-align:right">${formatCLP(m.precioUnitario || m.precio)}</td>
+              <td>${escapeHtml(m.categoria)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'tareas':
+      tableContent = `
+        <table>
+          <thead><tr><th>Nombre</th><th>Categoría</th><th>Descripción</th><th>Frecuencia</th><th>Activo</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((t: any) => `<tr>
+              <td><b>${escapeHtml(t.nombre)}</b></td>
+              <td>${escapeHtml(t.categoria)}</td>
+              <td>${escapeHtml((t.descripcion || '').substring(0, 80))}</td>
+              <td>${escapeHtml(t.frecuencia)}</td>
+              <td>${t.activo !== false ? 'Sí' : 'No'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'herramientas':
+      tableContent = `
+        <table>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Ubicación</th><th>Estado</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((h: any) => `<tr>
+              <td>${escapeHtml(h.codigo)}</td>
+              <td><b>${escapeHtml(h.nombre)}</b></td>
+              <td>${escapeHtml(h.categoria)}</td>
+              <td>${escapeHtml(h.ubicacion)}</td>
+              <td>${escapeHtml(h.estado)}</td>
             </tr>`).join('')}
           </tbody>
         </table>`
