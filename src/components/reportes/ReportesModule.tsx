@@ -8,7 +8,13 @@ import {
   Wrench,
   Building2,
   PiggyBank,
-  Printer
+  Printer,
+  DraftingCompass,
+  Search,
+  QrCode,
+  ShoppingCart,
+  Calendar,
+  ClipboardCheck
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -29,6 +35,12 @@ const reportTypes = [
   { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT', endpoint: 'ot' },
   { icon: Building2, title: 'Proveedores', desc: 'Directorio de proveedores', endpoint: 'proveedores' },
   { icon: PiggyBank, title: 'Centro de Costos', desc: 'Ejecución presupuestaria', endpoint: 'centrocostos' },
+  { icon: DraftingCompass, title: 'Proyectos', desc: 'Estado de proyectos activos', endpoint: 'proyectos' },
+  { icon: Search, title: 'Inspecciones', desc: 'Resultados de inspecciones', endpoint: 'inspecciones' },
+  { icon: QrCode, title: 'Rondas QR', desc: 'Registros de escaneos de guardias', endpoint: 'rondas' },
+  { icon: ShoppingCart, title: 'Solicitudes de Compra', desc: 'Estado de solicitudes', endpoint: 'solicitudescompra' },
+  { icon: Calendar, title: 'Asistencia', desc: 'Control de asistencia del personal', endpoint: 'asistencia' },
+  { icon: ClipboardCheck, title: 'Auditoría', desc: 'Registro de movimientos del sistema', endpoint: 'auditoria' },
 ]
 
 export function ReportesModule() {
@@ -168,6 +180,130 @@ function generateReportHTML(tipo: string, data: any[]): string {
         </table>
         <div style="margin-top:10px;text-align:right;font-weight:bold">Valor Total: ${formatCLP(data.reduce((s: number, a: any) => s + (a.valorActual || 0), 0))}</div>
       `
+      break
+    case 'ot':
+      tableContent = `
+        <table>
+          <thead><tr><th>N°</th><th>Título</th><th>Tipo</th><th>Prioridad</th><th>Estado</th><th>Ubicación</th><th>Asignado</th><th>Costo</th></tr></thead>
+          <tbody>
+            ${data.map((o: any) => `<tr>
+              <td>${escapeHtml(o.otNum || o.numero)}</td><td><b>${escapeHtml(o.titulo)}</b></td>
+              <td>${escapeHtml(o.tipo)}</td><td>${escapeHtml(o.prioridad)}</td><td>${escapeHtml(o.estado)}</td>
+              <td>${escapeHtml(o.ubicacion) || '–'}</td><td>${escapeHtml(o.asignadoA || o.asignado) || '–'}</td>
+              <td style="text-align:right">${formatCLP(o.costoEstimado || o.costoReal || 0)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'proveedores':
+      tableContent = `
+        <table>
+          <thead><tr><th>Nombre / Razón Social</th><th>RUT</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Categoría</th></tr></thead>
+          <tbody>
+            ${data.map((p: any) => `<tr>
+              <td><b>${escapeHtml(p.nombre)}</b></td><td>${escapeHtml(p.rut) || '–'}</td>
+              <td>${escapeHtml(p.contacto) || '–'}</td><td>${escapeHtml(p.telefono) || '–'}</td>
+              <td>${escapeHtml(p.email) || '–'}</td><td>${escapeHtml(p.categoria) || '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'centrocostos':
+      tableContent = `
+        <table>
+          <thead><tr><th>Código</th><th>Nombre</th><th>Presupuesto</th><th>Gastado</th><th>Saldo</th><th>Estado</th></tr></thead>
+          <tbody>
+            ${data.map((c: any) => `<tr>
+              <td>${escapeHtml(c.codigo)}</td><td><b>${escapeHtml(c.nombre)}</b></td>
+              <td style="text-align:right">${formatCLP(c.presupuesto)}</td>
+              <td style="text-align:right">${formatCLP(c.gastado)}</td>
+              <td style="text-align:right">${formatCLP((c.presupuesto || 0) - (c.gastado || 0))}</td>
+              <td>${escapeHtml(c.estado) || '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'proyectos':
+      tableContent = `
+        <table>
+          <thead><tr><th>Nombre</th><th>Estado</th><th>Encargado</th><th>Inicio</th><th>Plazo</th><th>Presupuesto</th></tr></thead>
+          <tbody>
+            ${data.map((p: any) => `<tr>
+              <td><b>${escapeHtml(p.nombre)}</b></td><td>${escapeHtml(p.estado)}</td>
+              <td>${escapeHtml(p.encargado) || '–'}</td><td>${formatDate(p.fechaInicio)}</td>
+              <td>${formatDate(p.fechaLimite)}</td><td style="text-align:right">${formatCLP(p.presupuesto)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'inspecciones':
+      tableContent = `
+        <table>
+          <thead><tr><th>Título</th><th>Tipo</th><th>Estado</th><th>Inspector</th><th>Fecha</th><th>Ubicación</th></tr></thead>
+          <tbody>
+            ${data.map((i: any) => `<tr>
+              <td><b>${escapeHtml(i.titulo)}</b></td><td>${escapeHtml(i.tipo)}</td><td>${escapeHtml(i.estado)}</td>
+              <td>${escapeHtml(i.inspector)}</td>
+              <td>${formatDate(i.fecha)}</td><td>${escapeHtml(i.ubicacion) || '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'rondas':
+      tableContent = `
+        <table>
+          <thead><tr><th>Ubicación</th><th>Guardia</th><th>Fecha/Hora</th><th>GPS</th></tr></thead>
+          <tbody>
+            ${data.map((r: any) => `<tr>
+              <td>${escapeHtml(r.location?.name || r.ubicacion || '–')}</td>
+              <td>${escapeHtml(r.scannedBy || r.guardia)}</td>
+              <td>${r.createdAt ? new Date(r.createdAt).toLocaleString('es-CL') : '–'}</td>
+              <td>${r.latitude ? r.latitude.toFixed(5) + ', ' + r.longitude.toFixed(5) : '–'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'solicitudescompra':
+      tableContent = `
+        <table>
+          <thead><tr><th>N°</th><th>Solicitante</th><th>Concepto</th><th>Monto</th><th>Estado</th><th>Fecha</th></tr></thead>
+          <tbody>
+            ${data.map((s: any) => `<tr>
+              <td>${escapeHtml(s.numero || s.id?.slice(-6))}</td><td>${escapeHtml(s.solicitante || s.creadoPor)}</td>
+              <td><b>${escapeHtml(s.concepto || s.descripcion)}</b></td>
+              <td style="text-align:right">${formatCLP(s.monto || s.montoEstimado)}</td>
+              <td>${escapeHtml(s.estado)}</td><td>${formatDate(s.fecha || s.createdAt)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'asistencia':
+      tableContent = `
+        <table>
+          <thead><tr><th>Nombre</th><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Horas</th><th>Estado</th></tr></thead>
+          <tbody>
+            ${data.map((a: any) => `<tr>
+              <td><b>${escapeHtml(a.nombre || a.personal)}</b></td><td>${formatDate(a.fecha)}</td>
+              <td>${escapeHtml(a.horaEntrada) || '–'}</td><td>${escapeHtml(a.horaSalida) || '–'}</td>
+              <td>${escapeHtml(a.horasTrabajadas) || '–'}</td><td>${escapeHtml(a.estado)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
+      break
+    case 'auditoria':
+      tableContent = `
+        <table>
+          <thead><tr><th>Fecha/Hora</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th></tr></thead>
+          <tbody>
+            ${(Array.isArray(data) ? data : []).map((a: any) => `<tr>
+              <td>${a.createdAt ? new Date(a.createdAt).toLocaleString('es-CL') : '–'}</td>
+              <td>${escapeHtml(a.userId || a.usuarioNombre || a.performedBy || '–')}</td>
+              <td><b>${escapeHtml(a.accion || a.action)}</b></td>
+              <td>${escapeHtml(a.entidad || a.entidadTipo || '–')}</td>
+              <td>${escapeHtml(a.datosDespues || a.datos || a.changes || '').substring(0, 100)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`
       break
     default:
       tableContent = '<p style="text-align:center;color:#94a3b8;padding:20px">Reporte no disponible</p>'

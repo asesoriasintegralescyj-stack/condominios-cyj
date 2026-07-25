@@ -208,6 +208,7 @@ const ROLES: RolInfo[] = [
   { key: 'personal', label: 'Personal', icon: <Wrench className="w-4 h-4" />, descripcion: 'Solo OT asignadas + crea SC' },
   { key: 'auditor', label: 'Auditor', icon: <Eye className="w-4 h-4" />, descripcion: 'Solo lectura de todo' },
   { key: 'guardia', label: 'Guardia', icon: <QrCode className="w-4 h-4" />, descripcion: 'Solo módulo Rondas (página dedicada)' },
+  { key: 'conserje', label: 'Conserje', icon: <UserIcon className="w-4 h-4" />, descripcion: 'Solo puede ver Rondas QR' },
 ]
 
 // Permisos por defecto (espejo de lib/auth.ts PERMISOS_POR_ROL)
@@ -280,6 +281,7 @@ const DEFAULT_PERMISOS: Record<string, string[]> = {
     'rondas.ver',
     'rondas.registrar',
   ],
+  conserje: ['rondas.ver'],
 }
 
 export function PermisosModule() {
