@@ -418,12 +418,37 @@ function generateReportHTML(tipo: string, data: any[]): string {
     } catch { return d }
   }
 
+  // Map endpoint → human-readable title for the report header
+  const REPORT_TITLES: Record<string, string> = {
+    propiedades: 'Propiedades',
+    personal: 'Personal',
+    activos: 'Activos',
+    ot: 'Órdenes de Trabajo',
+    aprobacionesot: 'Aprobaciones OT',
+    proveedores: 'Proveedores',
+    centrocostos: 'Centro de Costos',
+    proyectos: 'Proyectos',
+    inspecciones: 'Inspecciones',
+    rondas: 'Rondas QR (escaneos de guardias)',
+    solicitudescompra: 'Solicitudes de Compra',
+    asistencia: 'Asistencia',
+    auditoria: 'Auditoría del Sistema',
+    patentes: 'Patentes Vehiculares',
+    pmi: 'PMI — Listas de Verificación del Plan de Mantenimiento Integral',
+    cumplimiento: 'Cumplimiento Legal',
+    inventario: 'Movimientos de Inventario',
+    materiales: 'Catálogo de Materiales',
+    tareas: 'Catálogo de Tareas',
+    herramientas: 'Catálogo de Herramientas',
+  }
+  const reportTitle = REPORT_TITLES[tipo] || tipo
+
   const header = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
-      <title>Reporte - ${tipo}</title>
+      <title>Reporte - ${reportTitle}</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; font-size: 11px; padding: 24px; color: #000; }
@@ -442,12 +467,13 @@ function generateReportHTML(tipo: string, data: any[]): string {
         <div class="logo">🏘️</div>
         <div>
           <h1>Condominio Laguna Norte</h1>
-          <p style="font-size:11px;color:#64748b">Reporte de ${tipo} – ${new Date().toLocaleDateString('es-CL')}</p>
+          <p style="font-size:11px;color:#64748b">Reporte de <b>${reportTitle}</b> – ${new Date().toLocaleDateString('es-CL')}</p>
+          <p style="font-size:9px;color:#94a3b8;margin-top:2px">${data.length} registro(s)</p>
         </div>
       </div>
   `
 
-  const footer = `<div class="footer">Generado: ${new Date().toLocaleString('es-CL')}</div></body></html>`
+  const footer = `<div class="footer">Generado: ${new Date().toLocaleString('es-CL')} · Reporte: ${reportTitle}</div></body></html>`
 
   let tableContent = ''
 
@@ -655,18 +681,23 @@ function generateReportHTML(tipo: string, data: any[]): string {
     case 'pmi':
       tableContent = `
         <table>
-          <thead><tr><th>Elemento</th><th>Categoría</th><th>Frecuencia</th><th>Responsable</th><th>Último Mantención</th><th>Próximo</th></tr></thead>
+          <thead><tr><th>Código LV</th><th>Nombre / Elemento</th><th>Sector</th><th>Frecuencia</th><th>Responsable</th><th>Ítems</th><th>Estado</th></tr></thead>
           <tbody>
             ${(Array.isArray(data) ? data : []).map((p: any) => `<tr>
+              <td><b>${escapeHtml(p.codigo || '–')}</b></td>
               <td><b>${escapeHtml(p.nombre || p.elemento)}</b></td>
-              <td>${escapeHtml(p.categoria)}</td>
-              <td>${escapeHtml(p.frecuencia)}</td>
-              <td>${escapeHtml(p.responsable)}</td>
-              <td>${p.ultimoMantenimiento || p.ultimaFecha ? new Date(p.ultimoMantenimiento || p.ultimaFecha).toLocaleDateString('es-CL') : '–'}</td>
-              <td>${p.proximoMantenimiento || p.proximaFecha ? new Date(p.proximoMantenimiento || p.proximaFecha).toLocaleDateString('es-CL') : '–'}</td>
+              <td>${escapeHtml(p.sector || p.categoria || '–')}</td>
+              <td>${escapeHtml(p.frecuencia || '–')}</td>
+              <td>${escapeHtml(p.responsable || '–')}</td>
+              <td style="text-align:center">${p.cantidadItems ?? '–'}</td>
+              <td>${p.activa === false ? 'Inactiva' : 'Activa'}</td>
             </tr>`).join('')}
           </tbody>
-        </table>`
+        </table>
+        <p style="margin-top:10px;font-size:10px;color:#64748b;">
+          <b>PMI — Plan de Mantenimiento Integral.</b> Listas de Verificación (LV) activas en el sistema.
+          Cada LV agrupa los ítems de control que el personal debe ejecutar según la frecuencia indicada.
+        </p>`
       break
     case 'cumplimiento':
       tableContent = `
