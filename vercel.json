@@ -10,10 +10,6 @@
     {
       "path": "/api/pmi/cumplimiento/alerta",
       "schedule": "0 12 * * *"
-    },
-    {
-      "path": "/api/ot/alerta",
-      "schedule": "0 12-22 * * *"
     }
   ]
 }

@@ -1,0 +1,52 @@
+name: Alerta OT Supervisor SUP1
+
+# Ejecuta el endpoint /api/ot/alerta cada hora de 08:00 a 18:00 hora Santiago.
+# Santiago = UTC-4 (Chile no usa DST desde 2015).
+# 08:00 Santiago = 12:00 UTC
+# 18:00 Santiago = 22:00 UTC
+# Cron en GitHub Actions corre en UTC, por eso usamos "0 12-22 * * *".
+#
+# El endpoint verifica si el supervisor activo (rol='supervisor', SUP1) ha
+# generado al menos 3 OT durante el día. Si no cumple la meta, envía un correo
+# de alerta a operaciones.lagunanorte@gmail.com (Cc administracionlagunanorte).
+# Si la meta está cumplida, el endpoint NO envía correo y simplemente retorna.
+
+on:
+  schedule:
+    - cron: '0 12-22 * * *'  # 08:00–18:00 Santiago, cada hora
+  workflow_dispatch: {}      # Permite ejecutar manualmente
+
+permissions:
+  contents: read
+
+jobs:
+  trigger-alerta-ot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Llamar endpoint /api/ot/alerta
+        env:
+          ENDPOINT_URL: https://condominios-cyj.vercel.app/api/ot/alerta
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo ">>> $(date -u '+%Y-%m-%dT%H:%M:%SZ') Disparando alerta OT SUP1..."
+          if [ -z "$CRON_SECRET" ]; then
+            echo "⚠ CRON_SECRET no configurado — llamando sin Authorization (dependerá de x-vercel-cron)"
+            HEADER_ARGS=()
+          else
+            HEADER_ARGS=(-H "Authorization: Bearer $CRON_SECRET")
+          fi
+          RESPONSE=$(curl -sS -w "\n__HTTP_STATUS__%{http_code}\n" \
+            -X GET \
+            "${HEADER_ARGS[@]}" \
+            -H "X-GitHub-Actions: 1" \
+            "$ENDPOINT_URL" || true)
+          echo "<<< Respuesta:"
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | tail -1 | sed 's/__HTTP_STATUS__//')
+          echo ">>> HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "❌ El endpoint respondió con status $STATUS"
+            exit 1
+          fi
+          echo "✅ Alerta procesada correctamente"
