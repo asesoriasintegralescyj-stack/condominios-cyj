@@ -30,6 +30,11 @@ export const revalidate = 0
 
 const MIN_OT_DIARIA = 3
 const SUPERVISOR_CODIGO = 'SUP1'
+// Email específico del Supervisor Móvil SUP1 (no del Jefe de Operaciones).
+// Las alertas de OT y el control diario de creación de OT corresponden
+// al Supervisor Móvil. El Jefe de Operaciones (supervisor.test@cyj.cl)
+// es responsable de las Listas de Verificación (LV) del PMI.
+const SUPERVISOR_MOVIL_EMAIL = 'sup1@cyj.cl'
 
 /**
  * Devuelve la fecha actual en zona America/Santiago (UTC-4 fijo).
@@ -95,18 +100,36 @@ export async function POST(request: NextRequest) {
     const { inicio, fin, fechaISO } = rangoHoySantiagoUTC()
     const horaConsulta = horaSantiagoHHMM(new Date())
 
-    // 1. Buscar supervisor activo (SUP1)
-    const supervisor = await db.user.findFirst({
-      where: { rol: 'supervisor', activo: true },
-      select: { id: true, email: true, nombre: true, apellido: true },
+    // 1. Buscar Supervisor Móvil SUP1 por email específico
+    const supervisor = await db.user.findUnique({
+      where: { email: SUPERVISOR_MOVIL_EMAIL },
+      select: { id: true, email: true, nombre: true, apellido: true, activo: true, rol: true },
     })
+
+    if (supervisor && !supervisor.activo) {
+      return NextResponse.json({
+        fecha: fechaISO,
+        horaConsulta,
+        supervisorEncontrado: false,
+        mensaje: `Usuario ${SUPERVISOR_MOVIL_EMAIL} está inactivo`,
+      })
+    }
+
+    if (supervisor && supervisor.rol !== 'supervisor') {
+      return NextResponse.json({
+        fecha: fechaISO,
+        horaConsulta,
+        supervisorEncontrado: false,
+        mensaje: `Usuario ${SUPERVISOR_MOVIL_EMAIL} tiene rol '${supervisor.rol}', no 'supervisor'`,
+      })
+    }
 
     if (!supervisor) {
       return NextResponse.json({
         fecha: fechaISO,
         horaConsulta,
         supervisorEncontrado: false,
-        mensaje: 'No hay usuario supervisor activo en el sistema',
+        mensaje: `No se encontró usuario supervisor con email ${SUPERVISOR_MOVIL_EMAIL}`,
       })
     }
 
