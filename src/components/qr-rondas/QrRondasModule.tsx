@@ -358,6 +358,12 @@ export function QrRondasModule() {
   const [patentesSoloAbiertas, setPatentesSoloAbiertas] = useState(true)
   const [filterPatenteUbicacion, setFilterPatenteUbicacion] = useState<string>('all')
 
+  // ─── Formulario de registro manual de patente ───
+  const [showPatenteFormModal, setShowPatenteFormModal] = useState(false)
+  const [patenteForm, setPatenteForm] = useState({ patente: '', ubicacion: '', notes: '' })
+  const [savingPatente, setSavingPatente] = useState(false)
+  const [closingPatenteId, setClosingPatenteId] = useState<string | null>(null)
+
   // ─── Cargar patentes ───
   const fetchPatentes = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshingPatentes(true)
@@ -392,6 +398,66 @@ export function QrRondasModule() {
     const interval = setInterval(() => { fetchPatentes(false) }, 15000)
     return () => clearInterval(interval)
   }, [tab, fetchPatentes])
+
+  // ─── Registrar patente manualmente ───
+  const handleSavePatente = async () => {
+    if (!patenteForm.patente.trim() || patenteForm.patente.trim().length < 4) {
+      toast.error('La patente es obligatoria (mínimo 4 caracteres)')
+      return
+    }
+    if (!patenteForm.ubicacion.trim()) {
+      toast.error('La ubicación es obligatoria')
+      return
+    }
+    setSavingPatente(true)
+    try {
+      const res = await fetch('/api/qr-rondas/patentes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patente: patenteForm.patente.trim().toUpperCase(),
+          ubicacion: patenteForm.ubicacion.trim(),
+          notes: patenteForm.notes.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error al registrar patente')
+      }
+      toast.success(`Patente ${patenteForm.patente.trim().toUpperCase()} registrada`)
+      setShowPatenteFormModal(false)
+      setPatenteForm({ patente: '', ubicacion: '', notes: '' })
+      fetchPatentes(false)
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Error al registrar patente')
+    } finally {
+      setSavingPatente(false)
+    }
+  }
+
+  // ─── Registrar salida de patente ───
+  const handleCerrarPatente = async (id: string) => {
+    setClosingPatenteId(id)
+    try {
+      const res = await fetch('/api/qr-rondas/patentes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error al registrar salida')
+      }
+      toast.success('Salida registrada')
+      fetchPatentes(false)
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || 'Error al registrar salida')
+    } finally {
+      setClosingPatenteId(null)
+    }
+  }
 
   // ─── Cargar ubicaciones ───
   const fetchLocations = useCallback(async (isRefresh = false) => {
@@ -1378,15 +1444,34 @@ export function QrRondasModule() {
                     </Label>
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchPatentes(true)}
-                  disabled={refreshingPatentes}
-                >
-                  <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPatentes ? 'animate-spin' : ''}`} />
-                  {refreshingPatentes ? 'Actualizando...' : 'Actualizar'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {(isAdmin() || user?.rol === 'supervisor') && (
+                    <Button
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700"
+                      onClick={() => {
+                        setPatenteForm({
+                          patente: '',
+                          ubicacion: filterPatenteUbicacion !== 'all' ? filterPatenteUbicacion : '',
+                          notes: '',
+                        })
+                        setShowPatenteFormModal(true)
+                      }}
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Registrar Patente
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchPatentes(true)}
+                    disabled={refreshingPatentes}
+                  >
+                    <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPatentes ? 'animate-spin' : ''}`} />
+                    {refreshingPatentes ? 'Actualizando...' : 'Actualizar'}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-slate-500 mt-3">
                 Mostrando {patentes.length} de {patentesTotal} patentes ·
@@ -1421,6 +1506,7 @@ export function QrRondasModule() {
                         <TableHead className="min-w-[140px]">Salida</TableHead>
                         <TableHead className="min-w-[120px]">Guardia</TableHead>
                         <TableHead>Estado</TableHead>
+                        {(isAdmin() || user?.rol === 'supervisor') && <TableHead>Acciones</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1432,7 +1518,7 @@ export function QrRondasModule() {
                                 src={p.foto}
                                 alt="Foto"
                                 className="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80"
-                                onClick={() => window.open(p.foto, '_blank')}
+                                onClick={() => p.foto && window.open(p.foto, '_blank')}
                               />
                             ) : (
                               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -1457,6 +1543,28 @@ export function QrRondasModule() {
                               <Badge className="bg-emerald-100 text-emerald-700">Adentro</Badge>
                             )}
                           </TableCell>
+                          {(isAdmin() || user?.rol === 'supervisor') && (
+                            <TableCell>
+                              {!p.salidaAt ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs"
+                                  disabled={closingPatenteId === p.id}
+                                  onClick={() => handleCerrarPatente(p.id)}
+                                >
+                                  {closingPatenteId === p.id ? (
+                                    <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  )}
+                                  Registrar Salida
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-slate-400">–</span>
+                              )}
+                            </TableCell>
+                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1474,6 +1582,71 @@ export function QrRondasModule() {
         </TabsContent>
         )}
       </Tabs>
+
+      {/* ─── Modal Registrar Patente Manual ─── */}
+      <Dialog open={showPatenteFormModal} onOpenChange={setShowPatenteFormModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar Patente Vehicular</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Patente *</Label>
+              <Input
+                value={patenteForm.patente}
+                onChange={(e) => setPatenteForm({ ...patenteForm, patente: e.target.value.toUpperCase() })}
+                placeholder="Ej: ABCD12 ó AB1234"
+                className="font-mono uppercase"
+                maxLength={8}
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Formato chileno (4 letras + 2 números, o 2 letras + 4 números).
+              </p>
+            </div>
+            <div>
+              <Label>Ubicación *</Label>
+              <Input
+                value={patenteForm.ubicacion}
+                onChange={(e) => setPatenteForm({ ...patenteForm, ubicacion: e.target.value })}
+                placeholder="Ej: Portería Principal / Estacionamiento Visitas"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Selecciona o escribe la ubicación de entrada.
+              </p>
+            </div>
+            <div>
+              <Label>Observaciones (opcional)</Label>
+              <Textarea
+                value={patenteForm.notes}
+                onChange={(e) => setPatenteForm({ ...patenteForm, notes: e.target.value })}
+                placeholder="Ej: Visita a residente casa 12, proveedor, etc."
+                rows={2}
+                maxLength={500}
+              />
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+              <strong>Nota:</strong> Esta patente se registrará como entrada manual desde el escritorio.
+              Para registrar la salida, usa el botón "Registrar Salida" en la tabla.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPatenteFormModal(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="bg-amber-600 hover:bg-amber-700"
+              onClick={handleSavePatente}
+              disabled={savingPatente}
+            >
+              {savingPatente ? (
+                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Guardando...</>
+              ) : (
+                <><CheckCircle2 className="w-4 h-4 mr-2" /> Registrar Entrada</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Modal Crear/Editar ─── */}
       <Dialog open={showFormModal} onOpenChange={setShowFormModal}>

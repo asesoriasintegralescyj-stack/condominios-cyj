@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
       case 'proveedores':
         return await queryReport(() =>
-          db.proveedor.findMany({ orderBy: { nombre: 'asc' }, take }),
+          db.proveedor.findMany({ orderBy: { razonSocial: 'asc' }, take }),
         )
 
       case 'centrocostos':
@@ -123,9 +123,42 @@ export async function GET(request: NextRequest) {
         )
 
       case 'pmi':
-        return await queryReport(() =>
-          db.ronda.findMany({ orderBy: { createdAt: 'desc' }, take }),
-        )
+        return await queryReport(async () => {
+          const lvs = await withRetry(() =>
+            db.listaVerificacion.findMany({
+              where: { activa: true },
+              orderBy: { codigo: 'asc' },
+              take,
+            }),
+          )
+          return lvs.map((lv) => {
+            let cantidadItems = 0
+            try {
+              const items = JSON.parse(lv.items || '[]')
+              cantidadItems = Array.isArray(items)
+                ? items.reduce(
+                    (acc: number, s: any) =>
+                      acc + (Array.isArray(s?.items) ? s.items.length : 0),
+                    0,
+                  )
+                : 0
+            } catch {}
+            return {
+              id: lv.id,
+              codigo: lv.codigo,
+              nombre: lv.nombre,
+              sector: lv.sector || '',
+              categoria: lv.sector || '',
+              frecuencia: lv.frecuencia || '',
+              responsable: lv.responsable || '',
+              personalRequerido: lv.personalRequerido || '',
+              descripcion: lv.descripcion || '',
+              activa: lv.activa,
+              cantidadItems,
+              createdAt: lv.createdAt,
+            }
+          })
+        })
 
       case 'cumplimiento':
         return await queryReport(() =>

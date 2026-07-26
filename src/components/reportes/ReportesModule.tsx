@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Home,
   User,
@@ -23,7 +26,10 @@ import {
   Settings,
   BookOpen,
   BarChart3,
-  Car
+  Car,
+  Eye,
+  Loader2,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -38,50 +44,78 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 const reportTypes = [
-  { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades (usado por OT)', endpoint: 'propiedades' },
-  { icon: User, title: 'Personal', desc: 'Nómina completa del personal', endpoint: 'personal' },
-  { icon: Package, title: 'Activos', desc: 'Inventario con valorización', endpoint: 'activos' },
-  { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT registradas', endpoint: 'ot' },
-  { icon: CheckCircle, title: 'Aprobaciones OT', desc: 'OT pendientes de aprobación', endpoint: 'aprobacionesot' },
-  { icon: Building2, title: 'Proveedores', desc: 'Directorio de proveedores', endpoint: 'proveedores' },
-  { icon: PiggyBank, title: 'Centro de Costos', desc: 'Ejecución presupuestaria', endpoint: 'centrocostos' },
-  { icon: DraftingCompass, title: 'Proyectos', desc: 'Estado de proyectos activos', endpoint: 'proyectos' },
-  { icon: Search, title: 'Inspecciones', desc: 'Resultados de inspecciones', endpoint: 'inspecciones' },
-  { icon: QrCode, title: 'Rondas QR', desc: 'Registros de escaneos de guardias', endpoint: 'rondas' },
-  { icon: Car, title: 'Patentes Vehiculares', desc: 'Registro de entrada/salida vehicular', endpoint: 'patentes' },
-  { icon: ShoppingCart, title: 'Solicitudes de Compra', desc: 'Estado de solicitudes', endpoint: 'solicitudescompra' },
-  { icon: Calendar, title: 'Asistencia', desc: 'Control de asistencia del personal', endpoint: 'asistencia' },
-  { icon: ClipboardCheck, title: 'PMI', desc: 'Plan de Mantenimiento Integral', endpoint: 'pmi' },
-  { icon: FileCheck, title: 'Cumplimiento', desc: 'Cumplimiento legal y normativo', endpoint: 'cumplimiento' },
-  { icon: Package, title: 'Inventario', desc: 'Movimientos de inventario', endpoint: 'inventario' },
-  { icon: Wrench, title: 'Materiales', desc: 'Catálogo de materiales', endpoint: 'materiales' },
-  { icon: Wrench, title: 'Tareas', desc: 'Catálogo de tareas', endpoint: 'tareas' },
-  { icon: Wrench, title: 'Herramientas', desc: 'Catálogo de herramientas', endpoint: 'herramientas' },
-  { icon: BarChart3, title: 'Auditoría', desc: 'Registro de movimientos del sistema', endpoint: 'auditoria' },
+  { icon: Home, title: 'Propiedades', desc: 'Lista completa de unidades (usado por OT)', endpoint: 'propiedades', grupo: 'Operativo' },
+  { icon: User, title: 'Personal', desc: 'Nómina completa del personal', endpoint: 'personal', grupo: 'Operativo' },
+  { icon: Package, title: 'Activos', desc: 'Inventario con valorización', endpoint: 'activos', grupo: 'Operativo' },
+  { icon: Wrench, title: 'Órdenes de Trabajo', desc: 'Todas las OT registradas', endpoint: 'ot', grupo: 'Operativo' },
+  { icon: CheckCircle, title: 'Aprobaciones OT', desc: 'OT pendientes de aprobación', endpoint: 'aprobacionesot', grupo: 'Operativo' },
+  { icon: Building2, title: 'Proveedores', desc: 'Directorio de proveedores', endpoint: 'proveedores', grupo: 'Operativo' },
+  { icon: PiggyBank, title: 'Centro de Costos', desc: 'Ejecución presupuestaria', endpoint: 'centrocostos', grupo: 'Operativo' },
+  { icon: DraftingCompass, title: 'Proyectos', desc: 'Estado de proyectos activos', endpoint: 'proyectos', grupo: 'Operativo' },
+  { icon: Search, title: 'Inspecciones', desc: 'Resultados de inspecciones', endpoint: 'inspecciones', grupo: 'Operativo' },
+  { icon: ShoppingCart, title: 'Solicitudes de Compra', desc: 'Estado de solicitudes', endpoint: 'solicitudescompra', grupo: 'Operativo' },
+  { icon: Calendar, title: 'Asistencia', desc: 'Control de asistencia del personal', endpoint: 'asistencia', grupo: 'Operativo' },
+  { icon: Package, title: 'Inventario', desc: 'Movimientos de inventario', endpoint: 'inventario', grupo: 'Operativo' },
+  { icon: Car, title: 'Patentes Vehiculares', desc: 'Registro de entrada/salida vehicular', endpoint: 'patentes', grupo: 'Rondas QR' },
+  { icon: QrCode, title: 'Rondas QR', desc: 'Registros de escaneos de guardias', endpoint: 'rondas', grupo: 'Rondas QR' },
+  { icon: ClipboardCheck, title: 'PMI', desc: 'Listas de Verificación del Plan de Mantenimiento', endpoint: 'pmi', grupo: 'Rondas QR' },
+  { icon: FileCheck, title: 'Cumplimiento', desc: 'Cumplimiento legal y normativo', endpoint: 'cumplimiento', grupo: 'Cumplimiento' },
+  { icon: Wrench, title: 'Materiales', desc: 'Catálogo de materiales', endpoint: 'materiales', grupo: 'Catálogos' },
+  { icon: Wrench, title: 'Tareas', desc: 'Catálogo de tareas', endpoint: 'tareas', grupo: 'Catálogos' },
+  { icon: Wrench, title: 'Herramientas', desc: 'Catálogo de herramientas', endpoint: 'herramientas', grupo: 'Catálogos' },
+  { icon: BarChart3, title: 'Auditoría', desc: 'Registro de movimientos del sistema', endpoint: 'auditoria', grupo: 'Sistema' },
 ]
+
+const GRUPO_COLORS: Record<string, string> = {
+  Operativo: 'bg-blue-50 border-blue-200',
+  'Rondas QR': 'bg-purple-50 border-purple-200',
+  Cumplimiento: 'bg-green-50 border-green-200',
+  Catálogos: 'bg-slate-50 border-slate-200',
+  Sistema: 'bg-amber-50 border-amber-200',
+}
 
 export function ReportesModule() {
   const [loading, setLoading] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const [previewData, setPreviewData] = useState<{ tipo: string; data: any[] } | null>(null)
+  const [fechaDesde, setFechaDesde] = useState('')
+  const [fechaHasta, setFechaHasta] = useState('')
+
+  useEffect(() => {
+    setLastRefresh(new Date())
+  }, [])
+
+  const buildUrl = (endpoint: string) => {
+    const params = new URLSearchParams()
+    if (fechaDesde) params.append('from', new Date(fechaDesde).getTime().toString())
+    if (fechaHasta) {
+      const d = new Date(fechaHasta)
+      d.setHours(23, 59, 59, 999)
+      params.append('to', d.getTime().toString())
+    }
+    return `/api/reportes?tipo=${endpoint}${params.toString() ? '&' + params.toString() : ''}`
+  }
 
   const handleExport = async (endpoint: string) => {
     setLoading(endpoint)
     try {
-      const res = await fetch(`/api/reportes?tipo=${endpoint}`)
+      const res = await fetch(buildUrl(endpoint), { cache: 'no-store' })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         toast.error(err.error || `Error al generar reporte de ${endpoint}`)
         return
       }
       const data = await res.json()
-      
+
       if (!Array.isArray(data) || data.length === 0) {
         toast.info(`No hay datos disponibles para el reporte de ${endpoint}`)
         return
       }
-      
+
       // Generate HTML report
       const html = generateReportHTML(endpoint, data)
-      
+
       // Open in new window for printing
       const w = window.open('', '_blank', 'width=960,height=720')
       if (!w) {
@@ -93,6 +127,7 @@ export function ReportesModule() {
       w.document.close()
       w.onload = () => setTimeout(() => w.print(), 400)
       toast.success(`Reporte de ${endpoint} generado con ${data.length} registros`)
+      setLastRefresh(new Date())
     } catch (error) {
       console.error('Error generating report:', error)
       toast.error('Error de conexión al generar el reporte')
@@ -101,37 +136,274 @@ export function ReportesModule() {
     }
   }
 
+  const handlePreview = async (endpoint: string) => {
+    setLoading(endpoint)
+    try {
+      const res = await fetch(buildUrl(endpoint), { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (!Array.isArray(data) || data.length === 0) {
+        toast.info('Este reporte no tiene datos con los filtros actuales')
+        setPreviewData(null)
+        return
+      }
+      setPreviewData({ tipo: endpoint, data })
+      toast.success(`${data.length} registro(s) cargados`)
+      setLastRefresh(new Date())
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al cargar vista previa')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    try {
+      if (previewData?.tipo) {
+        const res = await fetch(buildUrl(previewData.tipo), { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (Array.isArray(data)) {
+            setPreviewData({ tipo: previewData.tipo, data })
+          }
+        }
+      }
+      setLastRefresh(new Date())
+      toast.success('Datos actualizados')
+    } catch {
+      toast.error('Error al actualizar')
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const grupos = Array.from(new Set(reportTypes.map((r) => r.grupo)))
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <FileCheck className="w-4 h-4" />
-        <span>{reportTypes.length} reportes disponibles para todos los módulos del sistema</span>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {reportTypes.map((report) => (
-        <Card 
-          key={report.endpoint}
-          className={`cursor-pointer transition-all hover:shadow-lg hover:border-amber-300 ${loading === report.endpoint ? 'opacity-70 pointer-events-none' : ''}`}
-          onClick={() => handleExport(report.endpoint)}
+    <div className="space-y-5">
+      {/* Header + acciones */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-[#0f2044] flex items-center gap-2">
+            <FileCheck className="w-5 h-5" />
+            Reportes del Sistema
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">
+            {reportTypes.length} reportes disponibles · Última actualización:{' '}
+            {lastRefresh ? lastRefresh.toLocaleTimeString('es-CL') : '—'}
+          </p>
+        </div>
+        <Button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="bg-[#0f2044] hover:bg-[#0a1628]"
+          size="sm"
         >
-          <CardContent className="p-4 flex items-start gap-4">
-            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center shrink-0">
-              {loading === report.endpoint 
-                ? <RefreshCw className="w-6 h-6 text-[#0f2044] animate-spin" />
-                : <report.icon className="w-6 h-6 text-[#0f2044]" />
-              }
+          {refreshing ? (
+            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Actualizando...</>
+          ) : (
+            <><RefreshCw className="w-4 h-4 mr-2" /> Actualizar datos</>
+          )}
+        </Button>
+      </div>
+
+      {/* Filtros de fecha */}
+      <Card className="border-slate-200">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label className="text-xs">Fecha desde (opcional)</Label>
+              <Input
+                type="date"
+                value={fechaDesde}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                className="w-[160px] h-8 text-xs"
+              />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm text-[#0f2044]">{report.title}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{report.desc}</div>
-              <div className="flex items-center gap-1 mt-3 text-xs text-amber-600 font-semibold">
-                <Printer className="w-3.5 h-3.5" /> Exportar →
+            <div>
+              <Label className="text-xs">Fecha hasta (opcional)</Label>
+              <Input
+                type="date"
+                value={fechaHasta}
+                onChange={(e) => setFechaHasta(e.target.value)}
+                className="w-[160px] h-8 text-xs"
+              />
+            </div>
+            {(fechaDesde || fechaHasta) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setFechaDesde('')
+                  setFechaHasta('')
+                }}
+                className="h-8 text-xs"
+              >
+                Limpiar fechas
+              </Button>
+            )}
+            <div className="text-xs text-slate-500 ml-auto">
+              <Calendar className="w-3 h-3 inline mr-1" />
+              Aplica a reportes de rondas, patentes, asistencia, inventario, auditoría
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tarjetas de reporte agrupadas */}
+      {grupos.map((grupo) => (
+        <div key={grupo}>
+          <h3 className="text-xs font-bold text-[#0f2044] uppercase tracking-wider mb-2 flex items-center gap-2">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+            {grupo}
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {reportTypes
+              .filter((r) => r.grupo === grupo)
+              .map((report) => {
+                const isLoading = loading === report.endpoint
+                return (
+                  <Card
+                    key={report.endpoint}
+                    className={`${GRUPO_COLORS[grupo] || 'bg-white'} transition-all hover:shadow-md`}
+                  >
+                    <CardContent className="p-4 flex items-start gap-3">
+                      <div className="w-11 h-11 bg-white rounded-lg flex items-center justify-center shrink-0 border border-slate-200">
+                        {isLoading ? (
+                          <Loader2 className="w-5 h-5 text-[#0f2044] animate-spin" />
+                        ) : (
+                          <report.icon className="w-5 h-5 text-[#0f2044]" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm text-[#0f2044]">{report.title}</div>
+                        <div className="text-xs text-slate-600 mt-0.5">{report.desc}</div>
+                        <div className="flex gap-1.5 mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => handlePreview(report.endpoint)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            ) : (
+                              <Eye className="w-3 h-3 mr-1" />
+                            )}
+                            Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="h-7 text-xs bg-amber-600 hover:bg-amber-700"
+                            onClick={() => handleExport(report.endpoint)}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            ) : (
+                              <Printer className="w-3 h-3 mr-1" />
+                            )}
+                            Exportar
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+          </div>
+        </div>
+      ))}
+
+      {/* Vista previa */}
+      {previewData && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-bold text-sm text-[#0f2044] flex items-center gap-2">
+                  <Eye className="w-4 h-4" />
+                  Vista previa: {previewData.tipo}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {previewData.data.length} registro(s) · Clic en "Exportar" para imprimir o guardar como PDF
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 h-7 text-xs"
+                  onClick={() => handleExport(previewData.tipo)}
+                >
+                  <Printer className="w-3 h-3 mr-1" /> Exportar a PDF
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs"
+                  onClick={() => setPreviewData(null)}
+                >
+                  <X className="w-3 h-3 mr-1" /> Cerrar
+                </Button>
               </div>
             </div>
+            <PreviewTable tipo={previewData.tipo} data={previewData.data} />
           </CardContent>
         </Card>
-      ))}
+      )}
     </div>
+  )
+}
+
+// ============================================
+// Vista previa inline (tabla simple)
+// ============================================
+function PreviewTable({ tipo, data }: { tipo: string; data: any[] }) {
+  if (!data || data.length === 0) {
+    return <div className="text-center text-slate-500 py-6">Sin datos</div>
+  }
+  const cols = Object.keys(data[0]).filter((k) => {
+    const v = data[0][k]
+    return (
+      v !== null &&
+      v !== undefined &&
+      typeof v !== 'object' &&
+      !k.endsWith('Fmt') &&
+      k !== 'id'
+    )
+  })
+  return (
+    <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[420px] overflow-y-auto">
+      <table className="w-full text-xs">
+        <thead className="bg-slate-100 sticky top-0">
+          <tr>
+            {cols.map((c) => (
+              <th key={c} className="px-2 py-1.5 text-left font-bold text-slate-700">
+                {c}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.slice(0, 100).map((row, i) => (
+            <tr key={i} className="border-t border-slate-100">
+              {cols.map((c) => (
+                <td key={c} className="px-2 py-1.5 text-slate-700 max-w-[200px] truncate">
+                  {String(row[c] ?? '')}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.length > 100 && (
+        <div className="text-center text-xs text-slate-500 py-2 bg-slate-50">
+          Mostrando primeros 100 de {data.length} registros. Exporta para ver todos.
+        </div>
+      )}
     </div>
   )
 }
