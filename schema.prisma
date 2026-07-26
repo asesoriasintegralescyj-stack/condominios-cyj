@@ -357,7 +357,10 @@ model OrdenTrabajo {
   
   // Forma de pago / imputación
   formaPago       String?  // Gasto Común Mensual, Fondo de Reserva, Gasto Extraordinario
-  
+
+  // Auditoría — quién creó la OT (para alertas de supervisor SUP1)
+  creadoPor       String?  // ID del User que creó la OT
+
   // Campos de aprobación
   estadoAprobacion  String?  @default("Pendiente") // Pendiente, Aprobada, Rechazada
   fechaSolicitudAprob String?  // Fecha en que se solicitó aprobación
@@ -400,6 +403,7 @@ model OrdenTrabajo {
   @@index([centroCostoId])
   @@index([createdAt])
   @@index([fechaInicio])
+  @@index([creadoPor])
 }
 
 model OTMaterial {

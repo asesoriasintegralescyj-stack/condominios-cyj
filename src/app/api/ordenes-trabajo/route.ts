@@ -133,10 +133,11 @@ export async function POST(request: NextRequest) {
     
     // Extract resources from data
     const { materiales, herramientas, tareas, personalOT, centroCostoId, ...otData } = data
-    
+
     const orden = await db.ordenTrabajo.create({
       data: {
         otNum: otData.otNum || nextNum,
+        creadoPor: session.user.id,
         titulo: otData.titulo,
         tipo: otData.tipo || 'Correctivo',
         prioridad: otData.prioridad || 'Media',
