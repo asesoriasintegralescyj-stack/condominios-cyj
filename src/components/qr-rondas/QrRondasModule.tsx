@@ -59,6 +59,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { useSession } from '@/hooks/use-session'
+import { UBICACIONES_PATENTES } from '@/lib/qr-rondas/ubicaciones'
 import {
   Search,
   Plus,
@@ -1421,12 +1422,8 @@ export function QrRondasModule() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas las ubicaciones</SelectItem>
-                        {Array.from(new Set(locations
-                          .filter(l => l.code.includes('ENTRADA-') || l.code.includes('SALIDA-'))
-                          .map(l => l.code.match(/^QR-([A-ZÁÉÍÓÚÑ\s]+)-/)?.[1])
-                          .filter(Boolean)
-                        )).map((ubicacion) => (
-                          <SelectItem key={ubicacion} value={ubicacion as string}>{ubicacion}</SelectItem>
+                        {UBICACIONES_PATENTES.map((u) => (
+                          <SelectItem key={u} value={u}>{u}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1605,13 +1602,21 @@ export function QrRondasModule() {
             </div>
             <div>
               <Label>Ubicación *</Label>
-              <Input
+              <Select
                 value={patenteForm.ubicacion}
-                onChange={(e) => setPatenteForm({ ...patenteForm, ubicacion: e.target.value })}
-                placeholder="Ej: Portería Principal / Estacionamiento Visitas"
-              />
+                onValueChange={(v) => setPatenteForm({ ...patenteForm, ubicacion: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="— Selecciona una ubicación —" />
+                </SelectTrigger>
+                <SelectContent>
+                  {UBICACIONES_PATENTES.map((u) => (
+                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-slate-500 mt-1">
-                Selecciona o escribe la ubicación de entrada.
+                Solo se permiten las 8 ubicaciones autorizadas del condominio.
               </p>
             </div>
             <div>

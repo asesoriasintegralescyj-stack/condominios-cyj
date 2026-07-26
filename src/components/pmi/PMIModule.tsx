@@ -45,6 +45,7 @@ import {
   BADGE_FRECUENCIA,
   DOT_FRECUENCIA,
 } from '@/lib/pmi/lv-data'
+import { CumplimientoPanel } from '@/components/pmi/CumplimientoPanel'
 
 // ============================================
 // Tipos
@@ -919,6 +920,10 @@ export function PMIModule() {
           </div>
         )}
       </div>
+
+      {/* ===== Control de Cumplimiento PMI (panel auto-actualizado) ===== */}
+      <CumplimientoPanel />
+
 
       {/* Layout 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

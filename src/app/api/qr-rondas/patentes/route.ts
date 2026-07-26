@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { isValidUbicacionPatente, UBICACIONES_PATENTES } from '@/lib/qr-rondas/ubicaciones'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -86,6 +87,12 @@ export async function POST(request: NextRequest) {
     if (!ubicacion || typeof ubicacion !== 'string' || !ubicacion.trim()) {
       return NextResponse.json(
         { error: 'La ubicación es obligatoria' },
+        { status: 400 },
+      )
+    }
+    if (!isValidUbicacionPatente(ubicacion.trim())) {
+      return NextResponse.json(
+        { error: `Ubicación no válida. Debe ser una de: ${UBICACIONES_PATENTES.join(', ')}` },
         { status: 400 },
       )
     }
