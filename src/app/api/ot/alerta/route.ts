@@ -1,22 +1,23 @@
 /**
  * API: /api/ot/alerta
  *
- * POST — Verifica si el supervisor SUP1 ha generado el mínimo de 3 OT
- *        durante el día en curso (America/Santiago). Si no cumple la meta,
- *        envía correo de alerta a:
+ * POST — Genera el RESUMEN DIARIO de OT del supervisor SUP1.
+ *        Envía siempre un correo (alerta si meta no cumplida, resumen si cumplida) a:
  *          To: operaciones.lagunanorte@gmail.com
  *          Cc: administracionlagunanorte@gmail.com
  *        From: asesoriasintegralescyj@gmail.com (SMTP_USER)
- *        Subject: NO HAY REGISTRO DE TRABAJOS
+ *        Subject adaptativo:
+ *          - Meta no cumplida (< 3 OT): "NO HAY REGISTRO DE TRABAJOS"
+ *          - Meta cumplida (≥ 3 OT):    "RESUMEN DIARIO DE OT — DD-MM-YYYY (N OTs)"
  *
- * El cron de Vercel llama este endpoint cada hora de 08:00 a 18:00 Santiago.
+ * El cron de Vercel llama este endpoint al cierre del día (18:00 Santiago).
  *
  * Lógica:
  *   - Busca User con rol='supervisor' AND activo=true (SUP1)
  *   - Si no hay supervisor activo, retorna sin acción.
- *   - Cuenta OTs donde creadoPor = supervisor.id AND createdAt >= inicio de hoy (Santiago)
- *   - Si otCreadasHoy >= 3, NO envía correo (meta cumplida).
- *   - Si otCreadasHoy < 3, envía correo y retorna detalle.
+ *   - Carga TODAS las OT donde creadoPor = supervisor.id creadas hoy (Santiago)
+ *   - Calcula conteo por estado (Pendiente, En Progreso, Completado, Cancelado)
+ *   - Envía correo con resumen completo (lista de OT + tabla por estado)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
     const supervisorNombreCompleto = `${supervisor.nombre}${supervisor.apellido ? ' ' + supervisor.apellido : ''}`
 
-    // 2. Contar OTs creadas por el supervisor hoy (UTC range mapping a Santiago)
+    // 2. Cargar TODAS las OT creadas por el supervisor hoy (UTC range mapping a Santiago)
     const otHoy = await db.ordenTrabajo.findMany({
       where: {
         creadoPor: supervisor.id,
@@ -124,12 +125,28 @@ export async function POST(request: NextRequest) {
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
-      take: 10,
     })
 
     const otCreadasHoy = otHoy.length
 
-    // 3. Enviar alerta si no cumple la meta
+    // 3. Calcular resumen por estado
+    const normalizeEstado = (e: string) => (e || '').toLowerCase().trim()
+    const resumenPorEstado = {
+      pendiente: 0,
+      enProgreso: 0,
+      completado: 0,
+      cancelado: 0,
+    }
+    for (const ot of otHoy) {
+      const e = normalizeEstado(ot.estado)
+      if (e.includes('complet')) resumenPorEstado.completado++
+      else if (e.includes('progres')) resumenPorEstado.enProgreso++
+      else if (e.includes('cancel')) resumenPorEstado.cancelado++
+      else if (e.includes('pendient')) resumenPorEstado.pendiente++
+      // Estados desconocidos no se cuentan en ninguna categoría
+    }
+
+    // 4. Enviar resumen diario (siempre envía — subject adaptativo en el helper)
     const result = await enviarAlertaOtSupervisor({
       fecha: fechaISO,
       supervisorNombre: supervisorNombreCompleto,
@@ -144,6 +161,7 @@ export async function POST(request: NextRequest) {
         createdAt: ot.createdAt.toISOString(),
       })),
       horaConsulta,
+      resumenPorEstado,
     })
 
     return NextResponse.json({
@@ -158,6 +176,13 @@ export async function POST(request: NextRequest) {
       otCreadasHoy,
       otMeta: MIN_OT_DIARIA,
       cumpleMeta: otCreadasHoy >= MIN_OT_DIARIA,
+      resumenPorEstado,
+      otDetalle: otHoy.map((ot) => ({
+        otNum: ot.otNum,
+        titulo: ot.titulo,
+        estado: ot.estado,
+        createdAt: ot.createdAt.toISOString(),
+      })),
       enviado: result.enviado,
       messageId: result.messageId,
       error: result.error,

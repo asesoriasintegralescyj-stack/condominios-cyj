@@ -1,8 +1,19 @@
 /**
- * Email helper para alertas de OT no generadas por el supervisor SUP1.
+ * Email helper para RESUMEN DIARIO de OT del supervisor SUP1.
  *
- * Envía un correo HTML cuando el supervisor (rol='supervisor') no ha creado
- * el mínimo de 3 OT durante el día en curso (America/Santiago).
+ * Envía un correo HTML con un resumen de las OT creadas por el supervisor
+ * (rol='supervisor', etiquetado como SUP1) durante el día en curso
+ * (America/Santiago), agrupadas por estado.
+ *
+ * Comportamiento:
+ *   - Si otCreadasHoy < otMeta (3): Subject = "NO HAY REGISTRO DE TRABAJOS"
+ *     (alerta, banda roja, indica OT faltantes)
+ *   - Si otCreadasHoy >= otMeta: Subject = "RESUMEN DIARIO DE OT — DD-MM-YYYY (N OTs)"
+ *     (reporte informativo, banda verde, meta cumplida)
+ *
+ * El correo SIEMPRE se envía cuando se invoca al endpoint (no se omite
+ * aunque la meta esté cumplida), para que Operaciones reciba el resumen
+ * diario completo con la lista de OT y su estado.
  *
  * Reutiliza la misma configuración SMTP que el resto del sistema
  * (SMTP_HOST, SMTP_USER, SMTP_PASSWORD). Si no hay SMTP configurado,
@@ -11,8 +22,6 @@
  * From: asesoriasintegralescyj@gmail.com (SMTP_USER)
  * To:   operaciones.lagunanorte@gmail.com
  * Cc:   administracionlagunanorte@gmail.com
- *
- * Subject fijo: "NO HAY REGISTRO DE TRABAJOS"
  */
 
 import nodemailer, { type Transporter } from 'nodemailer'
@@ -20,6 +29,13 @@ import nodemailer, { type Transporter } from 'nodemailer'
 const OT_EMAIL_FROM = process.env.SMTP_USER || 'asesoriasintegralescyj@gmail.com'
 const OT_EMAIL_TO = 'operaciones.lagunanorte@gmail.com'
 const OT_EMAIL_CC = 'administracionlagunanorte@gmail.com'
+
+export interface OtResumenEstado {
+  pendiente: number
+  enProgreso: number
+  completado: number
+  cancelado: number
+}
 
 export interface OtAlertaPayload {
   fecha: string // YYYY-MM-DD
@@ -35,6 +51,7 @@ export interface OtAlertaPayload {
     createdAt: string
   }>
   horaConsulta: string // HH:MM Santiago
+  resumenPorEstado: OtResumenEstado
 }
 
 let cachedTransport: Transporter | null = null
@@ -80,12 +97,34 @@ function formatFechaLarga(fechaISO: string): string {
   return `${dias[date.getUTCDay()]} ${d} de ${meses[date.getUTCMonth()]} de ${a}`
 }
 
+function formatHoraCorta(iso: string): string {
+  try {
+    const d = new Date(iso)
+    // Convertir a Santiago UTC-4
+    const santiago = new Date(d.getTime() - 4 * 60 * 60 * 1000)
+    const hh = String(santiago.getUTCHours()).padStart(2, '0')
+    const mm = String(santiago.getUTCMinutes()).padStart(2, '0')
+    return `${hh}:${mm}`
+  } catch {
+    return iso
+  }
+}
+
+function estadoBadgeColor(estado: string): { bg: string; color: string } {
+  const e = (estado || '').toLowerCase()
+  if (e.includes('complet')) return { bg: '#dcfce7', color: '#166534' }
+  if (e.includes('progres')) return { bg: '#dbeafe', color: '#1e40af' }
+  if (e.includes('cancel')) return { bg: '#fee2e2', color: '#991b1b' }
+  if (e.includes('pendient')) return { bg: '#fef3c7', color: '#92400e' }
+  return { bg: '#f1f5f9', color: '#475569' }
+}
+
 function buildAlertEmailHtml(p: OtAlertaPayload): string {
   const fechaLarga = formatFechaLarga(p.fecha)
   const fechaCorta = p.fecha.split('-').reverse().join('-') // DD-MM-YYYY
 
-  const faltantes = Math.max(0, p.otMeta - p.otCreadasHoy)
   const cumpleMeta = p.otCreadasHoy >= p.otMeta
+  const faltantes = Math.max(0, p.otMeta - p.otCreadasHoy)
 
   const estadoColor = cumpleMeta ? '#166534' : '#991b1b'
   const estadoBg = cumpleMeta ? '#dcfce7' : '#fee2e2'
@@ -93,25 +132,62 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
     ? 'META CUMPLIDA'
     : `FALTAN ${faltantes} OT POR GENERAR`
 
+  // Cards de resumen por estado
+  const estados = [
+    { label: 'Pendiente', value: p.resumenPorEstado.pendiente, bg: '#fef3c7', color: '#92400e' },
+    { label: 'En Progreso', value: p.resumenPorEstado.enProgreso, bg: '#dbeafe', color: '#1e40af' },
+    { label: 'Completado', value: p.resumenPorEstado.completado, bg: '#dcfce7', color: '#166534' },
+    { label: 'Cancelado', value: p.resumenPorEstado.cancelado, bg: '#fee2e2', color: '#991b1b' },
+  ]
+
+  const estadoCards = estados
+    .map(
+      (e) => `
+      <td width="25%" style="padding:0 4px;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:${e.bg};border-radius:8px;">
+          <tr><td style="padding:14px 6px;text-align:center;">
+            <div style="font-size:24px;font-weight:700;color:${e.color};line-height:1;">${e.value}</div>
+            <div style="font-size:10px;font-weight:600;color:${e.color};text-transform:uppercase;margin-top:4px;letter-spacing:0.5px;">${escapeHtml(e.label)}</div>
+          </td></tr>
+        </table>
+      </td>`,
+    )
+    .join('')
+
+  // Filas de OT (todas las creadas hoy)
   const otRows = p.otRecientes.length
     ? p.otRecientes
-        .map(
-          (ot) => `
+        .map((ot) => {
+          const badge = estadoBadgeColor(ot.estado)
+          return `
         <tr>
           <td style="font-family:Menlo,Consolas,monospace;font-size:12px;font-weight:700;color:#1e40af;padding:8px 10px;border:1px solid #e2e8f0;background:#eff6ff;">${escapeHtml(ot.otNum)}</td>
           <td style="font-weight:600;color:#0f172a;padding:8px 10px;border:1px solid #e2e8f0;">${escapeHtml(ot.titulo)}</td>
-          <td style="color:#475569;padding:8px 10px;border:1px solid #e2e8f0;">${escapeHtml(ot.estado)}</td>
-          <td style="color:#64748b;font-size:12px;padding:8px 10px;border:1px solid #e2e8f0;">${escapeHtml(ot.createdAt)}</td>
-        </tr>`,
-        )
+          <td style="padding:8px 10px;border:1px solid #e2e8f0;">
+            <span style="display:inline-block;padding:3px 8px;border-radius:4px;background:${badge.bg};color:${badge.color};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(ot.estado)}</span>
+          </td>
+          <td style="color:#64748b;font-size:12px;padding:8px 10px;border:1px solid #e2e8f0;">${escapeHtml(formatHoraCorta(ot.createdAt))} hrs</td>
+        </tr>`
+        })
         .join('')
     : `<tr><td colspan="4" style="padding:18px;text-align:center;color:#991b1b;font-weight:600;background:#fef2f2;border:1px solid #fecaca;">⚠ SIN REGISTROS — El supervisor no ha generado OT durante el día</td></tr>`
+
+  // Header adaptativo
+  const headerGradient = cumpleMeta
+    ? 'linear-gradient(135deg,#166534 0%,#14532d 100%)'
+    : 'linear-gradient(135deg,#991b1b 0%,#7f1d1d 100%)'
+  const headerTitle = cumpleMeta
+    ? `RESUMEN DIARIO DE OT — ${escapeHtml(fechaCorta)}`
+    : 'NO HAY REGISTRO DE TRABAJOS'
+  const headerSubtitle = cumpleMeta
+    ? `Reporte diario del supervisor ${escapeHtml(p.supervisorCodigo)} — Condominios Laguna Norte CyJ`
+    : `Alerta automática de supervisor ${escapeHtml(p.supervisorCodigo)} — Condominios Laguna Norte CyJ`
 
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>NO HAY REGISTRO DE TRABAJOS - ${escapeHtml(fechaCorta)}</title>
+  <title>${escapeHtml(headerTitle)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:24px 0;">
@@ -120,9 +196,9 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
         <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
           <!-- Header -->
           <tr>
-            <td style="background:linear-gradient(135deg,#991b1b 0%,#7f1d1d 100%);padding:24px 28px;color:#ffffff;">
-              <h1 style="margin:0 0 4px 0;font-size:22px;font-weight:700;">NO HAY REGISTRO DE TRABAJOS</h1>
-              <p style="margin:0;font-size:13px;opacity:0.92;">Alerta automática de supervisor SUP1 — Condominios Laguna Norte CyJ</p>
+            <td style="background:${headerGradient};padding:24px 28px;color:#ffffff;">
+              <h1 style="margin:0 0 4px 0;font-size:22px;font-weight:700;">${escapeHtml(headerTitle)}</h1>
+              <p style="margin:0;font-size:13px;opacity:0.92;">${headerSubtitle}</p>
             </td>
           </tr>
 
@@ -134,11 +210,11 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
               </p>
 
               <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#1e293b;">
-                El sistema de gestión <strong>Condominios Laguna Norte — CyJ</strong> ha detectado que al cierre
-                de la hora <strong>${escapeHtml(p.horaConsulta)}</strong> del día
+                El sistema de gestión <strong>Condominios Laguna Norte — CyJ</strong> registra que al cierre
+                de las <strong>${escapeHtml(p.horaConsulta)}</strong> horas del día
                 <strong>${escapeHtml(fechaLarga)}</strong>, el supervisor
-                <strong style="color:#991b1b;">${escapeHtml(p.supervisorNombre)} (${escapeHtml(p.supervisorCodigo)})</strong>
-                ha generado <strong style="color:#991b1b;">${p.otCreadasHoy} OT</strong>
+                <strong style="color:${estadoColor};">${escapeHtml(p.supervisorNombre)} (${escapeHtml(p.supervisorCodigo)})</strong>
+                ha generado <strong style="color:${estadoColor};">${p.otCreadasHoy} OT</strong>
                 de un mínimo requerido de <strong>${p.otMeta} OT diarias</strong>.
               </p>
 
@@ -146,7 +222,7 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
               <table width="100%" cellpadding="0" cellspacing="0" style="background:${estadoBg};border:2px solid ${estadoColor};border-radius:8px;margin:16px 0;">
                 <tr>
                   <td style="padding:14px 18px;">
-                    <p style="margin:0 0 4px 0;font-size:15px;font-weight:700;color:${estadoColor};">📅 Reporte: ${escapeHtml(fechaCorta)} · Hora: ${escapeHtml(p.horaConsulta)}</p>
+                    <p style="margin:0 0 4px 0;font-size:15px;font-weight:700;color:${estadoColor};">📅 Reporte: ${escapeHtml(fechaCorta)} · Hora: ${escapeHtml(p.horaConsulta)} hrs</p>
                     <p style="margin:0;font-size:13px;color:${estadoColor};">
                       Estado: <strong>${estadoLabel}</strong> · Mínimo diario: ${p.otMeta} OT
                     </p>
@@ -154,7 +230,7 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
                 </tr>
               </table>
 
-              <!-- KPI cards -->
+              <!-- KPI cards: OT generadas vs meta -->
               <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
                 <tr>
                   <td width="50%" style="padding:0 4px 0 0;">
@@ -176,8 +252,17 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
                 </tr>
               </table>
 
+              <!-- Resumen por estado -->
               <p style="margin:18px 0 10px 0;font-size:14px;font-weight:600;color:#1e293b;">
-                Detalle de OT generadas hoy:
+                📊 Resumen por estado:
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
+                <tr>${estadoCards}</tr>
+              </table>
+
+              <!-- Detalle de OT -->
+              <p style="margin:18px 0 10px 0;font-size:14px;font-weight:600;color:#1e293b;">
+                📋 Detalle de OT creadas hoy (ordenadas por más reciente):
               </p>
 
               <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
@@ -194,16 +279,29 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
                 </tbody>
               </table>
 
-              <p style="margin:18px 0 0 0;font-size:14px;line-height:1.6;color:#1e293b;">
-                <strong>Acción requerida:</strong> Se solicita al supervisor coordinar la generación de las OT pendientes
-                para alcanzar la meta diaria mínima de ${p.otMeta} OT. El sistema continuará enviando recordatorios
-                cada hora hasta cumplir la meta o finalizar la jornada.
-              </p>
+              <!-- Resumen ejecutivo -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:8px;margin:18px 0 0 0;padding:14px 18px;border-left:4px solid ${estadoColor};">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:${estadoColor};">📝 Resumen ejecutivo</p>
+                    <p style="margin:0;font-size:13px;line-height:1.6;color:#1e293b;">
+                      De las <strong>${p.otCreadasHoy} OT</strong> creadas por ${escapeHtml(p.supervisorCodigo)} durante el día:
+                      <strong>${p.resumenPorEstado.completado}</strong> completada(s),
+                      <strong>${p.resumenPorEstado.enProgreso}</strong> en progreso,
+                      <strong>${p.resumenPorEstado.pendiente}</strong> pendiente(s) y
+                      <strong>${p.resumenPorEstado.cancelado}</strong> cancelada(s).
+                      ${cumpleMeta
+                        ? `Meta diaria de <strong>${p.otMeta} OT</strong> cumplida. ✅`
+                        : `Faltan <strong>${faltantes} OT</strong> para alcanzar la meta diaria de <strong>${p.otMeta} OT</strong>. ⚠`
+                      }
+                    </p>
+                  </td>
+                </tr>
+              </table>
 
-              <p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">
-                Este correo es generado automáticamente por el sistema cada hora durante el horario de operaciones
-                (08:00–18:00 hora Santiago). Una vez que el supervisor genere las OT mínimas, el sistema
-                detendrá los envíos de manera automática.
+              <p style="margin:14px 0 0 0;font-size:13px;color:#64748b;">
+                Este correo es generado automáticamente por el sistema. El reporte se envía al cierre
+                de la jornada (18:00 hora Santiago) con el detalle completo de las OT creadas durante el día.
               </p>
             </td>
           </tr>
@@ -232,22 +330,17 @@ export interface OtSendResult {
 }
 
 /**
- * Envía el correo de alerta. Si la meta ya está cumplida (otCreadasHoy >= otMeta),
- * NO envía el correo y retorna motivoNoEnvio explicando el motivo.
+ * Envía el correo de resumen diario. Siempre envía el correo (incluso si
+ * la meta está cumplida), con subject adaptativo:
+ *   - Meta cumplida → "RESUMEN DIARIO DE OT — DD-MM-YYYY (N OTs)"
+ *   - Meta no cumplida → "NO HAY REGISTRO DE TRABAJOS"
  */
 export async function enviarAlertaOtSupervisor(
   payload: OtAlertaPayload,
 ): Promise<OtSendResult> {
-  if (payload.otCreadasHoy >= payload.otMeta) {
-    return {
-      enviado: false,
-      motivoNoEnvio: `Meta cumplida (${payload.otCreadasHoy}/${payload.otMeta} OT) — no se envía alerta`,
-    }
-  }
-
   const transport = getTransport()
   if (!transport) {
-    console.warn('[OT Alerta] SMTP no configurado — no se envió el correo')
+    console.warn('[OT Resumen] SMTP no configurado — no se envió el correo')
     return {
       enviado: false,
       error:
@@ -255,7 +348,14 @@ export async function enviarAlertaOtSupervisor(
     }
   }
 
-  const subject = 'NO HAY REGISTRO DE TRABAJOS'
+  const fechaCorta = payload.fecha.split('-').reverse().join('-')
+  const cumpleMeta = payload.otCreadasHoy >= payload.otMeta
+
+  // Subject adaptativo: alerta si meta no cumplida, resumen informativo si cumplida
+  const subject = cumpleMeta
+    ? `RESUMEN DIARIO DE OT — ${fechaCorta} (${payload.otCreadasHoy} OTs)`
+    : 'NO HAY REGISTRO DE TRABAJOS'
+
   const html = buildAlertEmailHtml(payload)
 
   try {
@@ -269,7 +369,7 @@ export async function enviarAlertaOtSupervisor(
     })
     return { enviado: true, messageId: info.messageId }
   } catch (err) {
-    console.error('[OT Alerta] Error enviando correo:', err)
+    console.error('[OT Resumen] Error enviando correo:', err)
     return { enviado: false, error: String(err) }
   }
 }
