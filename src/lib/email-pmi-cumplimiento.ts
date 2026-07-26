@@ -121,7 +121,7 @@ function buildAlertEmailHtml(p: PmiAlertaPayload): string {
           <tr>
             <td style="padding:24px 28px;">
               <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#1e293b;">
-                Estimado Jefe de Operaciones,
+                Estimado Luis García (Jefe de Operaciones),
               </p>
 
               <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#1e293b;">
@@ -193,7 +193,7 @@ function buildAlertEmailHtml(p: PmiAlertaPayload): string {
               </table>
 
               <p style="margin:18px 0 0 0;font-size:14px;line-height:1.6;color:#1e293b;">
-                <strong>Acción requerida:</strong> Se solicita al Jefe de Operaciones coordinar la ejecución
+                <strong>Acción requerida:</strong> Se solicita a Luis García (Jefe de Operaciones) coordinar la ejecución
                 de las LVs pendientes o registrar la justificación correspondiente en el sistema a la brevedad.
               </p>
 

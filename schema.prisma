@@ -362,11 +362,18 @@ model OrdenTrabajo {
   creadoPor       String?  // ID del User que creó la OT
 
   // Campos de aprobación
-  estadoAprobacion  String?  @default("Pendiente") // Pendiente, Aprobada, Rechazada
+  // Flujo: Alfredo marca Completado → Luis aprueba (etapaAprobacionSupervisor)
+  //        → Admin aprueba final (estadoAprobacion) → genera SC automática
+  estadoAprobacion  String?  @default("Pendiente") // Pendiente, Aprobada, Rechazada (etapa Admin)
+  etapaAprobacionSupervisor String? @default("Pendiente") // Pendiente, Aprobada, Rechazada (etapa Luis)
+  supervisorAprobadorId String?  // ID del Jefe de Operaciones que aprobó/rechazó (Luis)
+  supervisorAprobadorNombre String?
+  supervisorFechaAprobacion String?
+  supervisorObservaciones String?
   fechaSolicitudAprob String?  // Fecha en que se solicitó aprobación
-  fechaAprobacion   String?  // Fecha de aprobación/rechazo
-  aprobadoPor       String?  // ID del usuario que aprobó/rechazó
-  observacionesAprob String? // Observaciones del supervisor
+  fechaAprobacion   String?  // Fecha de aprobación/rechazo final (Admin)
+  aprobadoPor       String?  // ID del usuario Admin que aprobó/rechazó
+  observacionesAprob String? // Observaciones del Admin
   
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo

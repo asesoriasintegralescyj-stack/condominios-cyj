@@ -206,7 +206,7 @@ function buildAlertEmailHtml(p: OtAlertaPayload): string {
           <tr>
             <td style="padding:24px 28px;">
               <p style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:#1e293b;">
-                Estimado equipo de operaciones (Supervisor Móvil SUP1),
+                Estimado equipo de operaciones (Supervisor Alfredo Muñoz — SUP1),
               </p>
 
               <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;color:#1e293b;">
