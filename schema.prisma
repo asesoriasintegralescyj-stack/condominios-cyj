@@ -1489,6 +1489,8 @@ model RegistroLV {
   itemsCompletados     String?  // JSON array de índices de items completados
   firmaUrl             String?
   fotoUrl              String?
+  pdfRespaldoUrl       String?  // PDF obligatorio de respaldo (base64 data URL) para completar LV
+  pdfRespaldoNombre    String?  // Nombre original del archivo PDF
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

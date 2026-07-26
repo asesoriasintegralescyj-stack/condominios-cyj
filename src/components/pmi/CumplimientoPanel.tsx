@@ -108,7 +108,10 @@ export function CumplimientoPanel() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Error al enviar')
       if (json.enviado) {
-        toast.success(`✉ Alerta enviada a operaciones.lagunanorte@gmail.com`)
+        toast.success(
+          `✉ Alerta enviada: From asesoriasintegralescyj@gmail.com → To operaciones.lagunanorte@gmail.com (Cc: administracionlagunanorte@gmail.com)`,
+          { duration: 6000 },
+        )
       } else {
         toast.warning(`No se envió: ${json.error || 'razón desconocida'}`)
       }
@@ -289,10 +292,16 @@ export function CumplimientoPanel() {
         )}
 
         {puedeEnviarAlerta && (
-          <p className="text-xs text-slate-500 mt-2">
-            💡 Las alertas también se envían automáticamente todos los días a las <strong>08:00 AM</strong> (hora Santiago)
-            desde operaciones.lagunanorte@gmail.com con copia a administracionlagunanorte@gmail.com.
-          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-900 mt-2">
+            <p className="font-semibold mb-1">📧 Configuración de alertas automáticas</p>
+            <ul className="space-y-0.5 ml-4 list-disc">
+              <li><strong>Envío automático:</strong> todos los días a las <strong>08:00 AM</strong> (hora Santiago)</li>
+              <li><strong>Remitente (From):</strong> asesoriasintegralescyj@gmail.com</li>
+              <li><strong>Destinatario (To):</strong> operaciones.lagunanorte@gmail.com</li>
+              <li><strong>Con copia (Cc):</strong> administracionlagunanorte@gmail.com</li>
+              <li><strong>Asunto:</strong> ⚠ FALTA CUMPLIMIENTO PMI — [fecha] (N LVs pendientes)</li>
+            </ul>
+          </div>
         )}
       </CardContent>
     </Card>
