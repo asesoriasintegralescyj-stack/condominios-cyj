@@ -27,6 +27,7 @@ export type Module =
   | 'rondas'
   | 'qrrondas'
   | 'solicitudescompra'
+  | 'rendiciongastos'
   | 'permisos'
   | 'manuales'
   | 'pmi'

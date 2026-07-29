@@ -57,6 +57,10 @@ model Condominio {
   // Solicitudes de Compra
   solicitudesCompra SolicitudCompra[]
   listasDesplegables ListaDesplegable[]
+<<<<<<< HEAD
+=======
+  // Rendición de Gastos
+>>>>>>> 8990bee (feat: modulo rendicion de gastos completo - APIs, componente, PDF, centros de costo, categorias)
   rendicionesGastos RendicionGasto[]
 }
 
@@ -326,6 +330,7 @@ model CentroCostoMaster {
   ordenesTrabajo  OrdenTrabajo[]
   gastos          Gasto[]
   proyectos       Proyecto[]
+  rendicionesGastos RendicionGasto[]
 }
 
 // ============================================
@@ -1661,4 +1666,68 @@ model MovilAuditLog {
   @@index([entityType])
   @@index([action])
   @@index([createdAt])
+}
+
+// ============================================
+// RENDICIÓN DE GASTOS
+// ============================================
+model CategoriaGasto {
+  id     String  @id @default(cuid())
+  nombre String  @unique
+  icon   String  @default("📌")
+  activo Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ItemRendicion[]
+}
+
+model RendicionGasto {
+  id              String   @id @default(cuid())
+  numeroRendicion String   @unique              // RG-0001, RG-0002, ...
+  titulo          String
+  descripcion     String?
+  estado          String   @default("Borrador") // Borrador, Enviado, Aprobado, Rechazado, Modificar
+  montoTotal      Float    @default(0)
+  userId          String
+  condominioId    String?
+  centroCostoId   String?
+  notaRevision    String?
+  revisadoPor     String?
+  revisadoAt      DateTime?
+  enviadoAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id])
+  condominio Condominio? @relation(fields: [condominioId], references: [id])
+  centroCosto CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  items      ItemRendicion[]
+
+  @@index([userId])
+  @@index([condominioId])
+  @@index([centroCostoId])
+  @@index([estado])
+  @@index([createdAt])
+}
+
+model ItemRendicion {
+  id              String   @id @default(cuid())
+  descripcion     String
+  numeroBoleta    String?
+  montoRendir     Float
+  categoria       String?
+  fechaGasto      String?
+  fotoBoletaUrl   String?  // base64 JPEG
+  fotoCompraUrl   String?  // base64 JPEG
+  rendicionId     String
+  categoriaGastoId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rendicion     RendicionGasto @relation(fields: [rendicionId], references: [id], onDelete: Cascade)
+  categoriaGasto CategoriaGasto? @relation(fields: [categoriaGastoId], references: [id])
+
+  @@index([rendicionId])
+  @@index([categoriaGastoId])
 }

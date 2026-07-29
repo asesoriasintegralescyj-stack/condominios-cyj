@@ -54,7 +54,11 @@ const moduleTitles: Record<string, string> = {
   manuales: 'Manuales y Capacitaciones',
   auditoria: 'Auditoría',
   pmi: 'Plan de Mantenimiento Integral (PMI)',
+<<<<<<< HEAD
   rendiciongastos: 'Rendición de Gastos',
+=======
+  rendiciongastos: 'Rendicion de Gastos',
+>>>>>>> 8990bee (feat: modulo rendicion de gastos completo - APIs, componente, PDF, centros de costo, categorias)
 }
 
 export function MainContent() {
