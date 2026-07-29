@@ -442,8 +442,36 @@ export async function GET(request: NextRequest) {
 
             // Obtener registro real
             const grupo = registrosTrabajador.get(fechaDia)
-            const primeraEntrada = grupo?.entradas[0]
-            const primeraSalida = grupo?.salidas[0]
+            let entradasDelDia = grupo?.entradas || []
+            let salidasDelDia = grupo?.salidas || []
+
+            // FILTRO CLAVE: Para turnos diurnos (inicio < 12:00), descartar Entradas
+            // entre 00:00-04:00. Estas pertenecen al cierre del turno noche
+            // del día anterior, NO a la entrada del turno día actual.
+            const esTurnoDia = horarioInicio && parseHoraStr(horarioInicio) < 12 * 60
+            if (esTurnoDia) {
+              entradasDelDia = entradasDelDia.filter(e => parseHoraStr(e.hora) >= 4 * 60)
+              salidasDelDia = salidasDelDia.filter(s => parseHoraStr(s.hora) >= 4 * 60)
+            }
+
+            // Para turnos noche (19:00-07:00), buscar registros del día siguiente
+            // que crucen medianoche (salidas matutinas y entradas madrugada)
+            if (!esTurnoDia && horarioInicio === '19:00') {
+              const fechaSiguiente = addDays(fechaDia, 1)
+              const grupoSiguiente = registrosTrabajador.get(fechaSiguiente)
+              if (grupoSiguiente) {
+                const salidasManana = grupoSiguiente.salidas.filter(s => parseHoraStr(s.hora) < 12 * 60)
+                salidasDelDia = [...salidasDelDia, ...salidasManana]
+                const entradasManana = grupoSiguiente.entradas.filter(e => parseHoraStr(e.hora) < 12 * 60)
+                entradasDelDia = [...entradasDelDia, ...entradasManana]
+              }
+            }
+
+            entradasDelDia.sort((a: any, b: any) => parseHoraStr(a.hora) - parseHoraStr(b.hora))
+            salidasDelDia.sort((a: any, b: any) => parseHoraStr(a.hora) - parseHoraStr(b.hora))
+
+            const primeraEntrada = entradasDelDia[0]
+            const primeraSalida = salidasDelDia[0]
             const inas = inasistenciasTrabajador.get(fechaDia)
 
             // Determinar color y texto RECALCULANDO en tiempo real
@@ -459,7 +487,8 @@ export async function GET(request: NextRequest) {
               const horaEsperadaMin = horarioInicio ? parseHoraStr(horarioInicio) : 0
               let minutosAtraso = horaRealMin - horaEsperadaMin
 
-              // Para turno 4x4 noche (19:00-07:00), registro de madrugada no es atraso
+              // Para turno noche (19:00-07:00), registro de madrugada (00:00-08:00)
+              // no es atraso: el guardia entró a las 19:00 del día anterior
               if (horarioInicio === '19:00' && horaRealMin < 12 * 60) {
                 minutosAtraso = 0
               }
@@ -472,17 +501,16 @@ export async function GET(request: NextRequest) {
                 texto = primeraEntrada.hora
               }
             } else if (primeraSalida && horarioInicio === '19:00') {
-              // TURNO NOCHE 4x4: no hay entrada pero hay salida matutina
-              // Esto significa que el trabajador viene del turno de la noche anterior
-              // (entró a las 19:00 del día anterior, salió a las 07:00 de hoy)
-              // Es una jornada valida → mostrar como OK
+              // TURNO NOCHE: no hay entrada pero hay salida matutina (< 12:00)
+              // Significa que el trabajador viene del turno de la noche anterior:
+              // entró a las 19:00 del día anterior, salió a las 07:00 de hoy.
+              // Es una jornada válida → mostrar como OK
               const horaSalidaMin = parseHoraStr(primeraSalida.hora)
               if (horaSalidaMin < 12 * 60) {
-                // Salida matutina = fin del turno de noche anterior → OK
                 color = COLOR_OK
                 texto = primeraSalida.hora
               } else {
-                // Salida en la tarde/noche sin entrada previa → raro, marcar FALLA
+                // Salida en la tarde/noche sin entrada previa → FALLA
                 color = COLOR_FALTA
                 texto = 'FALLA'
               }
@@ -607,7 +635,6 @@ export async function GET(request: NextRequest) {
             if (fechaDia > fechaHasta) continue
 
             const grupo = registrosTrabajador.get(fechaDia)
-            const primeraEntrada = grupo?.entradas[0]
             const inas = inasistenciasTrabajador.get(fechaDia)
 
             let horarioEsperado = 'Libre'
@@ -645,7 +672,17 @@ export async function GET(request: NextRequest) {
 
             let estado = 'SIN_REGISTRO'
             let minutosAtraso = 0
-            const primeraSalidaCSV = grupo?.salidas[0]
+
+            // Filtrar registros de madrugada para turnos diurnos
+            let entradasFiltradas = grupo?.entradas || []
+            let salidasFiltradas = grupo?.salidas || []
+            if (horarioInicioCSV && parseHoraStr(horarioInicioCSV) < 12 * 60) {
+              entradasFiltradas = entradasFiltradas.filter((e: any) => parseHoraStr(e.hora) >= 4 * 60)
+              salidasFiltradas = salidasFiltradas.filter((s: any) => parseHoraStr(s.hora) >= 4 * 60)
+            }
+            const primeraEntrada = entradasFiltradas[0]
+            const primeraSalidaCSV = salidasFiltradas[0]
+
             if (esLibre) {
               estado = 'LIBRE'
             } else if (primeraEntrada) {

@@ -418,11 +418,22 @@ export function analizarAsistencia(
         }
 
         const grupo = registrosPorFecha.get(fecha)
-        // Para turno noche, también buscar registros del día anterior que cricen medianoche
         let entradas = grupo?.entradas || []
         let salidas = grupo?.salidas || []
 
-        // Si es turno noche (19:00 - 07:00), la salida puede estar registrada al día siguiente
+        // FILTRO: Para turnos diurnos (inicio < 12:00), descartar Entradas/Salidas
+        // entre 00:00-04:00. Estas pertenecen al cierre del turno noche anterior,
+        // NO a la jornada del día actual.
+        if (!horarioEsperado.esNoche && horarioEsperado.inicio) {
+          const inicioEsperado = parseHora(horarioEsperado.inicio)
+          if (inicioEsperado < 12 * 60) {
+            entradas = entradas.filter(e => parseHora(e.hora) >= 4 * 60)
+            salidas = salidas.filter(s => parseHora(s.hora) >= 4 * 60)
+          }
+        }
+
+        // Si es turno noche (19:00 - 07:00), buscar registros del día siguiente
+        // que crucen medianoche (salidas y entradas matutinas)
         if (horarioEsperado.esNoche) {
           const fechaSiguiente = dateToFechaStr(addDays(fechaStrToDate(fecha), 1))
           const grupoSiguiente = registrosPorFecha.get(fechaSiguiente)
@@ -599,10 +610,22 @@ export function analizarAsistencia(
           }
 
           const grupo = registrosPorFecha.get(fecha)
-          const primeraEntrada = grupo?.entradas[0]
-          const primeraSalida = grupo?.salidas[0]
-          const segundaEntrada = grupo?.entradas[1]
-          const segundaSalida = grupo?.salidas[grupo.salidas.length - 1]
+          let entradasFix = grupo?.entradas || []
+          let salidasFix = grupo?.salidas || []
+
+          // FILTRO: Para turnos diurnos, descartar registros de madrugada (00:00-04:00)
+          if (!horarioEsperado.esNoche && horarioEsperado.inicio) {
+            const inicioEsperado = parseHora(horarioEsperado.inicio)
+            if (inicioEsperado < 12 * 60) {
+              entradasFix = entradasFix.filter(e => parseHora(e.hora) >= 4 * 60)
+              salidasFix = salidasFix.filter(s => parseHora(s.hora) >= 4 * 60)
+            }
+          }
+
+          const primeraEntrada = entradasFix[0]
+          const primeraSalida = salidasFix[0]
+          const segundaEntrada = entradasFix[1]
+          const segundaSalida = salidasFix[salidasFix.length - 1]
 
           if (!primeraEntrada) {
             ausencias++
