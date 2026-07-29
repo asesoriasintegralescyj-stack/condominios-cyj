@@ -11,12 +11,19 @@ export async function GET(
   if (!session) return apiError('No autenticado', 401)
   try {
     const { id } = await params
-    const perfil = await db.movilProfile.findUnique({
-      where: { id },
-      include: { personal: { select: { id: true, nombre: true, cargo: true, estado: true } } },
-    })
+    const perfil = await db.movilProfile.findUnique({ where: { id } })
     if (!perfil) return apiError('Perfil no encontrado', 404)
-    return NextResponse.json(perfil)
+
+    // Lookup personal vinculado
+    let personal = null
+    if (perfil.personalId) {
+      personal = await db.personal.findUnique({
+        where: { id: perfil.personalId },
+        select: { id: true, nombre: true, cargo: true, estado: true },
+      })
+    }
+
+    return NextResponse.json({ ...perfil, personal })
   } catch (error) {
     console.error('Error fetching perfil móvil:', error)
     return NextResponse.json({ error: 'Error al obtener perfil' }, { status: 500 })
@@ -40,9 +47,18 @@ export async function PUT(
     const perfil = await db.movilProfile.update({
       where: { id },
       data: updateData,
-      include: { personal: { select: { id: true, nombre: true, cargo: true, estado: true } } },
     })
-    return NextResponse.json(perfil)
+
+    // Lookup personal vinculado
+    let personalLinked = null
+    if (perfil.personalId) {
+      personalLinked = await db.personal.findUnique({
+        where: { id: perfil.personalId },
+        select: { id: true, nombre: true, cargo: true, estado: true },
+      })
+    }
+
+    return NextResponse.json({ ...perfil, personal: personalLinked })
   } catch (error) {
     console.error('Error updating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al actualizar perfil' }, { status: 500 })

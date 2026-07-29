@@ -12,11 +12,30 @@ export async function GET() {
   try {
     const perfiles = await db.movilProfile.findMany({
       orderBy: { name: 'asc' },
-      include: {
-        personal: { select: { id: true, nombre: true, cargo: true, estado: true } },
-      },
     })
-    return NextResponse.json(perfiles)
+
+    // Lookup personal vinculado manualmente (sin @relation en schema)
+    const personalIds = perfiles
+      .map(p => p.personalId)
+      .filter((id): id is string => !!id)
+
+    let personalMap: Record<string, { id: string; nombre: string; cargo: string; estado: string }> = {}
+    if (personalIds.length > 0) {
+      const personalRecords = await db.personal.findMany({
+        where: { id: { in: personalIds } },
+        select: { id: true, nombre: true, cargo: true, estado: true },
+      })
+      for (const p of personalRecords) {
+        personalMap[p.id] = p
+      }
+    }
+
+    const result = perfiles.map(p => ({
+      ...p,
+      personal: p.personalId ? (personalMap[p.personalId] || null) : null,
+    }))
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching perfiles móviles:', error)
     return NextResponse.json({ error: 'Error al obtener perfiles' }, { status: 500 })
@@ -43,9 +62,18 @@ export async function POST(request: NextRequest) {
         permissions: data.permissions || ['view'],
         personalId: data.personalId || null,
       },
-      include: { personal: { select: { id: true, nombre: true, cargo: true, estado: true } } },
     })
-    return NextResponse.json(perfil, { status: 201 })
+
+    // Lookup personal vinculado
+    let personal = null
+    if (perfil.personalId) {
+      personal = await db.personal.findUnique({
+        where: { id: perfil.personalId },
+        select: { id: true, nombre: true, cargo: true, estado: true },
+      })
+    }
+
+    return NextResponse.json({ ...perfil, personal }, { status: 201 })
   } catch (error) {
     console.error('Error creating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al crear perfil' }, { status: 500 })

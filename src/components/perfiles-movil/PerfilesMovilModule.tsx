@@ -20,7 +20,7 @@ import {
   Plus, Pencil, Trash2, Search, RefreshCw, Smartphone, Shield, User, Eye,
   Users, CheckCircle, XCircle, Star, Archive,
 } from 'lucide-react'
-import { apiFetch } from '@/lib/api-helpers'
+import { apiFetch } from '@/lib/api-client'
 
 // ─── Interfaces ───
 interface PersonalItem {
