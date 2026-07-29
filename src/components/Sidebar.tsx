@@ -28,7 +28,6 @@ import {
   BookOpen,
   Receipt,
   ClipboardCheck,
-  Receipt,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -92,7 +91,6 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'asistencia', label: 'Control Asistencia', icon: <Calendar className="w-4 h-4" /> },
       { id: 'activos', label: 'Activos', icon: <Package className="w-4 h-4" /> },
       { id: 'inventario', label: 'Inventario', icon: <Package className="w-4 h-4" /> },
-      { id: 'rendiciongastos', label: 'Rendición de Gastos', icon: <Receipt className="w-4 h-4" /> },
       { id: 'solicitudescompra', label: 'Solicitud de Compras', icon: <ShoppingCart className="w-4 h-4" /> },
     ]
   },
