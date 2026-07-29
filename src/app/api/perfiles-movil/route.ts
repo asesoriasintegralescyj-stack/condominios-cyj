@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentSession, hasPermission, apiError } from '@/lib/auth'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
+import { apiError } from '@/lib/api-helpers'
 
 // GET - Listar todos los perfiles móviles
 export async function GET() {
