@@ -5,6 +5,8 @@
  * Comparte la tabla MovilQrScan con la app móvil.
  * Cualquier escaneo que haga un guardia en la app móvil aparece aquí
  * instantáneamente (sin necesidad de sincronización manual).
+ *
+ * OPTIMIZADO: Batch location lookup (una sola query en vez de N+1)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -56,47 +58,46 @@ export async function GET(request: NextRequest) {
       if (to) where.createdAt.lte = new Date(Number(to))
     }
 
-    // Importante: el schema Prisma NO define @relation entre MovilQrScan y
-    // MovilQrLocation (mismo diseño que la app móvil). No podemos usar
-    // `include: { location }`. Hacemos lookup manual con cache.
-    const scansRaw = await withRetry(() =>
-      db.movilQrScan.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-    )
-    const total = await withRetry(() => db.movilQrScan.count({ where }))
+    // 1 query: obtener escaneos
+    // 1 query: contar total
+    const [scansRaw, total] = await Promise.all([
+      withRetry(() =>
+        db.movilQrScan.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+      ),
+      withRetry(() => db.movilQrScan.count({ where })),
+    ])
 
-    // Hidratar cada scan con su ubicación (lookup manual, con cache)
-    const locationCache = new Map<
-      string,
-      { id: string; name: string; location: string; code: string } | null
-    >()
-    const scans = await Promise.all(
-      scansRaw.map(async (s) => {
-        let loc = locationCache.get(s.qrLocationId)
-        if (loc === undefined) {
-          try {
-            loc = await withRetry(() =>
-              db.movilQrLocation.findUnique({
-                where: { id: s.qrLocationId },
-                select: { id: true, name: true, location: true, code: true },
-              }),
-            )
-          } catch {
-            loc = null
-          }
-          locationCache.set(s.qrLocationId, loc)
-        }
-        return { ...s, location: loc }
+    // OPTIMIZACIÓN: Batch location lookup (1 sola query en vez de N)
+    if (scansRaw.length === 0) {
+      return NextResponse.json({ scans: [], total })
+    }
+
+    const locationIds = [...new Set(scansRaw.map((s) => s.qrLocationId))]
+    const locations = await withRetry(() =>
+      db.movilQrLocation.findMany({
+        where: { id: { in: locationIds } },
+        select: { id: true, name: true, location: true, code: true },
       }),
     )
+
+    const locMap = new Map<string, { id: string; name: string; location: string; code: string }>()
+    for (const loc of locations) locMap.set(loc.id, loc)
+
+    // Enriquecer sin queries adicionales
+    const scans = scansRaw.map((s) => ({
+      ...s,
+      location: locMap.get(s.qrLocationId) || null,
+    }))
 
     return NextResponse.json({ scans, total })
   } catch (error) {
     console.error('Error fetching QR scans:', error)
-    return NextResponse.json({ scans: [], total: 0 })
+    const msg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ scans: [], total: 0, error: msg })
   }
 }

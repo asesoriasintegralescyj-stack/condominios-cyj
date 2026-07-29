@@ -59,7 +59,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { useSession } from '@/hooks/use-session'
-import { UBICACIONES_PATENTES } from '@/lib/qr-rondas/ubicaciones'
 import {
   Search,
   Plus,
@@ -84,6 +83,11 @@ import {
   ArrowDown,
   ArrowUpDown,
   Car,
+  Calendar,
+  Users,
+  Activity,
+  TrendingUp,
+  Link2,
 } from 'lucide-react'
 
 // ─── Tipos ───
@@ -163,11 +167,24 @@ function formatDateInputCL(date: Date): string {
   }).format(date)
 }
 
-function startOfDayCL(date: Date): Date {
-  // Devuelve el Date UTC correspondiente al inicio (00:00:00) del día en Chile
-  // para la fecha dada. Esto soluciona el bug anterior donde se usaba mediodía UTC
-  // y se excluían escaneos hechos entre 00:00 y 08:00 Chile del día seleccionado.
-  const yyyymmdd = formatDateInputCL(date)
+function startOfDayCL(date: Date | string): Date {
+  // Devuelve el Date UTC correspondiente al inicio (00:00:00.000) del día en Chile
+  // para la fecha dada.
+  //
+  // Acepta:
+  //   - Un string "YYYY-MM-DD" (recomendado cuando viene de <input type="date">),
+  //     en cuyo caso se interpreta textualmente como esa fecha calendario en Chile.
+  //   - Un objeto Date, en cuyo caso se convierte primero a la fecha calendario
+  //     que ese instante representa en Chile.
+  //
+  // ⚠️ NO usar `new Date("2026-07-25")` antes de llamar a esta función: JavaScript
+  // interpreta los strings date-only como UTC midnight, que en Chile (UTC-4)
+  // corresponde al día anterior a las 20:00. Por eso el filtro "por fecha" antes
+  // entregaba resultados del día anterior.
+  const yyyymmdd =
+    typeof date === 'string'
+      ? date
+      : formatDateInputCL(date)
   const [y, m, d] = yyyymmdd.split('-').map(Number)
   // Creamos un Date a las 12:00 UTC de ese día y vemos qué hora es en Chile
   const utcNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
@@ -187,10 +204,32 @@ function startOfDayCL(date: Date): Date {
   return new Date(Date.UTC(y, m - 1, d, 0, 0, 0) + offsetMin * 60 * 1000)
 }
 
-function endOfDayCL(date: Date): Date {
+function endOfDayCL(date: Date | string): Date {
   // Devuelve el Date UTC correspondiente al final (23:59:59.999) del día en Chile
   const start = startOfDayCL(date)
   return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1)
+}
+
+/** Devuelve la fecha de hoy en Chile como string "YYYY-MM-DD". */
+function todayCL(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
+/** Devuelve la fecha de N días atrás en Chile como string "YYYY-MM-DD". */
+function daysAgoCL(days: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 // ─── Componente principal ───
@@ -229,7 +268,7 @@ export function QrRondasModule() {
   const [filterFromDate, setFilterFromDate] = useState<string>('')
   const [filterToDate, setFilterToDate] = useState<string>('')
 
-  // Ordenamiento de lecturas
+  // Ordenamiento de lecturas (por fecha o alfabético por guardia/ubicación)
   const [sortBy, setSortBy] = useState<'fecha' | 'guardia' | 'ubicacion'>('fecha')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -257,12 +296,6 @@ export function QrRondasModule() {
   const [refreshingPatentes, setRefreshingPatentes] = useState(false)
   const [patentesSoloAbiertas, setPatentesSoloAbiertas] = useState(true)
   const [filterPatenteUbicacion, setFilterPatenteUbicacion] = useState<string>('all')
-
-  // ─── Formulario de registro manual de patente ───
-  const [showPatenteFormModal, setShowPatenteFormModal] = useState(false)
-  const [patenteForm, setPatenteForm] = useState({ patente: '', ubicacion: '', notes: '' })
-  const [savingPatente, setSavingPatente] = useState(false)
-  const [closingPatenteId, setClosingPatenteId] = useState<string | null>(null)
 
   // ─── Cargar patentes ───
   const fetchPatentes = useCallback(async (isRefresh = false) => {
@@ -292,72 +325,12 @@ export function QrRondasModule() {
     fetchPatentes()
   }, [fetchPatentes])
 
-  // Auto-refresh patentes cada 15s
+  // Auto-refresh patentes cada 30s (optimizado para reducir carga del servidor)
   useEffect(() => {
     if (tab !== 'patentes') return
-    const interval = setInterval(() => { fetchPatentes(false) }, 15000)
+    const interval = setInterval(() => { fetchPatentes(false) }, 30000)
     return () => clearInterval(interval)
   }, [tab, fetchPatentes])
-
-  // ─── Registrar patente manualmente ───
-  const handleSavePatente = async () => {
-    if (!patenteForm.patente.trim() || patenteForm.patente.trim().length < 4) {
-      toast.error('La patente es obligatoria (mínimo 4 caracteres)')
-      return
-    }
-    if (!patenteForm.ubicacion.trim()) {
-      toast.error('La ubicación es obligatoria')
-      return
-    }
-    setSavingPatente(true)
-    try {
-      const res = await fetch('/api/qr-rondas/patentes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patente: patenteForm.patente.trim().toUpperCase(),
-          ubicacion: patenteForm.ubicacion.trim(),
-          notes: patenteForm.notes.trim(),
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.error || 'Error al registrar patente')
-      }
-      toast.success(`Patente ${patenteForm.patente.trim().toUpperCase()} registrada`)
-      setShowPatenteFormModal(false)
-      setPatenteForm({ patente: '', ubicacion: '', notes: '' })
-      fetchPatentes(false)
-    } catch (err: any) {
-      console.error(err)
-      toast.error(err.message || 'Error al registrar patente')
-    } finally {
-      setSavingPatente(false)
-    }
-  }
-
-  // ─── Registrar salida de patente ───
-  const handleCerrarPatente = async (id: string) => {
-    setClosingPatenteId(id)
-    try {
-      const res = await fetch('/api/qr-rondas/patentes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.error || 'Error al registrar salida')
-      }
-      toast.success('Salida registrada')
-      fetchPatentes(false)
-    } catch (err: any) {
-      console.error(err)
-      toast.error(err.message || 'Error al registrar salida')
-    } finally {
-      setClosingPatenteId(null)
-    }
-  }
 
   // ─── Cargar ubicaciones ───
   const fetchLocations = useCallback(async (isRefresh = false) => {
@@ -366,6 +339,10 @@ export function QrRondasModule() {
       const res = await fetch('/api/qr-rondas/locations', { cache: 'no-store' })
       if (!res.ok) throw new Error('Error al cargar ubicaciones')
       const data = await res.json()
+      if (data.error) {
+        console.error('API error loading locations:', data.error)
+        toast.error(`Error: ${data.error}`)
+      }
       setLocations(Array.isArray(data) ? data : [])
       if (isRefresh) toast.success(`${Array.isArray(data) ? data.length : 0} ubicaciones cargadas`)
     } catch (err) {
@@ -385,15 +362,16 @@ export function QrRondasModule() {
       if (filterLocationId !== 'all') params.set('qrLocationId', filterLocationId)
       if (filterGuardia !== 'all') params.set('scannedBy', filterGuardia)
       if (filterFromDate) {
-        // Inicio del día seleccionado en zona horaria Chile (00:00:00 Chile)
-        params.set('from', String(startOfDayCL(new Date(filterFromDate)).getTime()))
+        // Inicio del día seleccionado en zona horaria Chile (00:00:00 Chile).
+        // Pasamos el string "YYYY-MM-DD" directamente a startOfDayCL para evitar
+        // el bug de `new Date("YYYY-MM-DD")` que se interpreta como UTC midnight
+        // y en Chile (UTC-4) cae en el día anterior.
+        params.set('from', String(startOfDayCL(filterFromDate).getTime()))
       }
       if (filterToDate) {
-        // Fin del día seleccionado en zona horaria Chile (23:59:59.999 Chile)
-        // Antes se sumaba 1 día y se tomaba startOfDay (mediodía UTC), lo que
-        // incluía escaneos del día siguiente hasta las 08:00 Chile. Ahora
-        // usamos endOfDayCL que cierra correctamente a las 23:59:59 Chile.
-        params.set('to', String(endOfDayCL(new Date(filterToDate)).getTime()))
+        // Fin del día seleccionado en zona horaria Chile (23:59:59.999 Chile).
+        // Misma razón: pasamos el string directamente.
+        params.set('to', String(endOfDayCL(filterToDate).getTime()))
       }
       params.set('limit', '500')
       // cache: 'no-store' + timestamp para evitar cualquier caché del navegador
@@ -401,6 +379,10 @@ export function QrRondasModule() {
       const res = await fetch(`/api/qr-rondas/scans?${params.toString()}`, { cache: 'no-store' })
       if (!res.ok) throw new Error('Error al cargar lecturas')
       const data = await res.json()
+      if (data.error) {
+        console.error('API error loading scans:', data.error)
+        toast.error(`Error: ${data.error}`)
+      }
       const newScans = Array.isArray(data.scans) ? data.scans : []
       const newTotal = data.total || 0
       setScans(newScans)
@@ -428,10 +410,11 @@ export function QrRondasModule() {
     fetchScans()
   }, [fetchScans])
 
-  // Auto-refresh lecturas cada 15s (silencioso, sin toast ni spinner)
+  // Auto-refresh lecturas cada 30s (silencioso, sin toast ni spinner)
+  // Optimizado: 30s en vez de 15s para reducir carga en BD Aiven
   useEffect(() => {
     if (tab !== 'lecturas') return
-    const interval = setInterval(() => { fetchScans(false) }, 15000)
+    const interval = setInterval(() => { fetchScans(false) }, 30000)
     return () => clearInterval(interval)
   }, [tab, fetchScans])
 
@@ -756,7 +739,7 @@ export function QrRondasModule() {
       doc.text('Reporte de lecturas de guardias', margin, 20)
       doc.text(`Generado: ${new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date())}`, margin, 25)
 
-      // ─── Información de filtros ───
+      // ─── Información de filtros aplicados ───
       let y = 38
       doc.setTextColor(40, 40, 40)
       doc.setFontSize(10)
@@ -965,28 +948,27 @@ export function QrRondasModule() {
 
     setGenerandoInforme(true)
     try {
-      // Construir parámetros de consulta al endpoint /api/qr-rondas/scans
       const params = new URLSearchParams()
       params.set('limit', '2000')
       params.set('_t', String(Date.now()))
 
       let tituloCriterio = ''
       if (informeTipo === 'dia') {
-        const f = new Date(informeFecha)
-        params.set('from', String(startOfDayCL(f).getTime()))
-        params.set('to', String(endOfDayCL(f).getTime()))
-        tituloCriterio = `Día: ${formatDateInputCL(f)}`
+        // Pasamos el string "YYYY-MM-DD" directamente para evitar el bug de
+        // `new Date("YYYY-MM-DD")` interpretado como UTC midnight (día anterior
+        // en Chile).
+        params.set('from', String(startOfDayCL(informeFecha).getTime()))
+        params.set('to', String(endOfDayCL(informeFecha).getTime()))
+        tituloCriterio = `Día: ${informeFecha}`
       } else if (informeTipo === 'rango') {
-        const d = new Date(informeDesde)
-        const h = new Date(informeHasta)
-        params.set('from', String(startOfDayCL(d).getTime()))
-        params.set('to', String(endOfDayCL(h).getTime()))
-        tituloCriterio = `Rango: ${formatDateInputCL(d)} a ${formatDateInputCL(h)}`
+        params.set('from', String(startOfDayCL(informeDesde).getTime()))
+        params.set('to', String(endOfDayCL(informeHasta).getTime()))
+        tituloCriterio = `Rango: ${informeDesde} a ${informeHasta}`
       } else {
         // trabajador
         params.set('scannedBy', informeGuardia)
-        if (informeDesde) params.set('from', String(startOfDayCL(new Date(informeDesde)).getTime()))
-        if (informeHasta) params.set('to', String(endOfDayCL(new Date(informeHasta)).getTime()))
+        if (informeDesde) params.set('from', String(startOfDayCL(informeDesde).getTime()))
+        if (informeHasta) params.set('to', String(endOfDayCL(informeHasta).getTime()))
         tituloCriterio = `Trabajador: ${informeGuardia}` +
           (informeDesde || informeHasta
             ? ` · ${informeDesde || '—'} a ${informeHasta || '—'}`
@@ -1083,7 +1065,6 @@ export function QrRondasModule() {
       doc.setFontSize(11)
       doc.text('Detalle de lecturas', margin, y); y += 5
 
-      // Encabezado de tabla
       const colFecha = margin
       const colUbicacion = margin + 35
       const colGuardia = margin + 95
@@ -1127,9 +1108,7 @@ export function QrRondasModule() {
         const fecha = formatDateTimeCL(scan.createdAt)
         const ubicacion = (scan.location?.name ?? '—').substring(0, 30)
         const guardia = (scan.scannedBy || '—').substring(0, 20)
-        const gps = scan.latitude != null && scan.longitude != null
-          ? 'Sí'
-          : 'No'
+        const gps = scan.latitude != null && scan.longitude != null ? 'Sí' : 'No'
         const notas = (scan.notes || '—').substring(0, 25)
         doc.text(fecha, colFecha, y)
         doc.text(ubicacion, colUbicacion, y)
@@ -1197,6 +1176,139 @@ export function QrRondasModule() {
       setSortBy(col)
       setSortDir(col === 'fecha' ? 'desc' : 'asc')
     }
+  }
+
+  // ─── Métricas para el dashboard ───
+  // Se calculan en base a los scans actualmente cargados (que respetan los
+  // filtros de la pestaña Lecturas) más un fetch independiente para "hoy"
+  // y "últimos 7 días" (no dependen del filtro actual).
+  const [metricas, setMetricas] = useState<{
+    hoy: number
+    semana: number
+    total: number
+    guardiasActivos: number
+    ubicacionesActivas: number
+    patentesAdentro: number
+    ultimaLectura: string | null
+    ultimaLecturaFecha: string | null
+  }>({
+    hoy: 0, semana: 0, total: 0,
+    guardiasActivos: 0, ubicacionesActivas: 0, patentesAdentro: 0,
+    ultimaLectura: null, ultimaLecturaFecha: null,
+  })
+
+  useEffect(() => {
+    // Cargar métricas independientes de los filtros actuales
+    const cargarMetricas = async () => {
+      try {
+        const hoy = todayCL()
+        const hace7d = daysAgoCL(7)
+        const params = new URLSearchParams()
+        params.set('from', String(startOfDayCL(hace7d).getTime()))
+        params.set('to', String(endOfDayCL(hoy).getTime()))
+        params.set('limit', '2000')
+        params.set('_t', String(Date.now()))
+        const res = await fetch(`/api/qr-rondas/scans?${params.toString()}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        const ms: QrScan[] = Array.isArray(data.scans) ? data.scans : []
+
+        // Lecturas hoy
+        const inicioHoy = startOfDayCL(hoy).getTime()
+        const finHoy = endOfDayCL(hoy).getTime()
+        const lecturasHoy = ms.filter((s) => {
+          const t = new Date(s.createdAt).getTime()
+          return t >= inicioHoy && t <= finHoy
+        }).length
+
+        // Última lectura
+        let ultima: QrScan | null = null
+        for (const s of ms) {
+          if (!ultima || new Date(s.createdAt).getTime() > new Date(ultima.createdAt).getTime()) {
+            ultima = s
+          }
+        }
+
+        // Guardias activos (que escanearon en los últimos 7 días)
+        const guardiasSet = new Set<string>()
+        for (const s of ms) {
+          if (s.scannedBy) guardiasSet.add(s.scannedBy)
+        }
+
+        setMetricas({
+          hoy: lecturasHoy,
+          semana: ms.length,
+          total: data.total || ms.length,
+          guardiasActivos: guardiasSet.size,
+          ubicacionesActivas: locations.filter((l) => l.active).length,
+          patentesAdentro: patentes.filter((p) => !p.salidaAt).length,
+          ultimaLectura: ultima
+            ? `${ultima.scannedBy || '—'} · ${ultima.location?.name ?? '—'}`
+            : null,
+          ultimaLecturaFecha: ultima ? ultima.createdAt : null,
+        })
+      } catch (err) {
+        console.error('Error cargando métricas:', err)
+      }
+    }
+    cargarMetricas()
+    // Refrescar métricas cada 30s
+    const id = setInterval(cargarMetricas, 30000)
+    return () => clearInterval(id)
+  }, [locations, patentes])
+
+  // ─── Acciones del dashboard (hipervínculos) ───
+  // Cada tarjeta del dashboard aplica un filtro y cambia a la pestaña Lecturas.
+  const verLecturasHoy = () => {
+    const hoy = todayCL()
+    setFilterFromDate(hoy)
+    setFilterToDate(hoy)
+    setFilterLocationId('all')
+    setFilterGuardia('all')
+    setTab('lecturas')
+    toast.info(`Filtrando lecturas de hoy (${hoy})`)
+  }
+
+  const verLecturasSemana = () => {
+    const hoy = todayCL()
+    const hace7d = daysAgoCL(6) // últimos 7 días incluyendo hoy
+    setFilterFromDate(hace7d)
+    setFilterToDate(hoy)
+    setFilterLocationId('all')
+    setFilterGuardia('all')
+    setTab('lecturas')
+    toast.info(`Filtrando lecturas de los últimos 7 días (${hace7d} a ${hoy})`)
+  }
+
+  const verTodasLecturas = () => {
+    setFilterFromDate('')
+    setFilterToDate('')
+    setFilterLocationId('all')
+    setFilterGuardia('all')
+    setTab('lecturas')
+    toast.info('Mostrando todas las lecturas')
+  }
+
+  const verUltimaLectura = () => {
+    if (!metricas.ultimaLecturaFecha) return
+    const fecha = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Santiago',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(metricas.ultimaLecturaFecha))
+    setFilterFromDate(fecha)
+    setFilterToDate(fecha)
+    setFilterLocationId('all')
+    setFilterGuardia('all')
+    setTab('lecturas')
+    toast.info(`Filtrando lecturas del día de la última lectura (${fecha})`)
+  }
+
+  const verUbicaciones = () => {
+    setTab('ubicaciones')
+  }
+
+  const verPatentes = () => {
+    setTab('patentes')
   }
 
   // ─── Render ───
@@ -1267,6 +1379,172 @@ export function QrRondasModule() {
           )}
         </div>
       </div>
+
+      {/* ─── Dashboard interactivo (tarjetas tipo hipervínculo) ─── */}
+      {/* Cada tarjeta es clickeable: aplica un filtro y/o cambia de pestaña */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Lecturas hoy */}
+        <button
+          type="button"
+          onClick={verLecturasHoy}
+          className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300"
+          title="Click para ver lecturas de hoy"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">Hoy</span>
+            <Calendar className="w-3.5 h-3.5 text-blue-500 group-hover:text-blue-700" />
+          </div>
+          <div className="text-2xl font-bold text-slate-800 group-hover:text-blue-700">
+            {metricas.hoy}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            <span className="group-hover:text-blue-700">Ver lecturas de hoy</span>
+          </div>
+        </button>
+
+        {/* Últimos 7 días */}
+        <button
+          type="button"
+          onClick={verLecturasSemana}
+          className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          title="Click para ver lecturas de los últimos 7 días"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">7 días</span>
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500 group-hover:text-emerald-700" />
+          </div>
+          <div className="text-2xl font-bold text-slate-800 group-hover:text-emerald-700">
+            {metricas.semana}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            <span className="group-hover:text-emerald-700">Última semana</span>
+          </div>
+        </button>
+
+        {/* Total lecturas */}
+        <button
+          type="button"
+          onClick={verTodasLecturas}
+          className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          title="Click para ver todas las lecturas"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">Total</span>
+            <Activity className="w-3.5 h-3.5 text-indigo-500 group-hover:text-indigo-700" />
+          </div>
+          <div className="text-2xl font-bold text-slate-800 group-hover:text-indigo-700">
+            {metricas.total}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            <span className="group-hover:text-indigo-700">Ver todas</span>
+          </div>
+        </button>
+
+        {/* Guardias activos */}
+        <button
+          type="button"
+          onClick={verTodasLecturas}
+          className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-purple-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-300"
+          title="Guardias que registraron lecturas en los últimos 7 días"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">Guardias</span>
+            <Users className="w-3.5 h-3.5 text-purple-500 group-hover:text-purple-700" />
+          </div>
+          <div className="text-2xl font-bold text-slate-800 group-hover:text-purple-700">
+            {metricas.guardiasActivos}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            <span className="group-hover:text-purple-700">Activos 7 días</span>
+          </div>
+        </button>
+
+        {/* Ubicaciones activas */}
+        {!isConserje && (
+          <button
+            type="button"
+            onClick={verUbicaciones}
+            className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-teal-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-300"
+            title="Click para ver pestaña de ubicaciones QR"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">Ubicac.</span>
+              <MapPin className="w-3.5 h-3.5 text-teal-500 group-hover:text-teal-700" />
+            </div>
+            <div className="text-2xl font-bold text-slate-800 group-hover:text-teal-700">
+              {metricas.ubicacionesActivas}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+              <Link2 className="w-2.5 h-2.5" />
+              <span className="group-hover:text-teal-700">Ver ubicaciones</span>
+            </div>
+          </button>
+        )}
+
+        {/* Patentes adentro */}
+        <button
+          type="button"
+          onClick={verPatentes}
+          className="group text-left bg-white border border-slate-200 rounded-xl p-3 hover:border-amber-400 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-300"
+          title="Click para ver pestaña de patentes vehiculares"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">Patentes</span>
+            <Car className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-700" />
+          </div>
+          <div className="text-2xl font-bold text-slate-800 group-hover:text-amber-700">
+            {metricas.patentesAdentro}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+            <Link2 className="w-2.5 h-2.5" />
+            <span className="group-hover:text-amber-700">Vehículos adentro</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Última lectura — tarjeta adicional, ancha, tipo hipervínculo */}
+      {metricas.ultimaLectura && (
+        <button
+          type="button"
+          onClick={verUltimaLectura}
+          className="group w-full text-left bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl p-3 hover:from-slate-700 hover:to-slate-600 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-400"
+          title="Click para filtrar por el día de la última lectura"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wide">
+                  Última lectura registrada
+                </p>
+                <p className="text-sm font-semibold">
+                  {metricas.ultimaLectura}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-[10px] uppercase text-slate-400">Fecha y hora</p>
+                <p className="text-sm font-mono">
+                  {metricas.ultimaLecturaFecha
+                    ? formatDateTimeCL(metricas.ultimaLecturaFecha)
+                    : '—'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1 text-emerald-400 group-hover:text-emerald-300 text-xs">
+                <Link2 className="w-3 h-3" />
+                <span>Ver día</span>
+              </div>
+            </div>
+          </div>
+        </button>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'ubicaciones' | 'lecturas' | 'patentes' | 'ruta')}>
         <TabsList>
@@ -1613,8 +1891,12 @@ export function QrRondasModule() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todas las ubicaciones</SelectItem>
-                        {UBICACIONES_PATENTES.map((u) => (
-                          <SelectItem key={u} value={u}>{u}</SelectItem>
+                        {Array.from(new Set(locations
+                          .filter(l => l.code.includes('ENTRADA-') || l.code.includes('SALIDA-'))
+                          .map(l => l.code.match(/^QR-([A-ZÁÉÍÓÚÑ\s]+)-/)?.[1])
+                          .filter(Boolean)
+                        )).map((ubicacion) => (
+                          <SelectItem key={ubicacion} value={ubicacion as string}>{ubicacion}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1632,34 +1914,15 @@ export function QrRondasModule() {
                     </Label>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {(isAdmin() || user?.rol === 'supervisor') && (
-                    <Button
-                      size="sm"
-                      className="bg-amber-600 hover:bg-amber-700"
-                      onClick={() => {
-                        setPatenteForm({
-                          patente: '',
-                          ubicacion: filterPatenteUbicacion !== 'all' ? filterPatenteUbicacion : '',
-                          notes: '',
-                        })
-                        setShowPatenteFormModal(true)
-                      }}
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Registrar Patente
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fetchPatentes(true)}
-                    disabled={refreshingPatentes}
-                  >
-                    <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPatentes ? 'animate-spin' : ''}`} />
-                    {refreshingPatentes ? 'Actualizando...' : 'Actualizar'}
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fetchPatentes(true)}
+                  disabled={refreshingPatentes}
+                >
+                  <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPatentes ? 'animate-spin' : ''}`} />
+                  {refreshingPatentes ? 'Actualizando...' : 'Actualizar'}
+                </Button>
               </div>
               <p className="text-xs text-slate-500 mt-3">
                 Mostrando {patentes.length} de {patentesTotal} patentes ·
@@ -1694,7 +1957,6 @@ export function QrRondasModule() {
                         <TableHead className="min-w-[140px]">Salida</TableHead>
                         <TableHead className="min-w-[120px]">Guardia</TableHead>
                         <TableHead>Estado</TableHead>
-                        {(isAdmin() || user?.rol === 'supervisor') && <TableHead>Acciones</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1705,8 +1967,10 @@ export function QrRondasModule() {
                               <img
                                 src={p.foto}
                                 alt="Foto"
+                                loading="lazy"
+                                decoding="async"
                                 className="w-12 h-12 rounded-lg object-cover cursor-pointer hover:opacity-80"
-                                onClick={() => p.foto && window.open(p.foto, '_blank')}
+                                onClick={() => window.open(p.foto, '_blank')}
                               />
                             ) : (
                               <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -1731,28 +1995,6 @@ export function QrRondasModule() {
                               <Badge className="bg-emerald-100 text-emerald-700">Adentro</Badge>
                             )}
                           </TableCell>
-                          {(isAdmin() || user?.rol === 'supervisor') && (
-                            <TableCell>
-                              {!p.salidaAt ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs"
-                                  disabled={closingPatenteId === p.id}
-                                  onClick={() => handleCerrarPatente(p.id)}
-                                >
-                                  {closingPatenteId === p.id ? (
-                                    <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  )}
-                                  Registrar Salida
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-slate-400">–</span>
-                              )}
-                            </TableCell>
-                          )}
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1770,79 +2012,6 @@ export function QrRondasModule() {
         </TabsContent>
         )}
       </Tabs>
-
-      {/* ─── Modal Registrar Patente Manual ─── */}
-      <Dialog open={showPatenteFormModal} onOpenChange={setShowPatenteFormModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar Patente Vehicular</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Patente *</Label>
-              <Input
-                value={patenteForm.patente}
-                onChange={(e) => setPatenteForm({ ...patenteForm, patente: e.target.value.toUpperCase() })}
-                placeholder="Ej: ABCD12 ó AB1234"
-                className="font-mono uppercase"
-                maxLength={8}
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Formato chileno (4 letras + 2 números, o 2 letras + 4 números).
-              </p>
-            </div>
-            <div>
-              <Label>Ubicación *</Label>
-              <Select
-                value={patenteForm.ubicacion}
-                onValueChange={(v) => setPatenteForm({ ...patenteForm, ubicacion: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="— Selecciona una ubicación —" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UBICACIONES_PATENTES.map((u) => (
-                    <SelectItem key={u} value={u}>{u}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-slate-500 mt-1">
-                Solo se permiten las 8 ubicaciones autorizadas del condominio.
-              </p>
-            </div>
-            <div>
-              <Label>Observaciones (opcional)</Label>
-              <Textarea
-                value={patenteForm.notes}
-                onChange={(e) => setPatenteForm({ ...patenteForm, notes: e.target.value })}
-                placeholder="Ej: Visita a residente casa 12, proveedor, etc."
-                rows={2}
-                maxLength={500}
-              />
-            </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-              <strong>Nota:</strong> Esta patente se registrará como entrada manual desde el escritorio.
-              Para registrar la salida, usa el botón "Registrar Salida" en la tabla.
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPatenteFormModal(false)}>
-              Cancelar
-            </Button>
-            <Button
-              className="bg-amber-600 hover:bg-amber-700"
-              onClick={handleSavePatente}
-              disabled={savingPatente}
-            >
-              {savingPatente ? (
-                <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Guardando...</>
-              ) : (
-                <><CheckCircle2 className="w-4 h-4 mr-2" /> Registrar Entrada</>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ─── Modal Crear/Editar ─── */}
       <Dialog open={showFormModal} onOpenChange={setShowFormModal}>
@@ -1965,37 +2134,62 @@ export function QrRondasModule() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="w-5 h-5" /> Emitir Informe de Rondas
+              <FileText className="w-5 h-5 text-amber-600" />
+              Emitir Informe de Rondas
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Selector de tipo de informe */}
             <div>
-              <Label className="text-xs">Tipo de informe</Label>
-              <Select
-                value={informeTipo}
-                onValueChange={(v) => setInformeTipo(v as 'dia' | 'rango' | 'trabajador')}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecciona el tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="dia">Por día (una fecha específica)</SelectItem>
-                  <SelectItem value="rango">Por rango de fechas</SelectItem>
-                  <SelectItem value="trabajador">Por trabajador</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-bold uppercase text-slate-500">Tipo de informe</Label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => setInformeTipo('dia')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    informeTipo === 'dia'
+                      ? 'bg-amber-50 border-amber-400 text-amber-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Por día
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInformeTipo('rango')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    informeTipo === 'rango'
+                      ? 'bg-amber-50 border-amber-400 text-amber-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Por rango
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInformeTipo('trabajador')}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    informeTipo === 'trabajador'
+                      ? 'bg-amber-50 border-amber-400 text-amber-700'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Trabajador
+                </button>
+              </div>
             </div>
 
+            {/* Campos según tipo */}
             {informeTipo === 'dia' && (
               <div>
-                <Label className="text-xs">Fecha del informe</Label>
+                <Label>Fecha del informe</Label>
                 <Input
                   type="date"
                   value={informeFecha}
                   onChange={(e) => setInformeFecha(e.target.value)}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  El informe cubrirá desde las 00:00 hasta las 23:59 del día seleccionado (hora Chile).
+                  Genera un PDF con todas las lecturas registradas ese día (00:00 a 23:59 hora Chile).
                 </p>
               </div>
             )}
@@ -2003,7 +2197,7 @@ export function QrRondasModule() {
             {informeTipo === 'rango' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Desde</Label>
+                  <Label>Desde</Label>
                   <Input
                     type="date"
                     value={informeDesde}
@@ -2011,7 +2205,7 @@ export function QrRondasModule() {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Hasta</Label>
+                  <Label>Hasta</Label>
                   <Input
                     type="date"
                     value={informeHasta}
@@ -2019,7 +2213,7 @@ export function QrRondasModule() {
                   />
                 </div>
                 <p className="col-span-2 text-xs text-slate-500">
-                  El informe cubrirá todos los escaneos entre las 00:00 del "Desde" y las 23:59 del "Hasta" (hora Chile).
+                  Incluye todos los días desde el 00:00 de &quot;Desde&quot; hasta las 23:59 de &quot;Hasta&quot; (hora Chile).
                 </p>
               </div>
             )}
@@ -2027,27 +2221,22 @@ export function QrRondasModule() {
             {informeTipo === 'trabajador' && (
               <>
                 <div>
-                  <Label className="text-xs">Trabajador / Guardia *</Label>
+                  <Label>Trabajador / Guardia</Label>
                   <Select value={informeGuardia} onValueChange={setInformeGuardia}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecciona el trabajador" />
+                      <SelectValue placeholder="Selecciona un trabajador" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">(Selecciona un trabajador)</SelectItem>
+                      <SelectItem value="all">— Selecciona —</SelectItem>
                       {guardias.map((g) => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {guardias.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      No hay guardias cargados todavía. Carga lecturas primero para ver la lista de guardias.
-                    </p>
-                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-xs">Desde (opcional)</Label>
+                    <Label>Desde (opcional)</Label>
                     <Input
                       type="date"
                       value={informeDesde}
@@ -2055,7 +2244,7 @@ export function QrRondasModule() {
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Hasta (opcional)</Label>
+                    <Label>Hasta (opcional)</Label>
                     <Input
                       type="date"
                       value={informeHasta}
@@ -2064,38 +2253,41 @@ export function QrRondasModule() {
                   </div>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Si omites las fechas, se generará el informe histórico completo del trabajador.
+                  Si no seleccionas fechas, se generará el informe histórico completo del trabajador.
                 </p>
               </>
             )}
 
-            <div className="rounded-md bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600">
-              <p className="font-semibold mb-1">El informe PDF incluirá:</p>
-              <ul className="list-disc pl-4 space-y-0.5">
-                <li>Encabezado con criterio y fecha de generación</li>
-                <li>Resumen: total de lecturas, con/sin GPS, guardias y ubicaciones</li>
-                <li>Desglose por trabajador (número de lecturas)</li>
-                <li>Desglose por ubicación (número de lecturas)</li>
-                <li>Detalle completo de lecturas en tabla</li>
-              </ul>
-            </div>
+            {/* Botón pre-llenar con hoy */}
+            {informeTipo === 'dia' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInformeFecha(todayCL())}
+                className="w-full"
+              >
+                <Calendar className="w-3 h-3 mr-1" /> Usar fecha de hoy ({todayCL()})
+              </Button>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowInformeModal(false)} disabled={generandoInforme}>
+            <Button variant="outline" onClick={() => setShowInformeModal(false)}>
               Cancelar
             </Button>
             <Button
               onClick={generarInforme}
               disabled={generandoInforme}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
+              className="bg-amber-600 hover:bg-amber-700"
             >
               {generandoInforme ? (
                 <>
-                  <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Generando...
+                  <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                  Generando...
                 </>
               ) : (
                 <>
-                  <FileText className="w-4 h-4 mr-1" /> Generar Informe PDF
+                  <FileText className="w-3 h-3 mr-1" />
+                  Generar PDF
                 </>
               )}
             </Button>
