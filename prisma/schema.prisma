@@ -1491,6 +1491,8 @@ model RegistroLV {
   itemsCompletados     String?  // JSON array de índices de items completados
   firmaUrl             String?
   fotoUrl              String?
+  pdfRespaldoUrl       String?
+  pdfRespaldoNombre    String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
