@@ -28,6 +28,7 @@ import {
   BookOpen,
   Receipt,
   ClipboardCheck,
+  Smartphone,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -117,6 +118,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },
+      { id: 'perfiles-movil', label: 'Perfiles App Móvil', icon: <Smartphone className="w-4 h-4" /> },
       { id: 'permisos', label: 'Permisos del Sistema', icon: <Shield className="w-4 h-4" /> },
       { id: 'manuales', label: 'Manuales y Capacitaciones', icon: <BookOpen className="w-4 h-4" /> },
     ]
@@ -152,7 +154,7 @@ export function Sidebar() {
       if (item.id === 'manuales') return true
 
       // Módulos exclusivos del admin: 'usuarios' y 'permisos'
-      if ((item.id === 'usuarios' || item.id === 'permisos') && !isAdmin()) {
+      if ((item.id === 'usuarios' || item.id === 'permisos' || item.id === 'perfiles-movil') && !isAdmin()) {
         return false
       }
 
