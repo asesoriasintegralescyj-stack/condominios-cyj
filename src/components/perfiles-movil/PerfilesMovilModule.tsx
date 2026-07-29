@@ -116,7 +116,8 @@ function getColorLabel(color: string) {
   return COLOR_OPTIONS.find(o => o.value === color)?.label || color
 }
 
-function getPermisosBadges(permissions: string[]) {
+function getPermisosBadges(permissions: string[] | undefined | null) {
+  if (!Array.isArray(permissions)) return []
   const permMap: Record<string, { label: string; color: string }> = {
     view: { label: 'Ver', color: 'bg-slate-100 text-slate-700' },
     create: { label: 'Crear', color: 'bg-blue-100 text-blue-700' },
@@ -149,7 +150,7 @@ export function PerfilesMovilModule() {
     setLoading(true)
     try {
       const data = await apiFetch<PerfilMovil[]>('/api/perfiles-movil', [])
-      setPerfiles(data)
+      setPerfiles(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching perfiles:', error)
       toast.error('Error al cargar perfiles')
@@ -286,21 +287,22 @@ export function PerfilesMovilModule() {
 
   // Filtrado
   const filtered = useMemo(() => {
+    if (!Array.isArray(perfiles)) return []
     if (!search.trim()) return perfiles
     const s = search.toLowerCase()
     return perfiles.filter(p =>
-      p.name.toLowerCase().includes(s) ||
-      p.accessCode.toLowerCase().includes(s) ||
+      (p.name || '').toLowerCase().includes(s) ||
+      (p.accessCode || '').toLowerCase().includes(s) ||
       p.personal?.nombre?.toLowerCase().includes(s)
     )
   }, [perfiles, search])
 
   // Stats
   const stats = useMemo(() => ({
-    total: perfiles.length,
+    total: Array.isArray(perfiles) ? perfiles.length : 0,
     conPersonal: perfiles.filter(p => p.personalId).length,
-    supervisor: perfiles.filter(p => p.permissions.includes('supervisor') || p.permissions.includes('admin')).length,
-    guardia: perfiles.filter(p => p.permissions.includes('guardia')).length,
+    supervisor: perfiles.filter(p => Array.isArray(p.permissions) && (p.permissions.includes('supervisor') || p.permissions.includes('admin'))).length,
+    guardia: perfiles.filter(p => Array.isArray(p.permissions) && p.permissions.includes('guardia')).length,
   }), [perfiles])
 
   return (
