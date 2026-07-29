@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           user: { select: { id: true, nombre: true, apellido: true, email: true } },
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
           items: {
             select: { id: true, descripcion: true, montoRendir: true, categoria: true, fechaGasto: true },
             orderBy: { fechaGasto: 'asc' },
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     if (!user) return apiError('No autenticado', 401)
 
     const body = await request.json()
-    const { titulo, descripcion, items, estado = 'BORRADOR' } = body
+    const { titulo, descripcion, items, estado = 'BORRADOR', centroCostoId } = body
 
     if (!titulo || typeof titulo !== 'string' || titulo.trim().length === 0) {
       return apiError('El título es obligatorio')
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
         estado: estado === 'ENVIADO' ? 'ENVIADO' : 'BORRADOR',
         montoTotal,
         userId: user.id,
+        centroCostoId: centroCostoId || null,
         enviadoAt: estado === 'ENVIADO' ? new Date() : null,
         items: {
           create: items.map((item: any) => ({
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         user: { select: { id: true, nombre: true, apellido: true, email: true } },
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
         items: true,
       },
     })

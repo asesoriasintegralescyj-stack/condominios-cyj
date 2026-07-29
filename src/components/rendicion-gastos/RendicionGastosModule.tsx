@@ -72,6 +72,12 @@ interface ItemRendicion {
   fotoCompraUrl?: string | null
 }
 
+interface CentroCosto {
+  id: string
+  codigo: string
+  nombre: string
+}
+
 interface RendicionGasto {
   id: string
   numeroRendicion: string
@@ -80,6 +86,7 @@ interface RendicionGasto {
   estado: string
   montoTotal: number
   userId: string
+  centroCostoId?: string | null
   notaRevision?: string | null
   revisadoPor?: string | null
   revisadoAt?: string | null
@@ -92,6 +99,7 @@ interface RendicionGasto {
     apellido?: string | null
     email: string
   }
+  centroCosto?: CentroCosto | null
   items: ItemRendicion[]
 }
 
@@ -191,6 +199,7 @@ export function RendicionGastosModule() {
   // Data
   const [rendiciones, setRendiciones] = useState<RendicionGasto[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [centrosCosto, setCentrosCosto] = useState<CentroCosto[]>([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({ pagina: 1, porPagina: 15, total: 0, totalPaginas: 0 })
 
@@ -207,6 +216,7 @@ export function RendicionGastosModule() {
   const [formTitulo, setFormTitulo] = useState('')
   const [formDescripcion, setFormDescripcion] = useState('')
   const [formItems, setFormItems] = useState<ItemRendicion[]>([emptyItem()])
+  const [formCentroCosto, setFormCentroCosto] = useState('')
   const [formSaving, setFormSaving] = useState(false)
 
   // Review
@@ -246,12 +256,18 @@ export function RendicionGastosModule() {
     setCategorias(cats)
   }
 
+  const fetchCentrosCosto = async () => {
+    const ccs = await apiFetch<CentroCosto[]>('/api/centros-costo', [])
+    setCentrosCosto(ccs)
+  }
+
   useEffect(() => {
     fetchRendiciones(pagination.pagina)
   }, [fetchRendiciones, pagination.pagina])
 
   useEffect(() => {
     fetchCategorias()
+    fetchCentrosCosto()
   }, [])
 
   // ============================================================
@@ -261,6 +277,7 @@ export function RendicionGastosModule() {
     setFormTitulo('')
     setFormDescripcion('')
     setFormItems([emptyItem()])
+    setFormCentroCosto('')
   }
 
   const handleCrear = () => {
@@ -279,6 +296,7 @@ export function RendicionGastosModule() {
     setFormTitulo(rendicion.titulo)
     setFormDescripcion(rendicion.descripcion || '')
     setFormItems(rendicion.items.length > 0 ? rendicion.items.map(i => ({ ...i })) : [emptyItem()])
+    setFormCentroCosto(rendicion.centroCostoId || '')
     setVistaActual('crear')
   }
 
@@ -322,6 +340,7 @@ export function RendicionGastosModule() {
       titulo: formTitulo,
       descripcion: formDescripcion,
       estado: 'BORRADOR',
+      centroCostoId: formCentroCosto || null,
       items: validItems,
     }
 
@@ -361,6 +380,7 @@ export function RendicionGastosModule() {
       titulo: formTitulo,
       descripcion: formDescripcion,
       estado: 'ENVIADO',
+      centroCostoId: formCentroCosto || null,
       items: validItems,
     }
 
@@ -430,6 +450,25 @@ export function RendicionGastosModule() {
   const handleVolver = () => {
     setRendicionSeleccionada(null)
     setVistaActual('lista')
+  }
+
+  const handleDescargarPDF = async (rendicion: RendicionGasto) => {
+    try {
+      const res = await fetch(`/api/rendicion-gastos/${rendicion.id}/pdf`)
+      if (!res.ok) throw new Error('Error al generar PDF')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${rendicion.numeroRendicion}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('PDF descargado')
+    } catch {
+      toast.error('Error al descargar PDF')
+    }
   }
 
   // ============================================================
@@ -583,6 +622,9 @@ export function RendicionGastosModule() {
                         )}
                         <span>{new Date(rendicion.createdAt).toLocaleDateString('es-CL')}</span>
                         <span>{rendicion.items.length} gasto{rendicion.items.length !== 1 ? 's' : ''}</span>
+                        {rendicion.centroCosto && (
+                          <span className="text-blue-500">{rendicion.centroCosto.codigo}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -669,6 +711,24 @@ export function RendicionGastosModule() {
               rows={2}
             />
           </div>
+          {centrosCosto.length > 0 && (
+            <div>
+              <Label className="text-xs">Centro de Costo (opcional)</Label>
+              <Select value={formCentroCosto} onValueChange={v => setFormCentroCosto(v)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Sin centro de costo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin centro de costo</SelectItem>
+                  {centrosCosto.map(cc => (
+                    <SelectItem key={cc.id} value={cc.id}>
+                      {cc.codigo} - {cc.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -890,6 +950,9 @@ export function RendicionGastosModule() {
               <span>Creado por: <strong className="text-slate-700">{r.user.nombre} {r.user.apellido || ''}</strong></span>
               <span>Fecha: {new Date(r.createdAt).toLocaleDateString('es-CL')}</span>
               <span>Gastos: {r.items.length}</span>
+              {r.centroCosto && (
+                <span>CC: <strong className="text-slate-700">{r.centroCosto.codigo} - {r.centroCosto.nombre}</strong></span>
+              )}
             </div>
             {r.enviadoAt && (
               <p className="text-xs text-slate-400">Enviado: {new Date(r.enviadoAt).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
@@ -1014,6 +1077,12 @@ export function RendicionGastosModule() {
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2 justify-end">
+          <Button
+            variant="outline"
+            onClick={() => handleDescargarPDF(r)}
+          >
+            <Download className="w-4 h-4 mr-1" /> Descargar PDF
+          </Button>
           {canEdit && (
             <Button variant="outline" onClick={() => handleEditar(r)}>
               <Edit3 className="w-4 h-4 mr-1" /> Editar

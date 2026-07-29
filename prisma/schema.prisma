@@ -57,10 +57,7 @@ model Condominio {
   // Solicitudes de Compra
   solicitudesCompra SolicitudCompra[]
   listasDesplegables ListaDesplegable[]
-<<<<<<< HEAD
-=======
   // Rendición de Gastos
->>>>>>> 8990bee (feat: modulo rendicion de gastos completo - APIs, componente, PDF, centros de costo, categorias)
   rendicionesGastos RendicionGasto[]
 }
 
@@ -371,6 +368,7 @@ model OrdenTrabajo {
   fechaAprobacion   String?  // Fecha de aprobación/rechazo
   aprobadoPor       String?  // ID del usuario que aprobó/rechazó
   observacionesAprob String? // Observaciones del supervisor
+  creadoPor         String?  // ID del usuario que creó la OT
   
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
@@ -1595,63 +1593,6 @@ model MovilPatente {
   @@index([scannedBy])
 }
 
-// ============================================
-// RENDICIÓN DE GASTOS
-// ============================================
-model RendicionGasto {
-  id              String         @id @default(cuid())
-  numeroRendicion String         @unique // RG-0001, RG-0002...
-  titulo          String
-  descripcion     String?
-  estado          String         @default("BORRADOR") // BORRADOR, ENVIADO, APROBADO, RECHAZADO, MODIFICACION
-  montoTotal      Float          @default(0)
-  userId          String
-  condominioId    String?
-  notaRevision    String?
-  revisadoPor     String?
-  revisadoAt      DateTime?
-  enviadoAt       DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-
-  user      User            @relation(fields: [userId], references: [id])
-  condominio Condominio?    @relation(fields: [condominioId], references: [id])
-  items     ItemRendicion[]
-
-  @@index([userId])
-  @@index([condominioId])
-  @@index([estado])
-  @@index([createdAt])
-}
-
-model ItemRendicion {
-  id              String   @id @default(cuid())
-  descripcion     String
-  numeroBoleta    String
-  montoRendir     Float
-  categoria       String
-  fechaGasto      DateTime
-  fotoBoletaUrl   String?  // Base64 de la foto de boleta
-  fotoCompraUrl   String?  // Base64 de la foto de la compra
-  rendicionId     String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  rendicion RendicionGasto @relation(fields: [rendicionId], references: [id], onDelete: Cascade)
-
-  @@index([rendicionId])
-  @@index([categoria])
-}
-
-model CategoriaGasto {
-  id    String @id @default(cuid())
-  nombre String @unique
-  icon  String @default("📦")
-  activo Boolean @default(true)
-
-  @@index([activo])
-}
-
 model MovilAuditLog {
   id          String   @id @default(cuid())
   action      String
@@ -1687,7 +1628,7 @@ model RendicionGasto {
   numeroRendicion String   @unique              // RG-0001, RG-0002, ...
   titulo          String
   descripcion     String?
-  estado          String   @default("Borrador") // Borrador, Enviado, Aprobado, Rechazado, Modificar
+  estado          String   @default("BORRADOR") // BORRADOR, ENVIADO, APROBADO, RECHAZADO, MODIFICACION
   montoTotal      Float    @default(0)
   userId          String
   condominioId    String?

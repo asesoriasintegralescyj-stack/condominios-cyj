@@ -20,6 +20,7 @@ export async function GET(
       where: { id },
       include: {
         user: { select: { id: true, nombre: true, apellido: true, email: true, rol: true } },
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
         items: { orderBy: { fechaGasto: 'asc' } },
       },
     })
@@ -53,7 +54,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { titulo, descripcion, estado, items, notaRevision } = body
+    const { titulo, descripcion, estado, items, notaRevision, centroCostoId } = body
 
     const existente = await db.rendicionGasto.findUnique({
       where: { id },
@@ -94,6 +95,7 @@ export async function PUT(
         data: updateData,
         include: {
           user: { select: { id: true, nombre: true, apellido: true } },
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
           items: true,
         },
       })
@@ -118,6 +120,7 @@ export async function PUT(
     const updateData: any = {}
     if (titulo !== undefined) updateData.titulo = titulo.trim()
     if (descripcion !== undefined) updateData.descripcion = descripcion?.trim() || null
+    if (centroCostoId !== undefined) updateData.centroCostoId = centroCostoId || null
 
     // Si se envía para revisión
     if (body.enviar) {
@@ -151,6 +154,7 @@ export async function PUT(
       data: updateData,
       include: {
         user: { select: { id: true, nombre: true, apellido: true } },
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
         items: { orderBy: { fechaGasto: 'asc' } },
       },
     })

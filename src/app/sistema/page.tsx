@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store'
 
 // URL de la app móvil (comparte la misma BD Aiven)
-const APP_MOVIL_URL = 'https://laguna-norte-gestion.vercel.app'
+const APP_MOVIL_URL = 'https://laguna-norte-gestion-five.vercel.app'
 
 export default function SistemaPage() {
   const { user, authenticated, loading, refresh } = useSession()
