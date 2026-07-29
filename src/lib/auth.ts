@@ -654,6 +654,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
     // Solicitudes de Compra — admin solo gestiona en 2da etapa (NO aprueba como supervisor)
     'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -675,6 +677,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rondas.ver', 'rondas.registrar',
     // Solicitudes de Compra — supervisor aprueba en primera etapa
     'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar',
   ],
   usuario: [
     // Acceso básico
@@ -688,6 +692,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver',
     // Solicitudes de Compra — todos pueden crear
     'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear',
   ],
   personal: [
     // Solo puede ver OT y modificar progreso
