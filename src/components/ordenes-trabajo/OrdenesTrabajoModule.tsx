@@ -289,6 +289,11 @@ export function OrdenesTrabajoModule() {
     setLoading(false)
   }
 
+  const handleRefresh = async () => {
+    await fetchOrdenes(search)
+    toast.success('OTs actualizadas correctamente')
+  }
+
   const fetchCatalogs = async () => {
     try {
       const res = await fetch('/api/seed-catalogos')
@@ -1017,6 +1022,10 @@ export function OrdenesTrabajoModule() {
         </Button>
         <Button variant="outline" onClick={exportToCSV}>
           <Download className="w-4 h-4 mr-1" /> Exportar CSV
+        </Button>
+        <Button variant="outline" onClick={handleRefresh} disabled={loading} className="flex items-center gap-2">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar OTs
         </Button>
         <Button onClick={() => openDialog()}>
           <Plus className="w-4 h-4 mr-1" /> Nueva OT
