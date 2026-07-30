@@ -221,12 +221,11 @@ export function PerfilesMovilModule() {
 
         autoTable(doc, {
           startY: y,
-          head: [['#', 'Nombre', 'Código Acceso', 'Permisos']],
+          head: [['#', 'Nombre', 'Código Acceso']],
           body: section.data.map((p, i) => [
             i + 1,
             p.name,
             p.accessCode,
-            Array.isArray(p.permissions) ? p.permissions.join(', ') : '',
           ]),
           theme: 'grid',
           headStyles: {
@@ -242,9 +241,8 @@ export function PerfilesMovilModule() {
           },
           columnStyles: {
             0: { halign: 'center', cellWidth: 10 },
-            1: { cellWidth: 65 },
-            2: { halign: 'center', cellWidth: 35 },
-            3: { cellWidth: 80 },
+            1: { cellWidth: 120 },
+            2: { halign: 'center', cellWidth: 50 },
           },
           margin: { left: 14, right: 14 },
           alternateRowStyles: { fillColor: [248, 250, 252] },
