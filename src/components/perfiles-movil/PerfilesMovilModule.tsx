@@ -326,7 +326,7 @@ export function PerfilesMovilModule() {
 
       {/* Stats */}
       <TableroIndicadores
-        items={[
+        cards={[
           { titulo: 'Total Perfiles', numero: stats.total, icon: <Users className="w-5 h-5" />, color: 'primary' },
           { titulo: 'Vinculados a Personal', numero: stats.conPersonal, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
           { titulo: 'Supervisores/Admin', numero: stats.supervisor, icon: <Star className="w-5 h-5" />, color: 'azul' },
