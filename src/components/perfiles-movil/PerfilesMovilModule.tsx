@@ -18,7 +18,7 @@ import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { toast } from 'sonner'
 import {
   Plus, Pencil, Trash2, Search, RefreshCw, Smartphone, Shield, User, Eye,
-  Users, CheckCircle, XCircle, Star, Archive,
+  Users, CheckCircle, XCircle, Star, Archive, Download,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api-client'
 
@@ -178,6 +178,25 @@ export function PerfilesMovilModule() {
   const handleRefresh = async () => {
     await fetchPerfiles()
     toast.success('Perfiles actualizados')
+  }
+
+  // Exportar CSV
+  const handleExport = () => {
+    const data = perfiles.map(p => ({
+      Nombre: p.name,
+      'Código Acceso': p.accessCode,
+    }))
+    const header = 'Nombre,Código Acceso'
+    const rows = data.map(r => `${r.Nombre},${r['Código Acceso']}`).join('\n')
+    const csv = '\uFEFF' + header + '\n' + rows
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `perfiles-movil-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`${perfiles.length} perfiles exportados`)
   }
 
   // Crear
@@ -345,6 +364,9 @@ export function PerfilesMovilModule() {
             className="pl-9"
           />
         </div>
+        <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+          <Download className="w-4 h-4" /> Exportar CSV
+        </Button>
         <Button onClick={handleOpenCreate}>
           <Plus className="w-4 h-4 mr-1" /> Nuevo Perfil
         </Button>
