@@ -29,6 +29,7 @@ import {
   Receipt,
   ClipboardCheck,
   Smartphone,
+  BarChart3,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -117,6 +118,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'auditoria', label: 'Auditoría', icon: <Shield className="w-4 h-4" /> },
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
+      { id: 'informe-semanal', label: 'Informe Semanal', icon: <BarChart3 className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },
       { id: 'perfiles-movil', label: 'Perfiles App Móvil', icon: <Smartphone className="w-4 h-4" /> },
       { id: 'permisos', label: 'Permisos del Sistema', icon: <Shield className="w-4 h-4" /> },
