@@ -180,23 +180,86 @@ export function PerfilesMovilModule() {
     toast.success('Perfiles actualizados')
   }
 
-  // Exportar CSV
-  const handleExport = () => {
-    const data = perfiles.map(p => ({
-      Nombre: p.name,
-      'Código Acceso': p.accessCode,
-    }))
-    const header = 'Nombre,Código Acceso'
-    const rows = data.map(r => `${r.Nombre},${r['Código Acceso']}`).join('\n')
-    const csv = '\uFEFF' + header + '\n' + rows
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `perfiles-movil-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success(`${perfiles.length} perfiles exportados`)
+  // Exportar PDF
+  const handleExport = async () => {
+    try {
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import('jspdf'),
+        import('jspdf-autotable'),
+      ])
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+      // Encabezado
+      doc.setFontSize(16)
+      doc.setTextColor(15, 32, 68)
+      doc.text('Perfiles App Móvil - Laguna Norte', 14, 20)
+      doc.setFontSize(9)
+      doc.setTextColor(100, 116, 139)
+      doc.text(`Generado: ${new Date().toLocaleDateString('es-CL')} | Total: ${perfiles.length} perfiles`, 14, 27)
+
+      // Separar por tipo: supervisores/admin, guardias, otros
+      const admins = perfiles.filter(p => Array.isArray(p.permissions) && (p.permissions.includes('admin') || p.permissions.includes('supervisor')))
+      const guardias = perfiles.filter(p => Array.isArray(p.permissions) && p.permissions.includes('guardia'))
+      const otros = perfiles.filter(p => !Array.isArray(p.permissions) || (!p.permissions.includes('admin') && !p.permissions.includes('supervisor') && !p.permissions.includes('guardia')))
+
+      let y = 35
+      const tableSections = [
+        { title: 'Administradores / Supervisores', data: admins, color: [139, 92, 246] as [number, number, number] },
+        { title: 'Guardias', data: guardias, color: [20, 184, 166] as [number, number, number] },
+        { title: 'Otros Perfiles', data: otros, color: [59, 130, 246] as [number, number, number] },
+      ]
+
+      for (const section of tableSections) {
+        if (section.data.length === 0) continue
+        // Verificar si hay espacio para al menos 5 filas + título
+        if (y > 245) { doc.addPage(); y = 20; }
+
+        doc.setFontSize(11)
+        doc.setTextColor(...section.color)
+        doc.text(section.title, 14, y)
+        y += 2
+
+        autoTable(doc, {
+          startY: y,
+          head: [['#', 'Nombre', 'Código Acceso', 'Permisos']],
+          body: section.data.map((p, i) => [
+            i + 1,
+            p.name,
+            p.accessCode,
+            Array.isArray(p.permissions) ? p.permissions.join(', ') : '',
+          ]),
+          theme: 'grid',
+          headStyles: {
+            fillColor: section.color,
+            textColor: 255,
+            fontSize: 8,
+            fontStyle: 'bold',
+            halign: 'center',
+          },
+          bodyStyles: {
+            fontSize: 8,
+            textColor: 30,
+          },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { cellWidth: 65 },
+            2: { halign: 'center', cellWidth: 35 },
+            3: { cellWidth: 80 },
+          },
+          margin: { left: 14, right: 14 },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+        })
+
+        y = (doc as unknown as Record<string, number>).lastAutoTable?.finalY ?? y + 20
+        y += 8
+      }
+
+      doc.save(`perfiles-movil-${new Date().toISOString().slice(0, 10)}.pdf`)
+      toast.success(`${perfiles.length} perfiles exportados en PDF`)
+    } catch (error) {
+      console.error('Error exportando PDF:', error)
+      toast.error('Error al exportar PDF')
+    }
   }
 
   // Crear
@@ -365,7 +428,7 @@ export function PerfilesMovilModule() {
           />
         </div>
         <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
-          <Download className="w-4 h-4" /> Exportar CSV
+          <Download className="w-4 h-4" /> Exportar PDF
         </Button>
         <Button onClick={handleOpenCreate}>
           <Plus className="w-4 h-4 mr-1" /> Nuevo Perfil
