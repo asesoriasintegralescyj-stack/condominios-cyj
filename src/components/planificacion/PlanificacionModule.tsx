@@ -278,9 +278,9 @@ export function PlanificacionModule() {
 
       const res = await fetch(`/api/planificacion/tareas?${params.toString()}`)
       const json = await res.json()
-      if (json.success) {
-        setTareas(json.data.tareas)
-        setTotalTareas(json.data.total)
+      if (!json.error) {
+        setTareas(json.tareas ?? [])
+        setTotalTareas(json.total ?? 0)
       } else {
         toast.error('Error al cargar tareas')
       }
@@ -296,9 +296,9 @@ export function PlanificacionModule() {
     try {
       const res = await fetch('/api/planificacion/tareas?limit=500&offset=0')
       const json = await res.json()
-      if (json.success) {
-        setTareas(json.data.tareas)
-        setTotalTareas(json.data.total)
+      if (!json.error) {
+        setTareas(json.tareas ?? [])
+        setTotalTareas(json.total ?? 0)
       }
     } catch {
       // silent for calendar
@@ -311,8 +311,8 @@ export function PlanificacionModule() {
     try {
       const res = await fetch('/api/planificacion/google/auth')
       const json = await res.json()
-      if (json.success) {
-        setGoogleAuth(json.data)
+      if (!json.error) {
+        setGoogleAuth(json)
       }
     } catch {
       setGoogleAuth(null)
@@ -321,16 +321,20 @@ export function PlanificacionModule() {
     }
   }, [])
 
+  // ── Initial load ──
   useEffect(() => {
     void fetchAllTareas()
-  }, [fetchAllTareas])
+    void fetchGoogleAuth()
+  }, [])
 
+  // ── Re-fetch when tab changes to tareas ──
   useEffect(() => {
     if (activeTab === 'tareas') {
       void fetchTareas()
     }
   }, [activeTab, fetchTareas])
 
+  // ── Re-fetch google auth when tab changes ──
   useEffect(() => {
     if (activeTab === 'google') {
       void fetchGoogleAuth()
@@ -430,10 +434,10 @@ export function PlanificacionModule() {
           body: JSON.stringify(body),
         })
         const json = await res.json()
-        if (json.success) {
+        if (!json.error) {
           toast.success('Tarea actualizada correctamente')
         } else {
-          toast.error('Error al actualizar la tarea')
+          toast.error(json.error || 'Error al actualizar la tarea')
           return
         }
       } else {
@@ -443,10 +447,10 @@ export function PlanificacionModule() {
           body: JSON.stringify(body),
         })
         const json = await res.json()
-        if (json.success) {
+        if (!json.error) {
           toast.success('Tarea creada correctamente')
         } else {
-          toast.error('Error al crear la tarea')
+          toast.error(json.error || 'Error al crear la tarea')
           return
         }
       }
@@ -470,7 +474,7 @@ export function PlanificacionModule() {
     try {
       const res = await fetch(`/api/planificacion/tareas/${deleteId}`, { method: 'DELETE' })
       const json = await res.json()
-      if (json.success) {
+      if (!json.error) {
         toast.success('Tarea eliminada correctamente')
         setDeleteId(null)
         if (activeTab === 'tareas') {
@@ -479,7 +483,7 @@ export function PlanificacionModule() {
           await fetchAllTareas()
         }
       } else {
-        toast.error('Error al eliminar la tarea')
+        toast.error(json.error || 'Error al eliminar la tarea')
       }
     } catch {
       toast.error('Error de conexión al eliminar')
@@ -497,7 +501,7 @@ export function PlanificacionModule() {
         body: JSON.stringify({ estado: newEstado, completadoEn: newEstado === 'completada' ? new Date().toISOString() : null }),
       })
       const json = await res.json()
-      if (json.success) {
+      if (!json.error) {
         toast.success(newEstado === 'completada' ? 'Tarea marcada como completada' : 'Tarea marcada como pendiente')
         if (activeTab === 'tareas') {
           await fetchTareas()
@@ -516,11 +520,11 @@ export function PlanificacionModule() {
     try {
       const res = await fetch('/api/planificacion/google/auth', { method: 'POST' })
       const json = await res.json()
-      if (json.success && json.data?.authUrl) {
-        window.open(json.data.authUrl, '_blank')
+      if (!json.error && json.url) {
+        window.open(json.url, '_blank')
         toast.info('Se abrió la ventana de autenticación de Google')
       } else {
-        toast.error('Error al iniciar la conexión con Google')
+        toast.error(json.error || 'Error al iniciar la conexión con Google')
       }
     } catch {
       toast.error('Error de conexión con el servicio de Google')
@@ -533,7 +537,7 @@ export function PlanificacionModule() {
     try {
       const res = await fetch('/api/planificacion/google/auth', { method: 'DELETE' })
       const json = await res.json()
-      if (json.success) {
+      if (!json.error) {
         toast.success('Google desconectado correctamente')
         void fetchGoogleAuth()
       }
@@ -547,12 +551,12 @@ export function PlanificacionModule() {
     try {
       const res = await fetch('/api/planificacion/google/sync', { method: 'POST' })
       const json = await res.json()
-      if (json.success) {
-        toast.success('Sincronización completada')
+      if (!json.error) {
+        toast.success(`Sincronización completada: ${json.synced ?? 0} elementos nuevos (${json.events ?? 0} eventos, ${json.tasks ?? 0} tareas)`)
         void fetchGoogleAuth()
         void fetchAllTareas()
       } else {
-        toast.error('Error al sincronizar')
+        toast.error(json.error || 'Error al sincronizar')
       }
     } catch {
       toast.error('Error de conexión al sincronizar')
@@ -610,8 +614,14 @@ export function PlanificacionModule() {
     return { pendientes, enProgreso, completadas, urgentes, total: tareas.length }
   }, [tareas])
 
-  // ── Render: Loading ──
-  if (loading && activeTab !== 'google') {
+  // ── Render: Loading (only on initial load or tareas tab) ──
+  const isInitialLoading = loading && activeTab !== 'google' && tareas.length === 0
+
+  // ── Selected day tasks ──
+  const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : []
+
+  // ── Loading skeleton on initial load ──
+  if (isInitialLoading) {
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -624,9 +634,6 @@ export function PlanificacionModule() {
       </div>
     )
   }
-
-  // ── Selected day tasks ──
-  const selectedDayTasks = selectedDay ? getTasksForDay(selectedDay) : []
 
   return (
     <TooltipProvider>
