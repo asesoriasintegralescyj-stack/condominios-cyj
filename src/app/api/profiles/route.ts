@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db, withRetry } from '@/lib/db'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+/**
+ * GET /api/profiles
+ * Lista perfiles móviles (compatibilidad con app móvil).
+ */
+export async function GET() {
+  try {
+    const profiles = await withRetry(() =>
+      db.movilProfile.findMany({ orderBy: { name: 'asc' } }),
+    )
+    return NextResponse.json(profiles)
+  } catch (err) {
+    console.error('GET /api/profiles error:', err)
+    return NextResponse.json([])
+  }
+}
+
+/**
+ * POST /api/profiles
+ * Crea un perfil móvil.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const name = body.name?.trim()
+    if (!name) return NextResponse.json({ error: 'Nombre requerido' }, { status: 400 })
+
+    const profile = await withRetry(() =>
+      db.movilProfile.create({
+        data: {
+          name,
+          password: body.password || '',
+          accessCode: body.accessCode || String(Math.floor(1000 + Math.random() * 9000)),
+          color: body.color || 'bg-blue-600',
+          icon: body.icon || 'User',
+          workAreaIds: body.workAreaIds || [],
+          permissions: body.permissions || ['view'],
+          personalId: body.personalId || null,
+        },
+      }),
+    )
+
+    return NextResponse.json(profile, { status: 201 })
+  } catch (err) {
+    console.error('POST /api/profiles error:', err)
+    const msg = err instanceof Error ? err.message : 'Error al crear perfil'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+}

@@ -225,7 +225,7 @@ export function RendicionesGastosModule() {
         apiFetch<Rendicion[]>(`/api/rendiciones-gastos${filtroEstado ? `?estado=${filtroEstado}` : ''}`, []),
         apiFetch<Categoria[]>('/api/rendiciones-gastos/categorias', []),
         apiFetch<PersonalItem[]>('/api/personal?estado=Activo', []),
-        apiFetch<CentroCosto[]>('/api/centros-costos', []),
+        apiFetch<CentroCosto[]>('/api/centros-costo', []),
         apiFetch<MontoAsignado[]>('/api/rendiciones-gastos/montos-asignados', []),
       ])
       setRendiciones(rends)
