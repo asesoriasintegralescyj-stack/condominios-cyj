@@ -15,8 +15,8 @@ const globalForPrisma = globalThis as unknown as {
 // Antes: connection_limit=1 (free tier)
 // Ahora: connection_limit=3 (plan Pro)
 const databaseUrl = process.env.DATABASE_URL || ''
-const connectionLimit = 1
-const poolTimeout = 60
+const connectionLimit = 3
+const poolTimeout = 30
 
 const connectionString = databaseUrl.includes('?')
   ? databaseUrl + (
