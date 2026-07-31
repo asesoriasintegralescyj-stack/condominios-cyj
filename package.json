@@ -15,7 +15,7 @@
     "db:studio": "prisma studio --schema=schema.prisma",
     "db:seed": "node -e \"fetch('http://localhost:3000/api/seed', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
     "db:seed-catalogos": "node -e \"fetch('http://localhost:3000/api/seed-catalogos', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
-    "vercel-build": "prisma generate --schema=schema.prisma && next build"
+    "vercel-build": "prisma generate --schema=schema.prisma --no-engine && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
