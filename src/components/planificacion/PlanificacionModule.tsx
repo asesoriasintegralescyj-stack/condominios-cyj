@@ -293,6 +293,7 @@ export function PlanificacionModule() {
 
   // Fetch all tareas for calendar (no filters)
   const fetchAllTareas = useCallback(async () => {
+    setLoading(true)
     try {
       const res = await fetch('/api/planificacion/tareas?limit=500&offset=0')
       const json = await res.json()
@@ -302,6 +303,8 @@ export function PlanificacionModule() {
       }
     } catch {
       // silent for calendar
+    } finally {
+      setLoading(false)
     }
   }, [])
 
