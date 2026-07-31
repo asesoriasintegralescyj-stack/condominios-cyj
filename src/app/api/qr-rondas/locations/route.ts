@@ -36,20 +36,22 @@ export async function GET(request: NextRequest) {
       }),
     )
 
-    // Adjuntar contador de escaneos por ubicación (query separada para no
-    // saturar el pool de Aiven con connection_limit=1)
-    const locationsWithCounts = await Promise.all(
-      locations.map(async (loc) => {
-        try {
-          const scanCount = await withRetry(() =>
-            db.movilQrScan.count({ where: { qrLocationId: loc.id } }),
-          )
-          return { ...loc, scanCount }
-        } catch {
-          return { ...loc, scanCount: 0 }
-        }
+    // OPTIMIZACIÓN: Un solo groupBy query en vez de N count() individuales
+    const scanCountsRaw = await withRetry(() =>
+      db.movilQrScan.groupBy({
+        by: ['qrLocationId'],
+        _count: { id: true },
       }),
     )
+    const countMap = new Map<string, number>()
+    for (const row of scanCountsRaw) {
+      countMap.set(row.qrLocationId, row._count.id)
+    }
+
+    const locationsWithCounts = locations.map((loc) => ({
+      ...loc,
+      scanCount: countMap.get(loc.id) || 0,
+    }))
 
     return NextResponse.json(locationsWithCounts)
   } catch (error) {

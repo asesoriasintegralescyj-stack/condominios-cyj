@@ -30,6 +30,7 @@ export type Module =
   | 'permisos'
   | 'manuales'
   | 'pmi'
+  | 'rendicionesgastos'
 
 interface CondominioInfo {
   id: string

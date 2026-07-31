@@ -57,6 +57,9 @@ model Condominio {
   // Solicitudes de Compra
   solicitudesCompra SolicitudCompra[]
   listasDesplegables ListaDesplegable[]
+  // Rendiciones de Gastos
+  rendicionesGastos RendicionGasto[] @relation("RendicionesCondominio")
+  categoriasGastos CategoriaGasto[] @relation("CategoriasCondominio")
 }
 
 // ============================================
@@ -220,6 +223,8 @@ model Personal {
   horariosTrabajador HorarioTrabajador[]
   registrosReloj RegistroAsistenciaReloj[]
   inasistenciasAtrasos InasistenciaAtraso[]
+  rendiciones   RendicionGasto[] @relation("RendicionPersonal")
+  montosAsignados MontoAsignadoPersonal[] @relation("MontoAsignadoPer")
   @@index([condominioId, estado])
   @@index([rut])
   @@index([createdAt])
@@ -324,6 +329,7 @@ model CentroCostoMaster {
   ordenesTrabajo  OrdenTrabajo[]
   gastos          Gasto[]
   proyectos       Proyecto[]
+  boletasRendicion BoletaRendicion[] @relation("BoletaCentroCosto")
 }
 
 // ============================================
@@ -1600,4 +1606,93 @@ model MovilAuditLog {
   @@index([entityType])
   @@index([action])
   @@index([createdAt])
+}
+
+// ============================================
+// RENDICIONES DE GASTOS
+// ============================================
+model CategoriaGasto {
+  id          String  @id @default(cuid())
+  nombre      String
+  descripcion String?
+  color       String  @default("#0f2044")
+  activa      Boolean @default(true)
+  condominioId String?
+  condominio  Condominio? @relation("CategoriasCondominio", fields: [condominioId], references: [id])
+  boletas     BoletaRendicion[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([activa])
+}
+
+model MontoAsignadoPersonal {
+  id          String  @id @default(cuid())
+  personalId  String?
+  monto       Float
+  periodo     String  @default("Mensual")
+  estado      String  @default("Activo")
+  notas       String?
+  personal    Personal? @relation("MontoAsignadoPer", fields: [personalId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([personalId])
+}
+
+model RendicionGasto {
+  id                  String    @id @default(cuid())
+  codigo              String    @unique
+  periodo             String
+  concepto            String
+  descripcion         String?
+  estado              String    @default("Borrador")
+  montoTotal          Float     @default(0)
+  montoAsignado       Float     @default(0)
+  fechaRendicion      DateTime  @default(now())
+  fechaAprobacion     DateTime?
+  aprobadoPor         String?
+  aprobadoPorNombre   String?
+  observaciones       String?
+  motivoRechazo       String?
+  responsableId       String?
+  responsableNombre   String?
+  emailEnviado        Boolean   @default(false)
+  emailEnviadoA       String?
+  emailFechaEnvio     DateTime?
+  condominioId        String?
+  condominio          Condominio? @relation("RendicionesCondominio", fields: [condominioId], references: [id])
+  responsable         Personal? @relation("RendicionPersonal", fields: [responsableId], references: [id])
+  boletas             BoletaRendicion[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([estado, createdAt])
+  @@index([condominioId])
+  @@index([responsableId])
+  @@index([periodo])
+}
+
+model BoletaRendicion {
+  id            String   @id @default(cuid())
+  rendicionId   String
+  rendicion     RendicionGasto @relation(fields: [rendicionId], references: [id], onDelete: Cascade)
+  descripcion   String
+  monto         Float    @default(0)
+  fecha         String?
+  nDocumento    String?
+  proveedor     String?
+  notas         String?
+  comprobante   String?
+  documento     String?
+  centroCostoId String?
+  centroCosto   CentroCostoMaster? @relation("BoletaCentroCosto", fields: [centroCostoId], references: [id])
+  categoriaId   String?
+  categoria     CategoriaGasto? @relation(fields: [categoriaId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([rendicionId])
+  @@index([centroCostoId])
+  @@index([categoriaId])
 }

@@ -23,6 +23,7 @@ import {
   CheckCircle,
   QrCode,
   ShoppingCart,
+  Receipt,
   Menu,
   X,
   BookOpen,
@@ -64,6 +65,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   cumplimiento: 'configuracion.ver',
   qrrondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
+  rendicionesgastos: 'gastos.ver',
   // 'usuarios' y 'permisos' se manejan con lógica especial (solo admin)
 }
 
@@ -97,6 +99,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
     items: [
       { id: 'proveedores', label: 'Proveedores', icon: <Building2 className="w-4 h-4" /> },
       { id: 'centrocostos', label: 'Centro de Costos', icon: <PiggyBank className="w-4 h-4" /> },
+      { id: 'rendicionesgastos', label: 'Rendiciones de Gastos', icon: <Receipt className="w-4 h-4" /> },
     ]
   },
   {
