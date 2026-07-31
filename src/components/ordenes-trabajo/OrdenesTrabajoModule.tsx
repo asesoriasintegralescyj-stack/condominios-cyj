@@ -226,6 +226,7 @@ export function OrdenesTrabajoModule() {
   )
   const [propiedades, setPropiedades] = useState<{ id: string; nombre: string }[]>([])
   const [loading, setLoading] = useState(true)
+  const [savingOT, setSavingOT] = useState(false) // Previene doble click al guardar OT
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
@@ -524,6 +525,11 @@ export function OrdenesTrabajoModule() {
 
   const handleSave = async () => {
     if (!formData.titulo.trim()) return
+    if (savingOT) return // Prevenir doble envio
+    setSavingOT(true)
+
+    // Token de idempotencia para prevenir duplicados en servidor
+    const idempotencyToken = `OT-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
 
     // Calcular costo real basado en materiales y personal
     const costoMateriales = materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0)
@@ -557,22 +563,39 @@ export function OrdenesTrabajoModule() {
 
     try {
       if (editingOT) {
-        await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
+        const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dataToSend),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.details || err.error || 'Error al guardar OT')
+        }
       } else {
-        await fetch('/api/ordenes-trabajo', {
+        const res = await fetch('/api/ordenes-trabajo', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(dataToSend),
+          body: JSON.stringify({ ...dataToSend, _clientIdempotency: idempotencyToken }),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.details || err.error || 'Error al crear OT')
+        }
+        const result = await res.json()
+        if (result._duplicate) {
+          toast.info('Esta OT ya fue creada previamente')
+        } else {
+          toast.success(`OT ${result.otNum} creada correctamente`)
+        }
       }
       setDialogOpen(false)
       fetchOrdenes(search)
     } catch (error) {
       console.error('Error saving OT:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al guardar OT')
+    } finally {
+      setSavingOT(false)
     }
   }
 
@@ -2092,7 +2115,9 @@ export function OrdenesTrabajoModule() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSave}>Guardar OT</Button>
+              <Button onClick={handleSave} disabled={savingOT}>
+                {savingOT ? 'Guardando...' : 'Guardar OT'}
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>

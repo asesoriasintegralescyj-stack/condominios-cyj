@@ -38,7 +38,6 @@ model Condominio {
   ordenesTrabajo OrdenTrabajo[]
   proyectos     Proyecto[]
   inspecciones  Inspeccion[]
-  gastos        Gasto[]
   proveedores   Proveedor[]
   notificaciones Notificacion[]
   catMateriales CatMaterial[]
@@ -57,6 +56,9 @@ model Condominio {
   // Solicitudes de Compra
   solicitudesCompra SolicitudCompra[]
   listasDesplegables ListaDesplegable[]
+  // Rendiciones de Gastos
+  rendicionesGastos RendicionGasto[]
+  categoriasGastos  CategoriaGasto[] @relation("CategoriasCondominio")
 }
 
 // ============================================
@@ -216,6 +218,8 @@ model Personal {
 
   activos       Activo[] @relation("ActivoAsignado")
   otPersonal    OrdenTrabajo[] @relation("OTPersonal")
+  rendiciones   RendicionGasto[] @relation("RendicionPersonal")
+  montosAsignados MontoAsignadoPersonal[]
   asistencias   Asistencia[]
   horariosTrabajador HorarioTrabajador[]
   registrosReloj RegistroAsistenciaReloj[]
@@ -294,7 +298,6 @@ model Proveedor {
   condominioId   String?
   condominio     Condominio? @relation(fields: [condominioId], references: [id])
 
-  gastos         Gasto[]
   @@index([estado])
 }
 
@@ -322,7 +325,7 @@ model CentroCostoMaster {
   materiales      CatMaterial[]
   herramientas    CatHerramienta[]
   ordenesTrabajo  OrdenTrabajo[]
-  gastos          Gasto[]
+  boletasRendicion BoletaRendicion[] @relation("BoletaCentroCosto")
   proyectos       Proyecto[]
 }
 
@@ -602,37 +605,117 @@ model Inspeccion {
 }
 
 // ============================================
-// GASTOS / RENDICIÓN
+// CATEGORÍAS DE RENDICIÓN DE GASTOS
 // ============================================
-model Gasto {
+model CategoriaGasto {
+  id          String   @id @default(cuid())
+  nombre      String
+  descripcion String?
+  color       String   @default("#0f2044") // Color para la UI
+  activa      Boolean  @default(true)
+  condominioId String?
+  condominio   Condominio? @relation("CategoriasCondominio", fields: [condominioId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  boletas BoletaRendicion[]
+
+  @@index([activa])
+}
+
+// ============================================
+// MONTOS ASIGNADOS POR PERSONAL (para rendiciones)
+// ============================================
+model MontoAsignadoPersonal {
+  id          String   @id @default(cuid())
+  personalId   String?
+  personal    Personal? @relation(fields: [personalId], references: [id], onDelete: SetNull)
+  monto       Float    @default(0)       // Monto máximo asignado para rendir
+  periodo     String   @default("Mensual") // Mensual, Quincenal, Semanal
+  estado      String   @default("Activo") // Activo, Inactivo
+  notas       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([personalId])
+}
+
+// ============================================
+// RENDICIÓN DE GASTOS (cabecera)
+// ============================================
+model RendicionGasto {
+  id                String   @id @default(cuid())
+  codigo            String   @unique // RG-0001, RG-0002, etc.
+  periodo           String   // Ej: "2026-07" (YYYY-MM)
+  concepto          String  // Ej: "Rendición Julio 2026 - Jefe de Operaciones"
+  descripcion       String?
+  estado            String   @default("Borrador") // Borrador, En Revisión, Aprobada, Rechazada, Anulada
+  montoTotal        Float    @default(0) // Suma de todas las boletas
+  montoAsignado     Float    @default(0) // Monto asignado al responsable (para control)
+  fechaRendicion    DateTime @default(now())
+  fechaAprobacion   DateTime?
+  aprobadoPor       String?
+  aprobadoPorNombre String?
+  observaciones     String?
+  motivoRechazo     String?
+  
+  // Responsable (quien rinde)
+  responsableId     String?
+  responsable       Personal? @relation("RendicionPersonal", fields: [responsableId], references: [id])
+  responsableNombre String? // Denormalizado para queries rápidas
+  
+  // Email de aprobación
+  emailEnviado      Boolean  @default(false)
+  emailEnviadoA     String?
+  emailFechaEnvio   DateTime?
+  
+  // Condominio
+  condominioId      String?
+  condominio        Condominio? @relation(fields: [condominioId], references: [id])
+
+  boletas           BoletaRendicion[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([estado, createdAt])
+  @@index([condominioId])
+  @@index([responsableId])
+  @@index([periodo])
+}
+
+// ============================================
+// BOLETAS / COMPROBANTES DE RENDICIÓN (detalle)
+// Cada boleta tiene su propio centro de costo
+// ============================================
+model BoletaRendicion {
   id            String   @id @default(cuid())
-  descripcion   String
-  categoria     String   @default("Mantenimiento") // Mantenimiento, Administración, Seguridad, Áreas Verdes, etc.
-  estado        String   @default("Pendiente") // Pendiente, Pagado, Rechazado, En revisión
+  rendicionId   String
+  rendicion     RendicionGasto @relation(fields: [rendicionId], references: [id], onDelete: Cascade)
+  
+  descripcion   String  // Descripción del gasto
   monto         Float    @default(0)
-  fecha         String?
-  propiedad     String?
-  proveedorId   String?
-  proveedor     Proveedor? @relation(fields: [proveedorId], references: [id])
-  nDoc          String?  // Número de documento
+  fecha         String?  // Fecha del comprobante
+  nDocumento    String?  // Número de documento / boleta
+  proveedor     String?  // Nombre del proveedor en el comprobante
   notas         String?
-  comprobante   String?  // base64 or URL
+  comprobante   String?  // URL o base64 de la imagen del comprobante
+  documento     String?  // URL o base64 del documento adjunto (PDF, Word, etc.)
   
-  // Relación con Condominio
-  condominioId  String?
-  condominio    Condominio? @relation(fields: [condominioId], references: [id])
-  
-  // Relación con Centro de Costo
+  // Centro de costo va en la BOLETA, no en la rendición
   centroCostoId String?
-  centroCosto   CentroCostoMaster? @relation(fields: [centroCostoId], references: [id])
+  centroCosto   CentroCostoMaster? @relation("BoletaCentroCosto", fields: [centroCostoId], references: [id])
+  
+  // Categoría del gasto
+  categoriaId   String?
+  categoria     CategoriaGasto? @relation(fields: [categoriaId], references: [id])
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  @@index([condominioId, fecha])
-  @@index([proveedorId])
+
+  @@index([rendicionId])
   @@index([centroCostoId])
-  @@index([estado])
-  @@index([createdAt])
+  @@index([categoriaId])
 }
 
 // ============================================

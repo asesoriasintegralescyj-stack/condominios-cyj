@@ -66,13 +66,14 @@ export async function apiPost<T>(
   options?: RequestInit
 ): Promise<{ ok: boolean; data?: T; error?: string; status: number }> {
   try {
+    const hasBody = body !== null && body !== undefined
     const res = await fetch(url, {
       method: options?.method || 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
         ...(options?.headers || {}),
       },
-      body: typeof body === 'string' ? body : JSON.stringify(body),
+      ...(hasBody ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}),
       ...options,
     })
 

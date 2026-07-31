@@ -6,6 +6,14 @@
     {
       "path": "/api/backups/auto-mensual",
       "schedule": "0 6 1 * *"
+    },
+    {
+      "path": "/api/alertas/rondas-diario?shift=noche",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/alertas/rondas-diario?shift=dia",
+      "schedule": "0 10 * * *"
     }
   ]
 }

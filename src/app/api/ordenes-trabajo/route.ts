@@ -18,18 +18,15 @@ export async function GET(request: NextRequest) {
     // Para rol personal, buscar el registro de Personal por email y filtrar OT
     let personalFilter: any = undefined
     if (session.user.rol === 'personal') {
-      // Buscar Personal por email (campos encriptados, hay que buscar todos y filtrar)
       const allPersonal = await db.personal.findMany({ select: { id: true, email: true, nombre: true } })
       const userEmail = session.user.email.toLowerCase()
       const matched = allPersonal.find((p) => {
         if (!p.email) return false
-        // El email en Personal está encriptado; lo desencriptamos para comparar
         const dec = decrypt(p.email).toLowerCase()
         return dec === userEmail
       })
 
       if (matched) {
-        // Filtrar OT donde asignadoId = matched.id O donde el trabajador está en personalOT (por nombre)
         personalFilter = {
           OR: [
             { asignadoId: matched.id },
@@ -37,12 +34,10 @@ export async function GET(request: NextRequest) {
           ],
         }
       } else {
-        // Si no se encuentra el Personal, devolver array vacío
         return NextResponse.json([])
       }
     }
 
-    // Construir where combinando búsqueda + filtro de personal
     const where: any = {}
     if (search) {
       where.OR = [
@@ -52,7 +47,6 @@ export async function GET(request: NextRequest) {
       ]
     }
     if (personalFilter) {
-      // Combinar: si hay search, anidar con AND
       if (search) {
         where.AND = [personalFilter]
       } else {
@@ -63,47 +57,21 @@ export async function GET(request: NextRequest) {
     const ordenes = await db.ordenTrabajo.findMany({
       where: Object.keys(where).length > 0 ? where : undefined,
       select: {
-        id: true,
-        otNum: true,
-        titulo: true,
-        tipo: true,
-        prioridad: true,
-        estado: true,
-        ubicacion: true,
-        fechaInicio: true,
-        fechaLimite: true,
-        fechaInicioReal: true,
-        fechaFinReal: true,
-        costoEstimado: true,
-        costoReal: true,
-        progreso: true,
-        descripcion: true,
-        tiempoEst: true,
-        tiempoReal: true,
-        estadoAprobacion: true,
-        formaPago: true,
-        createdAt: true,
-        // Relaciones pero con select mínimo para reducir transferencia
+        id: true, otNum: true, titulo: true, tipo: true, prioridad: true,
+        estado: true, ubicacion: true, fechaInicio: true, fechaLimite: true,
+        fechaInicioReal: true, fechaFinReal: true, costoEstimado: true,
+        costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
+        tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
         propiedad: { select: { id: true, nombre: true } },
         asignado: { select: { id: true, nombre: true, cargo: true } },
         centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        // NO incluir materiales, herramientas, tareas, personalOT en el listado
-        // (se cargan individualmente al abrir el detalle)
         _count: {
-          select: {
-            materiales: true,
-            herramientas: true,
-            tareas: true,
-            personalOT: true,
-            documentos: true,
-          }
+          select: { materiales: true, herramientas: true, tareas: true, personalOT: true, documentos: true }
         }
       },
       orderBy: { createdAt: 'desc' }
     })
 
-    // Mantener centroCosto como objeto (codigo + nombre + id) para que el frontend
-    // pueda mostrar el código en la columna y el nombre en el detalle
     const ordenesWithCC = ordenes.map(ot => ({
       ...ot,
       fotosAntes: [],
@@ -117,7 +85,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - Create new orden de trabajo
+// POST - Create new orden de trabajo (con proteccion contra duplicados)
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
@@ -126,18 +94,72 @@ export async function POST(request: NextRequest) {
   }
   try {
     const data = await request.json()
-    
-    // Get next OT number using sequence table
+    const clientIdempotency = data._clientIdempotency || null
+
+    // ─── PROTECCION CONTRA DUPLICADOS (1): Token de idempotencia del cliente ───
+    if (clientIdempotency) {
+      const existing = await db.ordenTrabajo.findFirst({
+        where: { notas: { contains: clientIdempotency } },
+        select: { id: true, otNum: true, titulo: true },
+      })
+      if (existing) {
+        console.log(`[OT Dedup] Solicitud duplicada (${clientIdempotency}), retornando: ${existing.otNum}`)
+        return NextResponse.json({ ...existing, _duplicate: true, _message: 'OT ya creada previamente' })
+      }
+    }
+
+    // ─── PROTECCION CONTRA DUPLICADOS (2): Mismo titulo + mismo usuario en 60 seg ───
+    const titulo = (data.titulo || '').trim()
+    if (titulo) {
+      const sixtySecondsAgo = new Date(Date.now() - 60_000)
+      const recentDuplicate = await db.ordenTrabajo.findFirst({
+        where: {
+          titulo,
+          creadoPor: session.user.id,
+          createdAt: { gte: sixtySecondsAgo },
+        },
+        select: { id: true, otNum: true, titulo: true, createdAt: true },
+      })
+      if (recentDuplicate) {
+        console.log(`[OT Dedup] Duplicado temporal (titulo="${titulo}" por ${session.user.id}), retornando: ${recentDuplicate.otNum}`)
+        return NextResponse.json({ ...recentDuplicate, _duplicate: true, _message: 'OT ya creada en los ultimos segundos' })
+      }
+    }
+
+    // ─── CORRELATIVO SEGURO (con retry contra race conditions) ───
     const { generarCorrelativoDB } = await import('@/lib/utils')
-    const nextNum = await generarCorrelativoDB(db, 'OrdenTrabajo', 'OT', 4)
-    
+    let nextNum: string | undefined
+    let retries = 0
+    const maxRetries = 3
+    while (retries < maxRetries) {
+      try {
+        nextNum = await generarCorrelativoDB(db, 'OrdenTrabajo', 'OT', 4)
+        const exists = await db.ordenTrabajo.findFirst({ where: { otNum: nextNum }, select: { id: true } })
+        if (!exists) break
+        console.log(`[OT] Correlativo ${nextNum} ya existe, reintentando (${retries + 1}/${maxRetries})`)
+        retries++
+      } catch (err) {
+        console.error(`[OT] Error generando correlativo (intento ${retries + 1}):`, err)
+        retries++
+      }
+    }
+    if (!nextNum) {
+      return apiError('Error al generar numero de OT despues de varios intentos', 500)
+    }
+
     // Extract resources from data
-    const { materiales, herramientas, tareas, personalOT, centroCostoId, ...otData } = data
-    
+    const { materiales, herramientas, tareas, personalOT, centroCostoId, _clientIdempotency: _idem, ...otData } = data
+
+    // Notas con token de idempotencia (invisible al usuario)
+    const notasBase = otData.notas || ''
+    const notasFinal = clientIdempotency
+      ? `[IDEM:${clientIdempotency}]${notasBase ? ' ' + notasBase : ''}`
+      : notasBase || null
+
     const orden = await db.ordenTrabajo.create({
       data: {
-        otNum: otData.otNum || nextNum,
-        titulo: otData.titulo,
+        otNum: nextNum,
+        titulo,
         tipo: otData.tipo || 'Correctivo',
         prioridad: otData.prioridad || 'Media',
         estado: otData.estado || 'Pendiente',
@@ -153,17 +175,17 @@ export async function POST(request: NextRequest) {
         tiempoEst: parseInt(otData.tiempoEst) || 0,
         tiempoReal: parseInt(otData.tiempoReal) || 0,
         valorHora: parseFloat(otData.valorHora) || 0,
-        notas: otData.notas || null,
+        notas: notasFinal,
         propiedadId: otData.propiedadId || null,
         asignadoId: otData.asignadoId || null,
         activoId: otData.activoId || null,
         centroCostoId: centroCostoId || null,
         esRecurrente: otData.esRecurrente || false,
         formaPago: otData.formaPago || null,
+        creadoPor: session.user.id,
+        creadoPorNombre: session.user.nombre || session.user.email,
         fotosAntes: otData.fotosAntes && otData.fotosAntes.length > 0 ? JSON.stringify(otData.fotosAntes) : null,
         fotosDespues: otData.fotosDespues && otData.fotosDespues.length > 0 ? JSON.stringify(otData.fotosDespues) : null,
-        
-        // Create related resources
         materiales: materiales && materiales.length > 0 ? {
           create: materiales.map((m: any) => ({
             descripcion: m.descripcion,
@@ -173,26 +195,22 @@ export async function POST(request: NextRequest) {
             total: parseFloat(m.total) || 0,
           }))
         } : undefined,
-        
         herramientas: herramientas && herramientas.length > 0 ? {
           create: herramientas.map((h: any) => ({
             nombre: h.nombre,
             cantidad: parseInt(h.cantidad) || 1,
           }))
         } : undefined,
-        
         tareas: tareas && tareas.length > 0 ? {
           create: tareas.map((t: any) => ({
             descripcion: t.descripcion,
             cantidad: parseInt(t.cantidad) || 1,
             estado: t.estado || 'Pendiente',
-            // Checklist de verificación (LV del PMI): OK / NO OK / N/A
             ok: t.ok === true,
             noOk: t.noOk === true,
             na: t.na === true,
           }))
         } : undefined,
-        
         personalOT: personalOT && personalOT.length > 0 ? {
           create: personalOT.map((p: any) => ({
             nombre: p.nombre,
@@ -207,19 +225,19 @@ export async function POST(request: NextRequest) {
         } : undefined,
       },
       include: {
-        propiedad: true,
-        asignado: true,
-        centroCosto: true,
-        materiales: true,
-        herramientas: true,
-        tareas: true,
-        personalOT: true,
+        propiedad: true, asignado: true, centroCosto: true,
+        materiales: true, herramientas: true, tareas: true, personalOT: true,
       }
     })
-    
+
+    console.log(`[OT] Creada ${orden.otNum} por ${session.user.email} (${orden.id})`)
     return NextResponse.json(orden)
   } catch (error) {
     console.error('Error creating orden:', error)
-    return NextResponse.json({ error: 'Error creating orden' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    if (errMsg.includes('Unique') && errMsg.includes('otNum')) {
+      return apiError('Error de concurrencia: numero de OT duplicado. Intente nuevamente.', 409)
+    }
+    return NextResponse.json({ error: 'Error creating orden', details: errMsg }, { status: 500 })
   }
 }

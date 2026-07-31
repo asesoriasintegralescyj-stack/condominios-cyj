@@ -27,6 +27,7 @@ import {
   X,
   BookOpen,
   ClipboardCheck,
+  Receipt,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -64,6 +65,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   cumplimiento: 'configuracion.ver',
   qrrondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
+  rendicionesgastos: 'rendicionesgastos.ver',
   // 'usuarios' y 'permisos' se manejan con lógica especial (solo admin)
 }
 
@@ -97,6 +99,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
     items: [
       { id: 'proveedores', label: 'Proveedores', icon: <Building2 className="w-4 h-4" /> },
       { id: 'centrocostos', label: 'Centro de Costos', icon: <PiggyBank className="w-4 h-4" /> },
+      { id: 'rendicionesgastos', label: 'Rendición de Gastos', icon: <Receipt className="w-4 h-4" /> },
     ]
   },
   {
@@ -160,6 +163,12 @@ export function Sidebar() {
 
       // Dashboard siempre visible para los demás roles
       if (item.id === 'dashboard') return true
+
+      // Admin ve todo (incluye rendicionesgastos y cualquier módulo nuevo)
+      if (isAdmin()) return true
+
+      // Supervisor ve todo lo que tenga permiso o que no requiera permiso especial
+      // (no se filtra más aquí para supervisors)
 
       const permission = modulePermissions[item.id]
       if (!permission) return true
