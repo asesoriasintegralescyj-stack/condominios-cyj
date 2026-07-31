@@ -214,6 +214,22 @@ const CATEGORIAS_PERMISOS = {
       { id: 'rondas.eliminar', label: 'Eliminar' },
     ],
   },
+  solicitudescompra: {
+    label: 'Solicitudes de Compra',
+    permisos: [
+      { id: 'solicitudescompra.ver', label: 'Ver' },
+      { id: 'solicitudescompra.crear', label: 'Crear' },
+      { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Sup.)' },
+      { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)' },
+      { id: 'solicitudescompra.gestionar', label: 'Gestionar' },
+    ],
+  },
+  asistencia: {
+    label: 'Asistencia',
+    permisos: [
+      { id: 'asistencia.ver', label: 'Ver' },
+    ],
+  },
 };
 
 // Tipo para los permisos
@@ -248,6 +264,7 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
     'centros-costo.ver',
     'reportes.ver', 'reportes.exportar',
     'inventario.ver', 'inventario.editar',
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     'residentes.ver',
@@ -269,6 +286,27 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
   conserje: [
     // Conserje — Solo ver lecturas de QR y exportar PDF
     'rondas.ver',
+  ],
+  auditor: [
+    // Auditor — Solo lectura de todo
+    'usuarios.ver',
+    'residentes.ver',
+    'propiedades.ver',
+    'personal.ver',
+    'proveedores.ver',
+    'ots.ver',
+    'proyectos.ver',
+    'gastos.ver',
+    'inspecciones.ver',
+    'activos.ver',
+    'catalogos.ver',
+    'centros-costo.ver',
+    'reportes.ver', 'reportes.exportar',
+    'inventario.ver',
+    'rondas.ver',
+    'solicitudescompra.ver',
+    'asistencia.ver',
+    'logs.ver',
   ],
 };
 
@@ -323,10 +361,17 @@ export function UsuariosModule() {
     fetchUsuarios();
   }, []);
 
+  const isSupervisor = () => currentUser?.rol === 'supervisor';
+
   const fetchUsuarios = async () => {
     try {
       const data = await apiFetch<Usuario[]>('/api/usuarios', []);
-      setUsuarios(data);
+      // Supervisor cannot see admin users
+      if (isSupervisor()) {
+        setUsuarios(data.filter((u: Usuario) => u.rol !== 'admin'));
+      } else {
+        setUsuarios(data);
+      }
     } catch (error) {
       console.error('Error:', error);
       toast.error('Error de conexión');
@@ -392,6 +437,10 @@ export function UsuariosModule() {
   };
 
   const handleOpenEdit = (usuario: Usuario) => {
+    if (isSupervisor() && usuario.rol === 'admin') {
+      toast.error('No tiene permisos para editar cuentas de Administrador');
+      return;
+    }
     const permisosUsuario = parsePermisos(usuario.permisos);
     setFormData({
       nombre: usuario.nombre,
@@ -410,6 +459,10 @@ export function UsuariosModule() {
   };
 
   const handleOpenPassword = (usuario: Usuario) => {
+    if (isSupervisor() && usuario.rol === 'admin') {
+      toast.error('No tiene permisos para gestionar cuentas de Administrador');
+      return;
+    }
     setFormData({
       ...formData,
       password: '',
@@ -607,6 +660,10 @@ export function UsuariosModule() {
   };
 
   const handleToggleActive = async (usuario: Usuario) => {
+    if (isSupervisor() && usuario.rol === 'admin') {
+      toast.error('No tiene permisos para desactivar cuentas de Administrador');
+      return;
+    }
     try {
       const response = await fetch(`/api/usuarios/${usuario.id}`, {
         method: 'PUT',
@@ -704,6 +761,12 @@ export function UsuariosModule() {
           <p className="text-muted-foreground">
             Administre los usuarios del sistema
           </p>
+          {isSupervisor() && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+              <Shield className="w-3 h-3" />
+              Nota: No puede ver ni gestionar cuentas de Administrador
+            </p>
+          )}
         </div>
         <Button onClick={handleOpenCreate}>
           <Plus className="w-4 h-4 mr-2" />

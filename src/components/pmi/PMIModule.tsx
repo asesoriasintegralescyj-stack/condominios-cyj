@@ -36,6 +36,8 @@ import {
   X,
   Plus,
   Trash2,
+  Upload,
+  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { imprimirPDFDoc } from '@/lib/utils'
@@ -45,6 +47,7 @@ import {
   BADGE_FRECUENCIA,
   DOT_FRECUENCIA,
 } from '@/lib/pmi/lv-data'
+import { CumplimientoPanel } from '@/components/pmi/CumplimientoPanel'
 
 // ============================================
 // Tipos
@@ -102,9 +105,25 @@ const MESES = [
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
-// Fecha "Hoy" fija según requerimiento del enunciado (6 de julio 2026)
-const TODAY = new Date(2026, 6, 6) // 6 = julio (0-indexed)
-const TODAY_STR = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}-${String(TODAY.getDate()).padStart(2, '0')}`
+// Fecha "Hoy" — se calcula dinámicamente en zona America/Santiago (UTC-4)
+// para que el calendario y las LVs reflejen siempre el día actual real.
+function fechaSantiagoDate(): Date {
+  const ahora = new Date()
+  // UTC-4 (Chile continental, horario estándar — DST desactivado desde 2015)
+  const tzOffset = -4 * 60
+  return new Date(ahora.getTime() + tzOffset * 60 * 1000)
+}
+
+function fechaSantiagoStr(d: Date): string {
+  // Extraer YYYY-MM-DD del Date ya ajustado a Santiago
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const TODAY = fechaSantiagoDate()
+const TODAY_STR = fechaSantiagoStr(TODAY)
 
 // ============================================
 // Utilidades
@@ -130,8 +149,8 @@ export function PMIModule() {
   const { user, isAdmin } = useSession()
   const esAdmin = isAdmin()
 
-  // Estado de calendario
-  const [mesActual, setMesActual] = useState<Date>(new Date(2026, 6, 1)) // julio 2026
+  // Estado de calendario — mes inicial = mes actual (zona Santiago)
+  const [mesActual, setMesActual] = useState<Date>(new Date(TODAY.getUTCFullYear(), TODAY.getUTCMonth(), 1))
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>(TODAY_STR)
 
   // Datos
@@ -146,6 +165,9 @@ export function PMIModule() {
   const [itemsCompletados, setItemsCompletados] = useState<Set<string>>(new Set())
   const [observaciones, setObservaciones] = useState('')
   const [guardandoRegistro, setGuardandoRegistro] = useState(false)
+  // PDF de respaldo obligatorio para completar la LV
+  const [pdfRespaldoUrl, setPdfRespaldoUrl] = useState<string>('')
+  const [pdfRespaldoNombre, setPdfRespaldoNombre] = useState<string>('')
 
   // Dialog de edición de LV
   const [lvEditando, setLvEditando] = useState<LV | null>(null)
@@ -279,6 +301,8 @@ export function PMIModule() {
     setLvDetalle(lvCompleta)
     setItemsCompletados(new Set())
     setObservaciones('')
+    setPdfRespaldoUrl('')
+    setPdfRespaldoNombre('')
     setDialogDetalleOpen(true)
   }
 
@@ -292,8 +316,44 @@ export function PMIModule() {
     })
   }
 
+  // ===== Subir PDF de respaldo (base64 data URL) =====
+  const handlePdfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      toast.error('Solo se permiten archivos PDF')
+      e.target.value = ''
+      return
+    }
+    // Máximo 10 MB
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('El PDF es demasiado grande. Máximo 10 MB.')
+      e.target.value = ''
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string
+      setPdfRespaldoUrl(base64)
+      setPdfRespaldoNombre(file.name)
+      toast.success(`PDF cargado: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`)
+    }
+    reader.onerror = () => toast.error('Error al leer el PDF')
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemovePdf = () => {
+    setPdfRespaldoUrl('')
+    setPdfRespaldoNombre('')
+  }
+
   const guardarRegistro = async () => {
     if (!lvDetalle) return
+    // Validación client-side: PDF obligatorio para completar
+    if (!pdfRespaldoUrl) {
+      toast.error('📎 Para completar la LV es obligatorio subir un PDF de respaldo.')
+      return
+    }
     setGuardandoRegistro(true)
     try {
       const res = await fetch('/api/pmi/registros', {
@@ -307,12 +367,16 @@ export function PMIModule() {
           estado: 'Completado',
           observaciones,
           itemsCompletados: Array.from(itemsCompletados),
+          pdfRespaldoUrl,
+          pdfRespaldoNombre,
         }),
       })
       if (res.ok) {
         toast.success(`Registro guardado: ${lvDetalle.codigo}`)
         setDialogDetalleOpen(false)
         setLvDetalle(null)
+        setPdfRespaldoUrl('')
+        setPdfRespaldoNombre('')
         await cargarCalendario()
       } else {
         const data = await res.json().catch(() => ({}))
@@ -920,6 +984,10 @@ export function PMIModule() {
         )}
       </div>
 
+      {/* ===== Control de Cumplimiento PMI (panel auto-actualizado) ===== */}
+      <CumplimientoPanel />
+
+
       {/* Layout 2 columnas */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* ===== Calendario (3/5 = 60%) ===== */}
@@ -1310,6 +1378,66 @@ export function PMIModule() {
                 {lvDetalle?.items.reduce((acc, s) => acc + s.items.length, 0) || 0} ítems completados
               </span>
             </div>
+          </div>
+
+          {/* ===== PDF de respaldo OBLIGATORIO ===== */}
+          <div className="space-y-2 pt-3 border-t border-slate-200">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                PDF de respaldo <span className="text-red-600">*</span>
+              </Label>
+              <span className="text-[10px] text-slate-400">Obligatorio · máx 10 MB</span>
+            </div>
+            {pdfRespaldoUrl ? (
+              <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md p-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-green-700 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-green-800 truncate">{pdfRespaldoNombre}</p>
+                    <p className="text-[10px] text-green-600">PDF cargado ✓</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <a
+                    href={pdfRespaldoUrl}
+                    download={pdfRespaldoNombre}
+                    className="text-xs text-blue-600 hover:underline px-2"
+                  >
+                    Ver
+                  </a>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-red-600 hover:bg-red-50"
+                    onClick={handleRemovePdf}
+                    type="button"
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <label
+                htmlFor="pdf-upload"
+                className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-md p-4 cursor-pointer hover:border-[#0f2044] hover:bg-slate-50 transition-colors"
+              >
+                <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                <span className="text-xs text-slate-600 font-medium">Haz clic para subir un PDF</span>
+                <span className="text-[10px] text-slate-400 mt-0.5">Solo archivos .pdf · máximo 10 MB</span>
+                <input
+                  id="pdf-upload"
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className="hidden"
+                  onChange={handlePdfUpload}
+                />
+              </label>
+            )}
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-1.5">
+              ⚠ El PDF de respaldo es <strong>obligatorio</strong> para completar la Lista de Verificación.
+              Sin PDF, el registro no se puede guardar.
+            </p>
           </div>
 
           <DialogFooter>

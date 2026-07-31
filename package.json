@@ -15,7 +15,7 @@
     "db:studio": "prisma studio --schema=schema.prisma",
     "db:seed": "node -e \"fetch('http://localhost:3000/api/seed', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
     "db:seed-catalogos": "node -e \"fetch('http://localhost:3000/api/seed-catalogos', {method:'POST'}).then(r=>r.json()).then(console.log)\"",
-    "vercel-build": "prisma generate --schema=schema.prisma && next build"
+    "vercel-build": "prisma generate --schema=schema.prisma --no-engine && next build"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -58,6 +58,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "docx": "^9.7.1",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^12.23.2",
     "html5-qrcode": "^2.3.8",
@@ -69,6 +70,10 @@
     "next": "^16.1.1",
     "next-themes": "^0.4.6",
     "nodemailer": "^7.0.13",
+<<<<<<< HEAD
+=======
+    "pptxgenjs": "^4.0.1",
+>>>>>>> 4585c06d3f055df9c7b5541ddeae5adb8114b7b5
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-day-picker": "^9.8.0",
@@ -88,6 +93,7 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@prisma/client": "^6.19.3",
     "@tailwindcss/postcss": "^4",
     "@types/bcrypt": "^6.0.0",
     "@types/react": "^19",
