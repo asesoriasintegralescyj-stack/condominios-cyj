@@ -27,6 +27,21 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { ChevronsUpDown, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import {
   Table,
   TableBody,
   TableCell,
@@ -198,6 +213,8 @@ export function RendicionesGastosModule() {
   const [formDescripcion, setFormDescripcion] = useState('')
   const [formResponsableId, setFormResponsableId] = useState('')
   const [formResponsableNombre, setFormResponsableNombre] = useState('')
+  const [respOpen, setRespOpen] = useState(false)
+  const [montoOpen, setMontoOpen] = useState(false)
   const [formObservaciones, setFormObservaciones] = useState('')
   const [formBoletas, setFormBoletas] = useState<Boleta[]>([emptyBoleta()])
 
@@ -214,6 +231,7 @@ export function RendicionesGastosModule() {
     setFormDescripcion('')
     setFormResponsableId('')
     setFormResponsableNombre('')
+    setRespOpen(false)
     setFormObservaciones('')
     setFormBoletas([emptyBoleta()])
   }, [])
@@ -874,25 +892,49 @@ export function RendicionesGastosModule() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Responsable</Label>
-                <Select
-                  value={formResponsableId}
-                  onValueChange={(val) => {
-                    setFormResponsableId(val)
-                    const p = personal.find((x) => x.id === val)
-                    setFormResponsableNombre(p?.nombre || '')
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar personal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {personal.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nombre} {p.cargo ? `(${p.cargo})` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={respOpen} onOpenChange={setRespOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={respOpen}
+                      className="w-full justify-between text-sm h-9 font-normal"
+                    >
+                      {formResponsableId
+                        ? (() => {
+                            const p = personal.find((x) => x.id === formResponsableId)
+                            return p ? `${p.nombre}${p.cargo ? ` (${p.cargo})` : ''}` : 'Seleccionar personal'
+                          })()
+                        : 'Seleccionar personal'}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command shouldFilter={true}>
+                      <CommandInput placeholder="Buscar personal..." className="h-9" />
+                      <CommandList className="max-h-64">
+                        <CommandEmpty>No se encontró personal.</CommandEmpty>
+                        <CommandGroup>
+                          {personal.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              value={`${p.nombre} ${p.cargo || ''}`}
+                              onSelect={() => {
+                                setFormResponsableId(p.id)
+                                setFormResponsableNombre(p.nombre)
+                                setRespOpen(false)
+                              }}
+                              className="text-sm"
+                            >
+                              <Check className={cn("mr-2 h-4 w-4", formResponsableId === p.id ? "opacity-100" : "opacity-0")} />
+                              {p.nombre} {p.cargo ? `(${p.cargo})` : ''}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Observaciones</Label>
@@ -1279,18 +1321,48 @@ export function RendicionesGastosModule() {
           <div className="space-y-3">
             <div className="space-y-1">
               <Label className="text-xs">Personal *</Label>
-              <Select value={montoPersonalId} onValueChange={setMontoPersonalId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar personal" />
-                </SelectTrigger>
-                <SelectContent>
-                  {personal.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombre} {p.cargo ? `(${p.cargo})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={montoOpen} onOpenChange={setMontoOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={montoOpen}
+                    className="w-full justify-between text-sm h-9 font-normal"
+                  >
+                    {montoPersonalId
+                      ? (() => {
+                          const p = personal.find((x) => x.id === montoPersonalId)
+                          return p ? `${p.nombre}${p.cargo ? ` (${p.cargo})` : ''}` : 'Seleccionar personal'
+                        })()
+                      : 'Seleccionar personal'}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command shouldFilter={true}>
+                    <CommandInput placeholder="Buscar personal..." className="h-9" />
+                    <CommandList className="max-h-64">
+                      <CommandEmpty>No se encontró personal.</CommandEmpty>
+                      <CommandGroup>
+                        {personal.map((p) => (
+                          <CommandItem
+                            key={p.id}
+                            value={`${p.nombre} ${p.cargo || ''}`}
+                            onSelect={() => {
+                              setMontoPersonalId(p.id)
+                              setMontoOpen(false)
+                            }}
+                            className="text-sm"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", montoPersonalId === p.id ? "opacity-100" : "opacity-0")} />
+                            {p.nombre} {p.cargo ? `(${p.cargo})` : ''}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Monto Mensual *</Label>
