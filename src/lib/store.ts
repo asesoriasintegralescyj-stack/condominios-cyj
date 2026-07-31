@@ -27,10 +27,13 @@ export type Module =
   | 'rondas'
   | 'qrrondas'
   | 'solicitudescompra'
+  | 'rendiciongastos'
   | 'permisos'
   | 'manuales'
   | 'pmi'
   | 'rendicionesgastos'
+  | 'perfiles-movil'
+  | 'informe-semanal'
 
 interface CondominioInfo {
   id: string

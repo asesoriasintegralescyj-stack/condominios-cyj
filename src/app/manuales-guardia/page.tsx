@@ -28,8 +28,8 @@ interface Documento {
   tamaño?: string
 }
 
-const MANUAL_VERSION = '1.2'
-const MANUAL_FECHA = 'Junio 2026 · 24 módulos'
+const MANUAL_VERSION = '1.3'
+const MANUAL_FECHA = 'Julio 2026 · 25 módulos'
 
 const DOCUMENTOS: Documento[] = [
   {

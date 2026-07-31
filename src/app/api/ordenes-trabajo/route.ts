@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
     const orden = await db.ordenTrabajo.create({
       data: {
         otNum: nextNum,
-        titulo,
+        titulo: otData.titulo,
         tipo: otData.tipo || 'Correctivo',
         prioridad: otData.prioridad || 'Media',
         estado: otData.estado || 'Pendiente',

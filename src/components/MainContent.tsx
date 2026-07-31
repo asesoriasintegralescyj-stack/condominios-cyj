@@ -27,6 +27,9 @@ import { ManualesModule } from './manuales/ManualesModule'
 import { AuditorModule } from './auditor/AuditorModule'
 import { PMIModule } from './pmi/PMIModule'
 import { RendicionesGastosModule } from './rendiciones-gastos/RendicionesGastosModule'
+import { RendicionGastosModule } from './rendicion-gastos/RendicionGastosModule'
+import { PerfilesMovilModule } from './perfiles-movil/PerfilesMovilModule'
+import { InformeSemanalModule } from './informe-semanal/InformeSemanalModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -41,7 +44,7 @@ const moduleTitles: Record<string, string> = {
   materiales: 'Materiales',
   tareas: 'Tareas',
   reportes: 'Reportes',
-  usuarios: 'Gestión de Usuarios',
+  usuarios: 'Usuarios',
   inventario: 'Inventario',
   herramientas: 'Herramientas',
   aprobacionesot: 'Aprobaciones de Órdenes de Trabajo',
@@ -55,6 +58,9 @@ const moduleTitles: Record<string, string> = {
   auditoria: 'Auditoría',
   pmi: 'Plan de Mantenimiento Integral (PMI)',
   rendicionesgastos: 'Rendición de Gastos',
+  rendiciongastos: 'Rendición de Gastos',
+  'perfiles-movil': 'Perfiles App Móvil',
+  'informe-semanal': 'Informe Semanal',
 }
 
 export function MainContent() {
@@ -114,6 +120,12 @@ export function MainContent() {
         return <PMIModule />
       case 'rendicionesgastos':
         return <RendicionesGastosModule />
+      case 'rendiciongastos':
+        return <RendicionGastosModule />
+      case 'perfiles-movil':
+        return <PerfilesMovilModule />
+      case 'informe-semanal':
+        return <InformeSemanalModule />
       default:
         return <Dashboard />
     }

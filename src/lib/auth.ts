@@ -650,10 +650,14 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'configuracion.ver', 'configuracion.editar',
     'logs.ver',
     'inventario.ver', 'inventario.editar',
+    // Rendicion de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
     // Solicitudes de Compra — admin solo gestiona en 2da etapa (NO aprueba como supervisor)
     'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -671,10 +675,14 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'centros-costo.ver',
     'reportes.ver', 'reportes.exportar',
     'inventario.ver', 'inventario.editar',
+    // Rendicion de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar',
     // Solicitudes de Compra — supervisor aprueba en primera etapa
     'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar',
   ],
   usuario: [
     // Acceso básico
@@ -686,8 +694,12 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'catalogos.ver',
     'reportes.ver',
     'inventario.ver',
+    // Rendicion de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.eliminar',
     // Solicitudes de Compra — todos pueden crear
     'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Rendición de Gastos
+    'rendiciongastos.ver', 'rendiciongastos.crear',
   ],
   personal: [
     // Solo puede ver OT y modificar progreso

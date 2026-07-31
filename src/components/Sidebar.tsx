@@ -26,8 +26,10 @@ import {
   Menu,
   X,
   BookOpen,
-  ClipboardCheck,
   Receipt,
+  ClipboardCheck,
+  Smartphone,
+  BarChart3,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -66,6 +68,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   qrrondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
   rendicionesgastos: 'rendicionesgastos.ver',
+  rendiciongastos: 'rendiciongastos.ver',
   // 'usuarios' y 'permisos' se manejan con lógica especial (solo admin)
 }
 
@@ -100,6 +103,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'proveedores', label: 'Proveedores', icon: <Building2 className="w-4 h-4" /> },
       { id: 'centrocostos', label: 'Centro de Costos', icon: <PiggyBank className="w-4 h-4" /> },
       { id: 'rendicionesgastos', label: 'Rendición de Gastos', icon: <Receipt className="w-4 h-4" /> },
+      { id: 'rendiciongastos', label: 'Rendición de Gastos', icon: <Receipt className="w-4 h-4" /> },
     ]
   },
   {
@@ -116,7 +120,9 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'auditoria', label: 'Auditoría', icon: <Shield className="w-4 h-4" /> },
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
+      { id: 'informe-semanal', label: 'Informe Semanal', icon: <BarChart3 className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },
+      { id: 'perfiles-movil', label: 'Perfiles App Móvil', icon: <Smartphone className="w-4 h-4" /> },
       { id: 'permisos', label: 'Permisos del Sistema', icon: <Shield className="w-4 h-4" /> },
       { id: 'manuales', label: 'Manuales y Capacitaciones', icon: <BookOpen className="w-4 h-4" /> },
     ]
@@ -152,7 +158,7 @@ export function Sidebar() {
       if (item.id === 'manuales') return true
 
       // Módulos exclusivos del admin: 'usuarios' y 'permisos'
-      if ((item.id === 'usuarios' || item.id === 'permisos') && !isAdmin()) {
+      if ((item.id === 'usuarios' || item.id === 'permisos' || item.id === 'perfiles-movil') && !isAdmin()) {
         return false
       }
 
@@ -349,19 +355,6 @@ export function Sidebar() {
                 {user.email}
               </div>
               <DropdownMenuSeparator className="bg-white/10" />
-
-              {isAdmin() && (
-                <>
-                  <DropdownMenuItem
-                    className="text-white/70 focus:text-white focus:bg-white/10 cursor-pointer"
-                    onClick={() => handleNavigate('usuarios')}
-                  >
-                    <Users className="mr-2 h-4 w-4" />
-                    Gestionar Usuarios
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-white/10" />
-                </>
-              )}
 
               <DropdownMenuItem
                 className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
