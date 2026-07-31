@@ -1688,3 +1688,60 @@ model MovilAuditLog {
   @@index([createdAt])
 }
 
+// ============================================
+// PLANIFICACION DE TAREAS Y CALENDARIO
+// ============================================
+
+model TareaPlanificacion {
+  id            String    @id @default(cuid())
+  titulo        String
+  descripcion   String?
+  estado        String    @default("pendiente") // pendiente, en_progreso, completada, cancelada
+  prioridad     String    @default("media")     // baja, media, alta, urgente
+  fechaInicio   DateTime?
+  fechaFin      DateTime?
+  horaInicio    String?                       // HH:mm
+  horaFin       String?
+  diaCompleto   Boolean   @default(false)      // evento de día completo
+  asignadoA     String?                       // nombre del responsable
+  asignadoEmail String?
+  categoria     String?                       // personal, financiera, mantencion, legal, administrativa
+  ubicacion     String?
+  condominioId  String?
+  creadoById    String?
+  googleEventId String?  @unique             // ID del evento en Google Calendar (si está sincronizado)
+  googleTaskId  String?  @unique             // ID de la tarea en Google Tasks (si está sincronizado)
+  recordatorio  String?                       // none, 5min, 15min, 30min, 1hr, 1dia
+  recurrente     Boolean   @default(false)
+  notas         String?
+  etiquetas     String?                       // JSON array de etiquetas
+  completadoEn  DateTime?
+  sincronizado  Boolean   @default(false)     // marcado como sincronizado con Google
+  creadoEn      DateTime  @default(now())
+  actualizadoEn DateTime  @updatedAt
+
+  @@index([estado])
+  @@index([prioridad])
+  @@index([fechaInicio])
+  @@index([fechaFin])
+  @@index([asignadoA])
+  @@index([categoria])
+  @@index([creadoById])
+}
+
+model GoogleAccount {
+  id            String   @id @default(cuid())
+  userId        String?                      // User ID del sistema (opcional, puede ser global)
+  email         String
+  accessToken   String                       // OAuth access token (encriptado)
+  refreshToken  String                       // OAuth refresh token (encriptado)
+  tokenExpiry   DateTime?                    // Cuando expira el access token
+  calendarSync  Boolean  @default(false)     // sincronización de calendario activada
+  tasksSync     Boolean  @default(false)     // sincronización de tareas activada
+  lastSyncAt    DateTime?                    // última sincronización exitosa
+  connectedAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([email])
+}
+
