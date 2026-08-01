@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Listar todos los perfiles móviles
 export async function GET() {
   const session = await getCurrentSession()
@@ -36,6 +39,20 @@ export async function GET() {
       personal: p.personalId ? (personalMap[p.personalId] || null) : null,
     }))
 
+    // Lookup usuarios vinculados
+    const userIds = perfiles.map(p => p.userId).filter((id): id is string => !!id)
+    if (userIds.length > 0) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, email, nombre, apellido FROM "User" WHERE id = ANY($1)`,
+        userIds
+      ) as any[]
+      const userMap: Record<string, any> = {}
+      for (const u of users) { userMap[u.id] = u }
+      for (const r of result) {
+        if (r.userId) (r as any).user = userMap[r.userId] || null
+      }
+    }
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching perfiles móviles:', error)
@@ -62,6 +79,7 @@ export async function POST(request: NextRequest) {
         workAreaIds: data.workAreaIds || [],
         permissions: data.permissions || ['view'],
         personalId: data.personalId || null,
+        userId: data.userId || null,
       },
     })
 

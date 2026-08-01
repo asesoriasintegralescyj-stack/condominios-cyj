@@ -1610,11 +1610,13 @@ model MovilProfile {
   workAreaIds String[] @default([])
   permissions String[] @default(["view"])
   personalId  String?
+  userId      String?   // Vinculo directo con User.id del sistema desktop (para que OTs se asocien correctamente)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([name])
   @@index([accessCode])
+  @@index([userId])
 }
 
 model MovilQrLocation {
