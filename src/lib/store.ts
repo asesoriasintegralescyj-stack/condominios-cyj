@@ -33,6 +33,7 @@ export type Module =
   | 'rendicionesgastos'
   | 'planificacion'
   | 'perfilesmoviles'
+  | 'informesemanal'
 
 interface CondominioInfo {
   id: string

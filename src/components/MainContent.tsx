@@ -29,6 +29,7 @@ import { PMIModule } from './pmi/PMIModule'
 import { RendicionesGastosModule } from './rendiciones-gastos/RendicionesGastosModule'
 import { PlanificacionModule } from './planificacion/PlanificacionModule'
 import { PerfilesMovilModule } from './perfiles-movil/PerfilesMovilModule'
+import { InformeSemanalModule } from './informe-semanal/InformeSemanalModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -59,6 +60,7 @@ const moduleTitles: Record<string, string> = {
   rendicionesgastos: 'Rendiciones de Gastos',
   planificacion: 'Planificación de Tareas',
   perfilesmoviles: 'Claves App Móvil',
+  informesemanal: 'Informe Semanal',
 }
 
 export function MainContent() {
@@ -122,6 +124,8 @@ export function MainContent() {
         return <PlanificacionModule />
       case 'perfilesmoviles':
         return <PerfilesMovilModule />
+      case 'informesemanal':
+        return <InformeSemanalModule />
       default:
         return <Dashboard />
     }
