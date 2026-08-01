@@ -28,6 +28,7 @@ import { AuditorModule } from './auditor/AuditorModule'
 import { PMIModule } from './pmi/PMIModule'
 import { RendicionesGastosModule } from './rendiciones-gastos/RendicionesGastosModule'
 import { PlanificacionModule } from './planificacion/PlanificacionModule'
+import { PerfilesMovilModule } from './perfiles-movil/PerfilesMovilModule'
 
 const moduleTitles: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -57,6 +58,7 @@ const moduleTitles: Record<string, string> = {
   pmi: 'Plan de Mantenimiento Integral (PMI)',
   rendicionesgastos: 'Rendiciones de Gastos',
   planificacion: 'Planificación de Tareas',
+  perfilesmoviles: 'Claves App Móvil',
 }
 
 export function MainContent() {
@@ -118,6 +120,8 @@ export function MainContent() {
         return <RendicionesGastosModule />
       case 'planificacion':
         return <PlanificacionModule />
+      case 'perfilesmoviles':
+        return <PerfilesMovilModule />
       default:
         return <Dashboard />
     }

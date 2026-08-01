@@ -32,6 +32,7 @@ export type Module =
   | 'pmi'
   | 'rendicionesgastos'
   | 'planificacion'
+  | 'perfilesmoviles'
 
 interface CondominioInfo {
   id: string

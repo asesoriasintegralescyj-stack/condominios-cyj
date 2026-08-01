@@ -29,6 +29,7 @@ import {
   BookOpen,
   ClipboardCheck,
   CalendarDays,
+  Smartphone,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -94,6 +95,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
       { id: 'inventario', label: 'Inventario', icon: <Package className="w-4 h-4" /> },
       { id: 'solicitudescompra', label: 'Solicitud de Compras', icon: <ShoppingCart className="w-4 h-4" /> },
       { id: 'planificacion', label: 'Planificación', icon: <CalendarDays className="w-4 h-4" /> },
+      { id: 'perfilesmoviles', label: 'Claves App Móvil', icon: <Smartphone className="w-4 h-4" /> },
     ]
   },
   {
