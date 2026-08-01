@@ -149,6 +149,6 @@ export async function GET(request: NextRequest) {
 }
 
 function redirectToApp(path: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || ''
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://condominios-cyj.vercel.app'
   return NextResponse.redirect(`${baseUrl}${path}`)
 }
