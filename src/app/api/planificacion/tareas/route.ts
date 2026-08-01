@@ -5,6 +5,7 @@ import { apiError, apiSuccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 // GET - Listar tareas con filtros y paginación
 export async function GET(request: NextRequest) {

@@ -7,6 +7,7 @@ import { apiError, apiSuccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',

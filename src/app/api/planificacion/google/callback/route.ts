@@ -5,6 +5,7 @@ import { getCurrentSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 // GET - Manejar callback de OAuth de Google
 export async function GET(request: NextRequest) {
@@ -34,9 +35,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Obtener sesión del usuario
-    const session = await getCurrentSession()
+    let session
+    try {
+      session = await getCurrentSession()
+    } catch (e) {
+      console.error('Error al obtener sesión en callback Google:', e)
+      return redirectToApp('/login?google_callback=1&msg=session_error')
+    }
     if (!session) {
-      return redirectToApp('/login?google_callback=1')
+      return redirectToApp('/login?google_callback=1&msg=no_session')
     }
 
     // Intercambiar código por tokens

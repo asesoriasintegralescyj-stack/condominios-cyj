@@ -5,6 +5,7 @@ import { apiError, apiSuccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 60
 
 // POST - Sincronizar con Google Calendar y Google Tasks
 export async function POST(request: NextRequest) {

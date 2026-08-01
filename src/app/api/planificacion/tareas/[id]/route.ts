@@ -5,6 +5,7 @@ import { apiError, apiSuccess } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 // GET - Obtener tarea por ID
 export async function GET(
