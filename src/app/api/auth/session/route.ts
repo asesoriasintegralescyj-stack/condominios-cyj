@@ -6,6 +6,9 @@
 import { NextResponse } from 'next/server';
 import { getCurrentSession, getPermissions } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
 export async function GET() {
   try {
     const session = await getCurrentSession();

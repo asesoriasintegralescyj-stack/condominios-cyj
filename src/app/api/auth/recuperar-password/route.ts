@@ -15,6 +15,9 @@ import { db } from '@/lib/db'
 import { randomBytes } from 'crypto'
 import { logAction } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000 // 1 hora
 
 export async function POST(request: NextRequest) {

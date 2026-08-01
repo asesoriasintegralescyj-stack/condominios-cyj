@@ -12,6 +12,9 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 async function createAdmin() {
   // Verificar si ya existe algún usuario administrador
   const existingAdmin = await db.user.findFirst({

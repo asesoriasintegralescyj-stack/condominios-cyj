@@ -13,6 +13,9 @@ import {
 } from '@/lib/auth';
 import { db as prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
