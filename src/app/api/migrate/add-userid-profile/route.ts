@@ -70,14 +70,22 @@ export async function GET(request: NextRequest) {
 
     // ─── PASO 2: Crear índices con IF NOT EXISTS ───
     try {
-      await db.$executeRawUnsafe(`
-        CREATE INDEX IF NOT EXISTS "MovilProfile_userId_idx" ON "MovilProfile" ("userId");
-        CREATE INDEX IF NOT EXISTS "OrdenTrabajo_creadoPor_idx" ON "OrdenTrabajo" ("creadoPor");
-        CREATE INDEX IF NOT EXISTS "OrdenTrabajo_perfilMovilId_idx" ON "OrdenTrabajo" ("perfilMovilId");
-      `)
-      results.push('✅ Índices verificados/creados')
+      await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MovilProfile_userId_idx" ON "MovilProfile" ("userId")`)
+      results.push('✅ Índice MovilProfile_userId creado/verificado')
     } catch (e: any) {
-      results.push(`⚠️ Error en índices: ${e.message}`)
+      results.push(`⚠️ Error en índice userId: ${e.message}`)
+    }
+    try {
+      await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrdenTrabajo_creadoPor_idx" ON "OrdenTrabajo" ("creadoPor")`)
+      results.push('✅ Índice OrdenTrabajo_creadoPor creado/verificado')
+    } catch (e: any) {
+      results.push(`⚠️ Error en índice creadoPor: ${e.message}`)
+    }
+    try {
+      await db.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OrdenTrabajo_perfilMovilId_idx" ON "OrdenTrabajo" ("perfilMovilId")`)
+      results.push('✅ Índice OrdenTrabajo_perfilMovilId creado/verificado')
+    } catch (e: any) {
+      results.push(`⚠️ Error en índice perfilMovilId: ${e.message}`)
     }
 
     // ─── PASO 3: Vincular perfiles móviles con usuarios del escritorio ───
