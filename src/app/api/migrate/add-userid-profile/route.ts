@@ -63,6 +63,19 @@ export async function GET() {
       results.push('Columna creadoPor ya existe en OrdenTrabajo')
     }
 
+    // 1d. Verificar si la columna creadoPorNombre ya existe en OrdenTrabajo
+    const colCheckCPN = await db.$queryRawUnsafe(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPorNombre'
+    `) as any[]
+
+    if (colCheckCPN.length === 0) {
+      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPorNombre" TEXT`)
+      results.push('Columna creadoPorNombre agregada a OrdenTrabajo')
+    } else {
+      results.push('Columna creadoPorNombre ya existe en OrdenTrabajo')
+    }
+
     // 2. Crear índices si no existen
     const idxCheck = await db.$queryRawUnsafe(`
       SELECT indexname FROM pg_indexes 

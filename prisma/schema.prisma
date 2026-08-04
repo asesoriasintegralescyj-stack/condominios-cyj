@@ -368,6 +368,7 @@ model OrdenTrabajo {
   aprobadoPor       String?  // ID del usuario que aprobó/rechazó
   observacionesAprob String? // Observaciones del supervisor
   creadoPor         String?  // ID del usuario que creó la OT
+  creadoPorNombre   String?  // nombre legible del creador
   perfilMovilId     String?  // ID del MovilProfile que creó la OT desde la app móvil
   
   // Fotos antes y después
