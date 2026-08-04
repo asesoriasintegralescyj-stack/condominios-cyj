@@ -26,9 +26,15 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token = searchParams.get('token')
   
-  const session = await getCurrentSession()
-  if (!session?.user || (session.user.rol !== 'admin' && token !== MIGRATE_TOKEN)) {
-    return NextResponse.json({ error: 'Solo admin o token de migración válido' }, { status: 403 })
+  // Si tiene token válido, permitir acceso sin sesión
+  if (token === MIGRATE_TOKEN) {
+    // Token válido, continuar con la migración
+  } else {
+    // Sin token, verificar sesión admin
+    const session = await getCurrentSession()
+    if (!session?.user || session.user.rol !== 'admin') {
+      return NextResponse.json({ error: 'Solo admin o token de migración válido' }, { status: 403 })
+    }
   }
 
   const results: string[] = []
