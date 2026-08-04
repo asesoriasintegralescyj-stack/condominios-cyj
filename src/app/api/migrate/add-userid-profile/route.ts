@@ -40,173 +40,143 @@ export async function GET(request: NextRequest) {
   const results: string[] = []
 
   try {
-    // 1. Verificar si la columna userId ya existe en MovilProfile
-    const colCheck = await db.$queryRawUnsafe(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'MovilProfile' AND column_name = 'userId'
-    `) as any[]
+    // ─── PASO 1: Agregar columnas con IF NOT EXISTS (PostgreSQL) ───
+    // Usar una sola transacción para las ALTER TABLE
+    try {
+      await db.$executeRawUnsafe(`
+        DO $$
+        BEGIN
+          -- Agregar columnas a MovilProfile
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'MovilProfile' AND column_name = 'userId') THEN
+            ALTER TABLE "MovilProfile" ADD COLUMN "userId" TEXT;
+          END IF;
 
-    if (colCheck.length === 0) {
-      await db.$executeRawUnsafe(`ALTER TABLE "MovilProfile" ADD COLUMN "userId" TEXT`)
-      results.push('Columna userId agregada a MovilProfile')
-    } else {
-      results.push('Columna userId ya existe en MovilProfile')
+          -- Agregar columnas a OrdenTrabajo
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPor') THEN
+            ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPor" TEXT;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPorNombre') THEN
+            ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPorNombre" TEXT;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'OrdenTrabajo' AND column_name = 'perfilMovilId') THEN
+            ALTER TABLE "OrdenTrabajo" ADD COLUMN "perfilMovilId" TEXT;
+          END IF;
+        END $$;
+      `)
+      results.push('✅ Columnas verificadas/agregadas (userId, creadoPor, creadoPorNombre, perfilMovilId)')
+    } catch (e: any) {
+      results.push(`⚠️ Error en ALTER TABLE: ${e.message}`)
     }
 
-    // 1b. Verificar si la columna perfilMovilId ya existe en OrdenTrabajo
-    const colCheckPM = await db.$queryRawUnsafe(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'OrdenTrabajo' AND column_name = 'perfilMovilId'
-    `) as any[]
-
-    if (colCheckPM.length === 0) {
-      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "perfilMovilId" TEXT`)
-      results.push('Columna perfilMovilId agregada a OrdenTrabajo')
-    } else {
-      results.push('Columna perfilMovilId ya existe en OrdenTrabajo')
+    // ─── PASO 2: Crear índices con IF NOT EXISTS ───
+    try {
+      await db.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS "MovilProfile_userId_idx" ON "MovilProfile" ("userId");
+        CREATE INDEX IF NOT EXISTS "OrdenTrabajo_creadoPor_idx" ON "OrdenTrabajo" ("creadoPor");
+        CREATE INDEX IF NOT EXISTS "OrdenTrabajo_perfilMovilId_idx" ON "OrdenTrabajo" ("perfilMovilId");
+      `)
+      results.push('✅ Índices verificados/creados')
+    } catch (e: any) {
+      results.push(`⚠️ Error en índices: ${e.message}`)
     }
 
-    // 1c. Verificar si la columna creadoPor ya existe en OrdenTrabajo
-    const colCheckCP = await db.$queryRawUnsafe(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPor'
-    `) as any[]
-
-    if (colCheckCP.length === 0) {
-      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPor" TEXT`)
-      results.push('Columna creadoPor agregada a OrdenTrabajo')
-    } else {
-      results.push('Columna creadoPor ya existe en OrdenTrabajo')
-    }
-
-    // 1d. Verificar si la columna creadoPorNombre ya existe en OrdenTrabajo
-    const colCheckCPN = await db.$queryRawUnsafe(`
-      SELECT column_name FROM information_schema.columns 
-      WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPorNombre'
-    `) as any[]
-
-    if (colCheckCPN.length === 0) {
-      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPorNombre" TEXT`)
-      results.push('Columna creadoPorNombre agregada a OrdenTrabajo')
-    } else {
-      results.push('Columna creadoPorNombre ya existe en OrdenTrabajo')
-    }
-
-    // 2. Crear índices si no existen
-    const idxCheck = await db.$queryRawUnsafe(`
-      SELECT indexname FROM pg_indexes 
-      WHERE tablename = 'MovilProfile' AND indexname = 'MovilProfile_userId_idx'
-    `) as any[]
-
-    if (idxCheck.length === 0) {
-      await db.$executeRawUnsafe(`CREATE INDEX "MovilProfile_userId_idx" ON "MovilProfile" ("userId")`)
-      results.push('Índice userId creado')
-    } else {
-      results.push('Índice userId ya existe')
-    }
-
-    // 2b. Índice perfilMovilId en OrdenTrabajo
-    const idxCheckPM = await db.$queryRawUnsafe(`
-      SELECT indexname FROM pg_indexes 
-      WHERE tablename = 'OrdenTrabajo' AND indexname = 'OrdenTrabajo_perfilMovilId_idx'
-    `) as any[]
-
-    if (idxCheckPM.length === 0) {
-      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_perfilMovilId_idx" ON "OrdenTrabajo" ("perfilMovilId")`)
-      results.push('Índice perfilMovilId creado en OrdenTrabajo')
-    } else {
-      results.push('Índice perfilMovilId ya existe')
-    }
-
-    // 2c. Índice creadoPor en OrdenTrabajo
-    const idxCheckCP = await db.$queryRawUnsafe(`
-      SELECT indexname FROM pg_indexes 
-      WHERE tablename = 'OrdenTrabajo' AND indexname = 'OrdenTrabajo_creadoPor_idx'
-    `) as any[]
-
-    if (idxCheckCP.length === 0) {
-      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_creadoPor_idx" ON "OrdenTrabajo" ("creadoPor")`)
-      results.push('Índice creadoPor creado en OrdenTrabajo')
-    } else {
-      results.push('Índice creadoPor ya existe')
-    }
-
-    // 3. Auto-vincular perfiles que tienen personalId → User por email
-    const perfilesSinUser = await db.$queryRawUnsafe(`
-      SELECT mp.id, mp.name, mp."personalId", p.email, p.nombre as "personalNombre"
-      FROM "MovilProfile" mp
-      LEFT JOIN "Personal" p ON mp."personalId" = p.id
-      WHERE mp."userId" IS NULL AND mp."personalId" IS NOT NULL AND p.email IS NOT NULL AND p.email != ''
-    `) as any[]
-
+    // ─── PASO 3: Vincular perfiles móviles con usuarios del escritorio ───
+    // Usar UPDATE directo con JOIN en vez de bucle
     let vinculadosEmail = 0
-    for (const perfil of perfilesSinUser) {
-      try {
-        const users = await db.$queryRawUnsafe(`
-          SELECT id, email, nombre, apellido FROM "User" WHERE email ILIKE $1 LIMIT 1
-        `, perfil.email) as any[]
-        
-        if (users.length > 0) {
-          await db.$executeRawUnsafe(`UPDATE "MovilProfile" SET "userId" = $1 WHERE id = $2`, users[0].id, perfil.id)
-          results.push(`Vinculado: ${perfil.name} → ${users[0].nombre} ${users[0].apellido || ''} (${users[0].email})`)
-          vinculadosEmail++
-        }
-      } catch (err: any) {
-        results.push(`Error vinculando ${perfil.name}: ${err.message}`)
-      }
+    try {
+      const resEmail = await db.$executeRawUnsafe(`
+        UPDATE "MovilProfile" mp
+        SET "userId" = u.id
+        FROM "Personal" p
+        JOIN "User" u ON p.email ILIKE u.email
+        WHERE mp."personalId" = p.id
+          AND mp."userId" IS NULL
+          AND p.email IS NOT NULL
+          AND p.email != ''
+      `)
+      vinculadosEmail = (resEmail as any).rowCount || 0
+      results.push(`✅ Vinculados por email Personal→User: ${vinculadosEmail}`)
+    } catch (e: any) {
+      results.push(`⚠️ Error vinculando por email: ${e.message}`)
     }
 
-    // 4. Vincular por nombre si no se encontró por email
-    const perfilesSinUser2 = await db.$queryRawUnsafe(`
-      SELECT mp.id, mp.name FROM "MovilProfile" mp WHERE mp."userId" IS NULL
-    `) as any[]
-
+    // Vincular por nombre si no se vinculó por email
     let vinculadosNombre = 0
-    for (const perfil of perfilesSinUser2) {
-      try {
-        const users = await db.$queryRawUnsafe(`
-          SELECT id, email, nombre, apellido FROM "User" 
-          WHERE (nombre ILIKE $1 OR nombre || ' ' || "apellido" ILIKE $1)
-          AND "activo" = true LIMIT 1
-        `, perfil.name) as any[]
-        
-        if (users.length > 0) {
-          await db.$executeRawUnsafe(`UPDATE "MovilProfile" SET "userId" = $1 WHERE id = $2`, users[0].id, perfil.id)
-          results.push(`Vinculado por nombre: ${perfil.name} → ${users[0].nombre} ${users[0].apellido || ''} (${users[0].email})`)
-          vinculadosNombre++
-        }
-      } catch (err: any) {
-        results.push(`Error vinculando por nombre ${perfil.name}: ${err.message}`)
-      }
+    try {
+      const resNombre = await db.$executeRawUnsafe(`
+        UPDATE "MovilProfile" mp
+        SET "userId" = u.id
+        FROM "User" u
+        WHERE mp."userId" IS NULL
+          AND (u.nombre ILIKE mp.name OR (u.nombre || ' ' || u."apellido") ILIKE mp.name)
+          AND u."activo" = true
+      `)
+      vinculadosNombre = (resNombre as any).rowCount || 0
+      results.push(`✅ Vinculados por nombre: ${vinculadosNombre}`)
+    } catch (e: any) {
+      results.push(`⚠️ Error vinculando por nombre: ${e.message}`)
     }
 
-    results.push(`Vinculados por email: ${vinculadosEmail}, por nombre: ${vinculadosNombre}`)
-
-    // 5. Actualizar OTs existentes con creadoPor = "Perfil: xxx" → userId
-    const otsParaActualizar = await db.$queryRawUnsafe(`
-      SELECT ot.id, mp."userId", mp.name
-      FROM "OrdenTrabajo" ot
-      JOIN "MovilProfile" mp ON ot."creadoPor" ILIKE '%' || mp.name || '%'
-      WHERE ot."creadoPor" NOT IN (SELECT id FROM "User") AND mp."userId" IS NOT NULL
-    `) as any[]
-
+    // ─── PASO 4: Actualizar OTs existentes con creadoPor = "Perfil: xxx" → userId ───
     let otsActualizadas = 0
-    for (const ot of otsParaActualizar) {
-      try {
-        await db.$executeRawUnsafe(`UPDATE "OrdenTrabajo" SET "creadoPor" = $1 WHERE id = $2`, ot.userId, ot.id)
-        otsActualizadas++
-      } catch (err: any) {
-        results.push(`Error actualizando OT ${ot.id}: ${err.message}`)
-      }
+    try {
+      const resOTs = await db.$executeRawUnsafe(`
+        UPDATE "OrdenTrabajo" ot
+        SET "creadoPor" = mp."userId",
+            "creadoPorNombre" = mp.name
+        FROM "MovilProfile" mp
+        WHERE ot."creadoPor" ILIKE '%' || mp.name || '%'
+          AND mp."userId" IS NOT NULL
+          AND ot."creadoPor" NOT IN (SELECT id FROM "User")
+      `)
+      otsActualizadas = (resOTs as any).rowCount || 0
+      results.push(`✅ OTs actualizadas con userId correcto: ${otsActualizadas}`)
+    } catch (e: any) {
+      results.push(`⚠️ Error actualizando OTs: ${e.message}`)
     }
-    results.push(`OTs actualizadas con userId correcto: ${otsActualizadas}`)
+
+    // ─── PASO 5: Diagnóstico final ───
+    try {
+      const diag = await db.$queryRawUnsafe(`
+        SELECT 
+          (SELECT COUNT(*) FROM "MovilProfile" WHERE "userId" IS NOT NULL) as perfiles_vinculados,
+          (SELECT COUNT(*) FROM "MovilProfile") as perfiles_total,
+          (SELECT COUNT(*) FROM "OrdenTrabajo" WHERE "creadoPor" IS NOT NULL) as ots_con_creador,
+          (SELECT COUNT(*) FROM "OrdenTrabajo") as ots_total
+      `) as any[]
+      
+      if (diag.length > 0) {
+        const d = diag[0]
+        results.push(`📊 Diagnóstico: ${d.perfiles_vinculados}/${d.perfiles_total} perfiles vinculados, ${d.ots_con_creador}/${d.ots_total} OTs con creador`)
+      }
+    } catch (e: any) {
+      results.push(`⚠️ Error en diagnóstico: ${e.message}`)
+    }
+
+    // Listar perfiles para ver estado
+    try {
+      const perfiles = await db.$queryRawUnsafe(`
+        SELECT mp.id, mp.name, mp."userId", u.nombre as "userNombre", u.email as "userEmail"
+        FROM "MovilProfile" mp
+        LEFT JOIN "User" u ON mp."userId" = u.id
+        ORDER BY mp.name
+      `) as any[]
+      
+      for (const p of perfiles) {
+        if (p.userId) {
+          results.push(`🔗 ${p.name} → ${p.userNombre || '?'} (${p.userEmail || '?'})`)
+        } else {
+          results.push(`❌ ${p.name} → SIN vincular`)
+        }
+      }
+    } catch (e: any) {
+      results.push(`⚠️ Error listando perfiles: ${e.message}`)
+    }
 
     return NextResponse.json({
       success: true,
       results,
       summary: {
-        columnAdded: colCheck.length === 0,
-        indexAdded: idxCheck.length === 0,
         profilesLinkedByEmail: vinculadosEmail,
         profilesLinkedByName: vinculadosNombre,
         otsUpdated: otsActualizadas,
