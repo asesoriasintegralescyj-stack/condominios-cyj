@@ -368,6 +368,7 @@ model OrdenTrabajo {
   aprobadoPor       String?  // ID del usuario que aprobó/rechazó
   observacionesAprob String? // Observaciones del supervisor
   creadoPor         String?  // ID del usuario que creó la OT
+  perfilMovilId     String?  // ID del MovilProfile que creó la OT desde la app móvil
   
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
@@ -402,6 +403,8 @@ model OrdenTrabajo {
   @@index([asignadoId])
   @@index([propiedadId])
   @@index([centroCostoId])
+  @@index([creadoPor])
+  @@index([perfilMovilId])
   @@index([createdAt])
   @@index([fechaInicio])
 }

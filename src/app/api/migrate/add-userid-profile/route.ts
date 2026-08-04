@@ -24,7 +24,7 @@ export async function GET() {
   const results: string[] = []
 
   try {
-    // 1. Verificar si la columna ya existe
+    // 1. Verificar si la columna userId ya existe en MovilProfile
     const colCheck = await db.$queryRawUnsafe(`
       SELECT column_name FROM information_schema.columns 
       WHERE table_name = 'MovilProfile' AND column_name = 'userId'
@@ -34,10 +34,36 @@ export async function GET() {
       await db.$executeRawUnsafe(`ALTER TABLE "MovilProfile" ADD COLUMN "userId" TEXT`)
       results.push('Columna userId agregada a MovilProfile')
     } else {
-      results.push('Columna userId ya existe')
+      results.push('Columna userId ya existe en MovilProfile')
     }
 
-    // 2. Verificar índice
+    // 1b. Verificar si la columna perfilMovilId ya existe en OrdenTrabajo
+    const colCheckPM = await db.$queryRawUnsafe(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'OrdenTrabajo' AND column_name = 'perfilMovilId'
+    `) as any[]
+
+    if (colCheckPM.length === 0) {
+      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "perfilMovilId" TEXT`)
+      results.push('Columna perfilMovilId agregada a OrdenTrabajo')
+    } else {
+      results.push('Columna perfilMovilId ya existe en OrdenTrabajo')
+    }
+
+    // 1c. Verificar si la columna creadoPor ya existe en OrdenTrabajo
+    const colCheckCP = await db.$queryRawUnsafe(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name = 'OrdenTrabajo' AND column_name = 'creadoPor'
+    `) as any[]
+
+    if (colCheckCP.length === 0) {
+      await db.$executeRawUnsafe(`ALTER TABLE "OrdenTrabajo" ADD COLUMN "creadoPor" TEXT`)
+      results.push('Columna creadoPor agregada a OrdenTrabajo')
+    } else {
+      results.push('Columna creadoPor ya existe en OrdenTrabajo')
+    }
+
+    // 2. Crear índices si no existen
     const idxCheck = await db.$queryRawUnsafe(`
       SELECT indexname FROM pg_indexes 
       WHERE tablename = 'MovilProfile' AND indexname = 'MovilProfile_userId_idx'
@@ -48,6 +74,32 @@ export async function GET() {
       results.push('Índice userId creado')
     } else {
       results.push('Índice userId ya existe')
+    }
+
+    // 2b. Índice perfilMovilId en OrdenTrabajo
+    const idxCheckPM = await db.$queryRawUnsafe(`
+      SELECT indexname FROM pg_indexes 
+      WHERE tablename = 'OrdenTrabajo' AND indexname = 'OrdenTrabajo_perfilMovilId_idx'
+    `) as any[]
+
+    if (idxCheckPM.length === 0) {
+      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_perfilMovilId_idx" ON "OrdenTrabajo" ("perfilMovilId")`)
+      results.push('Índice perfilMovilId creado en OrdenTrabajo')
+    } else {
+      results.push('Índice perfilMovilId ya existe')
+    }
+
+    // 2c. Índice creadoPor en OrdenTrabajo
+    const idxCheckCP = await db.$queryRawUnsafe(`
+      SELECT indexname FROM pg_indexes 
+      WHERE tablename = 'OrdenTrabajo' AND indexname = 'OrdenTrabajo_creadoPor_idx'
+    `) as any[]
+
+    if (idxCheckCP.length === 0) {
+      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_creadoPor_idx" ON "OrdenTrabajo" ("creadoPor")`)
+      results.push('Índice creadoPor creado en OrdenTrabajo')
+    } else {
+      results.push('Índice creadoPor ya existe')
     }
 
     // 3. Auto-vincular perfiles que tienen personalId → User por email
