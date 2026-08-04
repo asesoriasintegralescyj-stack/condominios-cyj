@@ -1,24 +1,34 @@
 /**
- * Migración: Agregar columna userId a MovilProfile
+ * Migración: Agregar columnas a OrdenTrabajo y MovilProfile
  * 
- * Este endpoint ejecuta el ALTER TABLE para agregar la columna
- * y luego vincula los perfiles existentes con sus usuarios correspondientes.
+ * Este endpoint ejecuta:
+ * 1. ALTER TABLE para agregar creadoPor, creadoPorNombre, perfilMovilId a OrdenTrabajo
+ * 2. ALTER TABLE para agregar userId a MovilProfile
+ * 3. Crear índices
+ * 4. Vincular perfiles móviles con usuarios del escritorio
+ * 5. Actualizar OTs existentes con creadoPor correcto
  * 
- * Uso: GET /api/migrate/add-userid-profile
- * Solo ejecutable si tiene sesión de admin.
+ * Uso: GET /api/migrate/add-userid-profile?token=MIGRATE_2026_ALFREDO
+ * Requiere: sesión de admin O token de migración válido
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
+
+const MIGRATE_TOKEN = 'MIGRATE_2026_ALFREDO'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Autenticación: sesión admin O token de migración
+  const { searchParams } = new URL(request.url)
+  const token = searchParams.get('token')
+  
   const session = await getCurrentSession()
-  if (!session || session.user.rol !== 'admin') {
-    return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
+  if (!session?.user || (session.user.rol !== 'admin' && token !== MIGRATE_TOKEN)) {
+    return NextResponse.json({ error: 'Solo admin o token de migración válido' }, { status: 403 })
   }
 
   const results: string[] = []
