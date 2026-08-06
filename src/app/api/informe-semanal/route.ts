@@ -242,11 +242,11 @@ export async function GET(request: NextRequest) {
             new Paragraph({
               spacing: { after: 150 },
               children: [new TextRun({
-                text: `Se registraron ${reportData.resumen.totalRondas} lecturas QR durante el período, correspondientes a las rondas de seguridad realizadas por el equipo de guardias. Adicionalmente, se crearon ${reportData.resumen.totalQrCreados} nuevos puntos de control QR en el condominio. A continuación se detalla la actividad por trabajador.`,
+                text: `Se registraron ${reportData.resumen.totalRondas} lecturas QR durante el período, correspondientes a las rondas de seguridad realizadas por el equipo de guardias. Adicionalmente, se cuenta con ${reportData.resumen.totalQrCreados} puntos de control QR activos en el condominio. El siguiente detalle desglosa la actividad por personal de guardia e incluye un ejemplo del registro del sistema para dar a conocer la implementación.`,
                 size: 22,
               })],
             }),
-            ...generateRondasSection(rondasPorTrabajador, qrLocations),
+            ...generateRondasSection(rondasPorTrabajador, qrLocations, registrosRonda),
 
             // ─── SOLICITUDES DE COMPRA ───
             new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 200 }, children: [new TextRun({ text: '5. SOLICITUDES DE COMPRA', bold: true, color: '0F2044', size: 28 })] }),
@@ -548,47 +548,219 @@ export async function GET(request: NextRequest) {
       return elements
     }
 
-    function generateRondasSection(rondasMap: Map<string, any[]>, qrLocs: any[]): Paragraph[] {
-      const elements: Paragraph[] = []
+    function generateRondasSection(rondasMap: Map<string, any[]>, qrLocs: any[], allScans: any[]): (Paragraph | Table)[] {
+      const elements: (Paragraph | Table)[] = []
+      const totalLecturas = allScans.length
 
-      if (qrLocs.length > 0) {
-        elements.push(new Paragraph({
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 100, after: 100 },
-          children: [new TextRun({ text: `Puntos QR Creados (${qrLocs.length})`, bold: true, size: 24, color: '0F766E' })],
-        }))
-        for (const qr of qrLocs) {
-          elements.push(new Paragraph({
-            spacing: { after: 30 },
-            indent: { left: 400 },
-            children: [new TextRun({ text: `📍 ${qr.name} (${qr.code}) — ${qr.location} — ${qr.description || 'Sin descripción'}`, size: 20 })],
-          }))
-        }
-      }
+      // ─── 4.1 INTRODUCCIÓN ───
+      elements.push(new Paragraph({
+        spacing: { after: 150 },
+        children: [new TextRun({ text: `Durante el período se registraron ${totalLecturas} lecturas QR distribuidas en ${rondasMap.size} trabajadores. A continuación se presenta el detalle de actividad por guardia y los puntos de control implementados en el condominio.`, size: 20, italics: true, color: '444444' })],
+      }))
 
+      // ─── 4.2 TABLA RESUMEN POR PERSONAL ───
       elements.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 200, after: 100 },
-        children: [new TextRun({ text: `Rondas Registradas por Trabajador`, bold: true, size: 24, color: '0F766E' })],
+        children: [new TextRun({ text: `Resumen de Lecturas por Personal (${totalLecturas} totales)`, bold: true, size: 24, color: '0F766E' })],
       }))
 
       if (rondasMap.size === 0) {
-        elements.push(new Paragraph({ children: [new TextRun({ text: 'No se registraron rondas en este período.', italics: true, color: '999999' })] }))
-        return elements
+        elements.push(new Paragraph({ children: [new TextRun({ text: 'No se registraron lecturas QR en este período.', italics: true, color: '999999' })] }))
+      } else {
+        // Ordenar por cantidad descendente
+        const sortedWorkers = Array.from(rondasMap.entries()).sort((a, b) => b[1].length - a[1].length)
+
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: ['#', 'Personal', 'Lecturas', '% del Total'].map(text =>
+                new TableCell({
+                  shading: { type: ShadingType.SOLID, color: '0F766E' },
+                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
+                })
+              ),
+            }),
+            ...sortedWorkers.map(([worker, scans], idx) => {
+              const pct = totalLecturas > 0 ? ((scans.length / totalLecturas) * 100).toFixed(1) : '0.0'
+              return new TableRow({
+                children: [
+                  String(idx + 1),
+                  worker || 'Sin asignar',
+                  String(scans.length),
+                  `${pct}%`,
+                ].map((text, ci) =>
+                  new TableCell({
+                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
+                    children: [new Paragraph({
+                      alignment: ci === 0 || ci === 2 || ci === 3 ? AlignmentType.CENTER : AlignmentType.LEFT,
+                      children: [new TextRun({ text, bold: ci === 2, size: 20, color: ci === 2 ? '0F766E' : ci === 3 ? '0F766E' : '333333' })],
+                    })],
+                  })
+                ),
+              })
+            }),
+            // Fila TOTAL
+            new TableRow({
+              children: [
+                { text: '', span: 2 },
+                { text: String(totalLecturas), bold: true },
+                { text: '100%', bold: true },
+              ].map((cell: any) =>
+                new TableCell({
+                  shading: { type: ShadingType.SOLID, color: '0F766E' },
+                  children: [new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [new TextRun({ text: typeof cell === 'string' ? cell : String(cell.text || ''), bold: true, color: 'FFFFFF', size: 20 })],
+                  })],
+                })
+              ),
+            }),
+          ],
+        }))
       }
 
-      for (const [trabajador, scans] of rondasMap) {
+      // ─── 4.3 PUNTOS DE CONTROL QR ───
+      if (qrLocs.length > 0) {
         elements.push(new Paragraph({
-          spacing: { before: 100, after: 50 },
-          children: [new TextRun({ text: `👤 ${trabajador} — ${scans.length} lecturas`, bold: true, size: 22 })],
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
+          children: [new TextRun({ text: `Puntos de Control QR Implementados (${qrLocs.length})`, bold: true, size: 24, color: '0F766E' })],
         }))
-        for (const scan of scans) {
-          elements.push(new Paragraph({
-            spacing: { after: 20 },
-            indent: { left: 600 },
-            children: [new TextRun({ text: `• ${scan.qrLocationId} — ${fmtDate(scan.createdAt)} ${scan.notes || ''}`, size: 20, color: '555555' })],
-          }))
-        }
+        elements.push(new Paragraph({
+          spacing: { after: 100 },
+          children: [new TextRun({ text: 'El sistema de control de rondas utiliza códigos QR distribuidos estratégicamente en el condominio. Cada punto de control es escaneado por el personal de guardia durante su ronda, registrando automáticamente la ubicación, fecha, hora y responsable.', size: 20, color: '444444' })],
+        }))
+
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: ['Punto de Control', 'Ubicación', 'Código QR'].map(text =>
+                new TableCell({
+                  shading: { type: ShadingType.SOLID, color: '0F766E' },
+                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
+                })
+              ),
+            }),
+            ...qrLocs.slice(0, 20).map((qr, idx) =>
+              new TableRow({
+                children: [
+                  qr.name,
+                  qr.location || qr.description || '—',
+                  qr.code,
+                ].map(text =>
+                  new TableCell({
+                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
+                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(text), size: 20 })] })],
+                  })
+                ),
+              })
+            ),
+          ],
+        }))
+      }
+
+      // ─── 4.4 EJEMPLO DE LECTURA REGISTRADA ───
+      if (allScans.length > 0) {
+        elements.push(new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
+          children: [new TextRun({ text: 'Ejemplo de Lectura Registrada', bold: true, size: 24, color: '0F766E' })],
+        }))
+        elements.push(new Paragraph({
+          spacing: { after: 100 },
+          children: [new TextRun({ text: 'A continuación se muestra un registro típico de una lectura QR realizada durante una ronda de seguridad. Cada escaneo queda almacenado en el sistema con los datos del responsable, punto de control, coordenadas y timestamp.', size: 20, color: '444444' })],
+        }))
+
+        // Tomar una lectura de ejemplo (la más reciente)
+        const ejemplo = allScans[0]
+        const puntoQr = qrLocs.find(q => q.code === ejemplo.qrLocationId)
+
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: ['Campo', 'Valor'].map(text =>
+                new TableCell({
+                  shading: { type: ShadingType.SOLID, color: '0F766E' },
+                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
+                })
+              ),
+            }),
+            ...[
+              ['ID Registro', ejemplo.id?.substring(0, 20) + '...'],
+              ['Punto de Control', puntoQr?.name || ejemplo.qrLocationId],
+              ['Ubicación', puntoQr?.location || '—'],
+              ['Escaneado por', ejemplo.scannedBy || 'Sin asignar'],
+              ['Fecha y Hora', fmtDate(ejemplo.createdAt) + ' ' + (ejemplo.createdAt ? new Date(ejemplo.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '')],
+              ['Coordenadas', ejemplo.latitude && ejemplo.longitude ? `${ejemplo.latitude.toFixed(6)}, ${ejemplo.longitude.toFixed(6)}` : 'No disponibles'],
+              ['Notas', ejemplo.notes || 'Sin notas'],
+            ].map(([campo, valor], idx) =>
+              new TableRow({
+                children: [
+                  new TableCell({
+                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
+                    width: { size: 30, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: campo, bold: true, size: 20, color: '0F766E' })] })],
+                  }),
+                  new TableCell({
+                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
+                    width: { size: 70, type: WidthType.PERCENTAGE },
+                    children: [new Paragraph({ children: [new TextRun({ text: valor, size: 20 })] })],
+                  }),
+                ],
+              })
+            ),
+          ],
+        }))
+      }
+
+      // ─── 4.5 RUTA DE RONDA — DIAGRAMA DE PUNTOS ───
+      if (qrLocs.length > 0) {
+        elements.push(new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
+          children: [new TextRun({ text: 'Mapa de Puntos de Control', bold: true, size: 24, color: '0F766E' })],
+        }))
+        elements.push(new Paragraph({
+          spacing: { after: 100 },
+          children: [new TextRun({ text: `Los ${qrLocs.length} puntos de control QR se encuentran distribuidos estratégicamente en las instalaciones del condominio, cubriendo las áreas comunes, accesos, estacionamientos y zonas verdes. La siguiente tabla muestra la ubicación de cada punto y el flujo de recorrido sugerido para las rondas de seguridad.`, size: 20, color: '444444' })],
+        }))
+
+        // Tabla con ruta numerada
+        elements.push(new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: ['#', 'Punto', 'Ubicación', 'Estado'].map(text =>
+                new TableCell({
+                  shading: { type: ShadingType.SOLID, color: '0F766E' },
+                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
+                })
+              ),
+            }),
+            ...qrLocs.map((qr, idx) =>
+              new TableRow({
+                children: [
+                  String(idx + 1),
+                  qr.name,
+                  qr.location || '—',
+                  qr.active ? 'Activo' : 'Inactivo',
+                ].map((text, ci) =>
+                  new TableCell({
+                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
+                    children: [new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      children: [new TextRun({ text: String(text), size: 20, color: ci === 3 ? (text === 'Activo' ? '16A34A' : 'DC2626') : '333333' })],
+                    })],
+                  })
+                ),
+              })
+            ),
+          ],
+        }))
       }
 
       return elements
@@ -829,37 +1001,75 @@ export async function GET(request: NextRequest) {
 
       // SLIDE 5: RONDAS QR
       slide = pres.addSlide()
-      slide.addText('RONDAS Y LECTURAS QR', { x: 0.5, y: 0.3, w: 12, h: 0.7, fontSize: 28, bold: true, color: DARK })
+      slide.addText('RONDAS DE SEGURIDAD Y LECTURAS QR', { x: 0.5, y: 0.3, w: 12, h: 0.7, fontSize: 28, bold: true, color: DARK })
       slide.addShape(pres.ShapeType.rect, { x: 0.5, y: 1.0, w: 12, h: 0.03, fill: { color: TEAL } })
 
-      const qrRows = [
-        [{ text: 'Punto QR', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
-         { text: 'Ubicación', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
-         { text: 'Código', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
-         { text: 'Descripción', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } }],
-      ]
+      // Total de lecturas
+      slide.addText(`${r.totalRondas} lecturas QR registradas en el período`, { x: 0.5, y: 1.1, w: 12, h: 0.4, fontSize: 14, color: TEAL, italic: true })
 
-      for (const qr of qrLocations.slice(0, 10)) {
-        qrRows.push([qr.name, qr.location, qr.code, qr.description || '—'])
+      // Tabla por personal (ordenada por cantidad)
+      const sortedPPTWorkers = Array.from(rondasPorTrabajador.entries()).sort((a, b) => b[1].length - a[1].length)
+      const rondaWorkerRows = [
+        [{ text: '#', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
+         { text: 'Personal', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
+         { text: 'Lecturas', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
+         { text: '% Total', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } }],
+      ]
+      sortedPPTWorkers.forEach(([worker, scans], idx) => {
+        const pct = r.totalRondas > 0 ? ((scans.length / r.totalRondas) * 100).toFixed(1) : '0.0'
+        rondaWorkerRows.push([
+          String(idx + 1),
+          worker || 'Sin asignar',
+          { text: String(scans.length), options: { bold: true, color: TEAL } },
+          `${pct}%`,
+        ])
+      })
+      // Fila total
+      rondaWorkerRows.push([
+        { text: '', options: { fill: { color: TEAL } } },
+        { text: 'TOTAL', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL } } },
+        { text: String(r.totalRondas), options: { bold: true, color: 'FFFFFF', fill: { color: TEAL } } },
+        { text: '100%', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL } } },
+      ])
+      if (rondasPorTrabajador.size === 0) {
+        rondaWorkerRows.push([{ text: 'Sin registros de rondas en este período', options: { colspan: 4, align: 'center', color: GRAY } }])
+      }
+      slide.addTable(rondaWorkerRows, { x: 0.5, y: 1.5, w: 7, fontSize: 10, border: { type: 'solid', pt: 0.5, color: 'CCCCCC' }, colW: [0.6, 3.4, 1.5, 1.5] })
+
+      // Puntos QR (lado derecho)
+      slide.addText(`Puntos de Control QR (${qrLocations.length})`, { x: 8, y: 1.1, w: 4.5, h: 0.4, fontSize: 12, bold: true, color: TEAL })
+      const qrPptRows = [
+        [{ text: 'Punto', options: { bold: true, color: 'FFFFFF', fill: { color: DARK }, fontSize: 9 } },
+         { text: 'Ubicación', options: { bold: true, color: 'FFFFFF', fill: { color: DARK }, fontSize: 9 } }],
+      ]
+      for (const qr of qrLocations.slice(0, 8)) {
+        qrPptRows.push([
+          { text: qr.name, options: { fontSize: 9 } },
+          { text: qr.location || '—', options: { fontSize: 9 } },
+        ])
       }
       if (qrLocations.length === 0) {
-        qrRows.push([{ text: 'No se crearon puntos QR en este período', options: { colspan: 4, align: 'center', color: GRAY } }])
+        qrPptRows.push([{ text: 'Sin puntos QR', options: { colspan: 2, align: 'center', color: GRAY, fontSize: 9 } }])
       }
-      slide.addTable(qrRows, { x: 0.5, y: 1.2, w: 12, fontSize: 10, border: { type: 'solid', pt: 0.5, color: 'CCCCCC' }, colW: [3, 3, 2, 4] })
+      slide.addTable(qrPptRows, { x: 8, y: 1.5, w: 4.5, fontSize: 9, border: { type: 'solid', pt: 0.5, color: 'CCCCCC' }, colW: [1.8, 2.7] })
 
-      // Trabajadores rondas
-      slide.addText(`Rondas registradas: ${r.totalRondas} lecturas`, { x: 0.5, y: 3.5, w: 12, h: 0.5, fontSize: 14, bold: true, color: TEAL })
-      const rondaWorkerRows = [
-        [{ text: 'Trabajador', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } },
-         { text: 'Lecturas', options: { bold: true, color: 'FFFFFF', fill: { color: DARK } } }],
-      ]
-      for (const [worker, scans] of rondasPorTrabajador) {
-        rondaWorkerRows.push([worker, String(scans.length)])
+      // Ejemplo de lectura
+      if (registrosRonda.length > 0) {
+        const ej = registrosRonda[0]
+        const qrNombre = qrLocations.find(q => q.code === ej.qrLocationId)?.name || ej.qrLocationId
+        slide.addShape(pres.ShapeType.rect, { x: 0.5, y: 4.5, w: 12, h: 0.03, fill: { color: TEAL } })
+        slide.addText('Ejemplo de Lectura Registrada:', { x: 0.5, y: 4.6, w: 12, h: 0.4, fontSize: 12, bold: true, color: DARK })
+        const ejRows = [
+          [{ text: 'Campo', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, fontSize: 9 } },
+           { text: 'Valor', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, fontSize: 9 } },
+           { text: 'Campo', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, fontSize: 9 } },
+           { text: 'Valor', options: { bold: true, color: 'FFFFFF', fill: { color: TEAL }, fontSize: 9 } }],
+          ['Punto de Control', qrNombre, 'Escaneado por', ej.scannedBy || 'Sin asignar'],
+          ['Fecha', fmtDate(ej.createdAt), 'Coordenadas', ej.latitude && ej.longitude ? `${ej.latitude.toFixed(4)}, ${ej.longitude.toFixed(4)}` : 'N/A'],
+          ['Notas', ej.notes || 'Sin notas', '', ''],
+        ]
+        slide.addTable(ejRows, { x: 0.5, y: 5.0, w: 12, fontSize: 9, border: { type: 'solid', pt: 0.5, color: 'CCCCCC' }, colW: [2, 4, 2, 4] })
       }
-      if (rondasPorTrabajador.size === 0) {
-        rondaWorkerRows.push([{ text: 'Sin registros de rondas', options: { colspan: 2, align: 'center', color: GRAY } }])
-      }
-      slide.addTable(rondaWorkerRows, { x: 0.5, y: 4.2, w: 5, fontSize: 10, border: { type: 'solid', pt: 0.5, color: 'CCCCCC' }, colW: [3.5, 1.5] })
 
       // SLIDE 6: SOLICITUDES DE COMPRA
       slide = pres.addSlide()
