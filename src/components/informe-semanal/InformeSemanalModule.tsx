@@ -58,10 +58,28 @@ export function InformeSemanalModule() {
         const err = await res.json()
         throw new Error(err.error || 'Error generando informe')
       }
-      // La API devuelve el archivo como blob
-      const blob = await res.blob()
-      const ext = formato === 'word' ? 'docx' : 'pptx'
-      const filename = `informe-semanal-${dias}dias.${ext}`
+      // La API devuelve JSON con el archivo en base64 dentro de "archivos"
+      const data = await res.json()
+      const base64Key = formato === 'word' ? 'word' : 'pptx'
+      const filenameKey = formato === 'word' ? 'filename_word' : 'filename_pptx'
+      const base64Data = data.archivos?.[base64Key]
+      const filename = data[filenameKey] || `informe-semanal-${dias}dias.${formato === 'word' ? 'docx' : 'pptx'}`
+
+      if (!base64Data) {
+        throw new Error('No se recibió el archivo del servidor')
+      }
+
+      // Convertir base64 a blob binario
+      const binaryString = atob(base64Data)
+      const bytes = new Uint8Array(binaryString.length)
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+      }
+      const mimeType = formato === 'word'
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      const blob = new Blob([bytes], { type: mimeType })
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
