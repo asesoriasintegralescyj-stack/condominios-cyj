@@ -33,6 +33,22 @@ function parseFotos(fotosJson: string | null | undefined): string[] {
   } catch { return [] }
 }
 
+// ─── HELPER: extraer buffer binario de data URI (base64) ───
+function dataUriToBuffer(dataUri: string): { buffer: Buffer; extension: string } | null {
+  if (!dataUri || !dataUri.startsWith('data:')) return null
+  try {
+    const match = dataUri.match(/^data:(image\/\w+);base64,(.+)$/)
+    if (!match) return null
+    const mime = match[1] // e.g. "image/jpeg", "image/png"
+    const base64Data = match[2]
+    const extension = mime === 'image/jpeg' || mime === 'image/jpg' ? 'jpg' : mime === 'image/png' ? 'png' : mime === 'image/gif' ? 'gif' : mime === 'image/webp' ? 'webp' : 'jpg'
+    const buffer = Buffer.from(base64Data, 'base64')
+    return { buffer, extension }
+  } catch {
+    return null
+  }
+}
+
 // ─── HELPER: format CL date ───
 function fmtDate(d: string | Date): string {
   if (!d) return '—'
@@ -376,21 +392,67 @@ export async function GET(request: NextRequest) {
           if (fotosAntes.length > 0 || fotosDespues.length > 0) {
             elements.push(new Paragraph({
               spacing: { after: 30 },
-              children: [new TextRun({ text: `Fotografía: ${ot.fotosAntes ? 'Antes' : ''}${ot.fotosAntes && ot.fotosDespues ? ' / ' : ''}${ot.fotosDespues ? 'Después' : ''}`, size: 18, color: '888888' })],
+              children: [new TextRun({ text: `Fotografía: ${fotosAntes.length > 0 ? 'Antes' : ''}${fotosAntes.length > 0 && fotosDespues.length > 0 ? ' / ' : ''}${fotosDespues.length > 0 ? 'Después' : ''}`, size: 18, color: '888888' })],
             }))
-            for (const foto of fotosAntes) {
-              elements.push(new Paragraph({
-                spacing: { after: 20 },
-                indent: { left: 400 },
-                children: [new TextRun({ text: `📷 Antes: ${foto}`, size: 18, color: '2E5BBA' })],
-              }))
+            for (const foto of fotosAntes.slice(0, 3)) {
+              const imgData = dataUriToBuffer(foto)
+              if (imgData && imgData.buffer.length > 0) {
+                try {
+                  elements.push(new Paragraph({
+                    spacing: { after: 10 },
+                    indent: { left: 400 },
+                    children: [new TextRun({ text: '📷 Antes:', size: 16, color: '2E5BBA', bold: true })],
+                  }))
+                  elements.push(new Paragraph({
+                    spacing: { after: 30 },
+                    indent: { left: 400 },
+                    children: [
+                      new (ImageRun as any)({
+                        data: imgData.buffer,
+                        transformation: { width: 350, height: 260 },
+                        type: imgData.extension === 'png' ? 'png' : 'jpg',
+                      }),
+                    ],
+                  }))
+                } catch {
+                  elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Antes: [error al procesar imagen]', size: 18, color: '999999' })] }))
+                }
+              } else {
+                elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Antes: ${foto.substring(0, 60)}...`, size: 18, color: '2E5BBA' })] }))
+              }
             }
-            for (const foto of fotosDespues) {
-              elements.push(new Paragraph({
-                spacing: { after: 20 },
-                indent: { left: 400 },
-                children: [new TextRun({ text: `📷 Después: ${foto}`, size: 18, color: '16A34A' })],
-              }))
+            if (fotosAntes.length > 3) {
+              elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `... y ${fotosAntes.length - 3} fotos más (máx. 3 por sección)`, size: 16, color: '999999', italics: true })] }))
+            }
+            for (const foto of fotosDespues.slice(0, 3)) {
+              const imgData = dataUriToBuffer(foto)
+              if (imgData && imgData.buffer.length > 0) {
+                try {
+                  elements.push(new Paragraph({
+                    spacing: { after: 10 },
+                    indent: { left: 400 },
+                    children: [new TextRun({ text: '📷 Después:', size: 16, color: '16A34A', bold: true })],
+                  }))
+                  elements.push(new Paragraph({
+                    spacing: { after: 30 },
+                    indent: { left: 400 },
+                    children: [
+                      new (ImageRun as any)({
+                        data: imgData.buffer,
+                        transformation: { width: 350, height: 260 },
+                        type: imgData.extension === 'png' ? 'png' : 'jpg',
+                      }),
+                    ],
+                  }))
+                } catch {
+                  elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Después: [error al procesar imagen]', size: 18, color: '999999' })] }))
+                }
+              } else {
+                elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Después: ${foto.substring(0, 60)}...`, size: 18, color: '16A34A' })] }))
+              }
+            }
+            if (fotosDespues.length > 3) {
+              elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `... y ${fotosDespues.length - 3} fotos más (máx. 3 por sección)`, size: 16, color: '999999', italics: true })] }))
             }
           }
         }
@@ -454,11 +516,31 @@ export async function GET(request: NextRequest) {
             spacing: { after: 30 },
             children: [new TextRun({ text: 'Fotografía del proyecto:', size: 18, color: '888888' })],
           }))
-          for (const foto of fotosAntes) {
-            elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Antes: ${foto}`, size: 18, color: '2E5BBA' })] }))
+          for (const foto of fotosAntes.slice(0, 3)) {
+            const imgData = dataUriToBuffer(foto)
+            if (imgData && imgData.buffer.length > 0) {
+              try {
+                elements.push(new Paragraph({ spacing: { after: 10 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Antes:', size: 16, color: '2E5BBA', bold: true })] }))
+                elements.push(new Paragraph({ spacing: { after: 30 }, indent: { left: 400 }, children: [new (ImageRun as any)({ data: imgData.buffer, transformation: { width: 350, height: 260 }, type: imgData.extension === 'png' ? 'png' : 'jpg' })] }))
+              } catch {
+                elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Antes: [error al procesar]', size: 18, color: '999999' })] }))
+              }
+            } else {
+              elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Antes: ${foto.substring(0, 60)}...`, size: 18, color: '2E5BBA' })] }))
+            }
           }
-          for (const foto of fotosDespues) {
-            elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Después: ${foto}`, size: 18, color: '16A34A' })] }))
+          for (const foto of fotosDespues.slice(0, 3)) {
+            const imgData = dataUriToBuffer(foto)
+            if (imgData && imgData.buffer.length > 0) {
+              try {
+                elements.push(new Paragraph({ spacing: { after: 10 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Después:', size: 16, color: '16A34A', bold: true })] }))
+                elements.push(new Paragraph({ spacing: { after: 30 }, indent: { left: 400 }, children: [new (ImageRun as any)({ data: imgData.buffer, transformation: { width: 350, height: 260 }, type: imgData.extension === 'png' ? 'png' : 'jpg' })] }))
+              } catch {
+                elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: '📷 Después: [error al procesar]', size: 18, color: '999999' })] }))
+              }
+            } else {
+              elements.push(new Paragraph({ spacing: { after: 20 }, indent: { left: 400 }, children: [new TextRun({ text: `📷 Después: ${foto.substring(0, 60)}...`, size: 18, color: '16A34A' })] }))
+            }
           }
         }
       }
