@@ -271,8 +271,9 @@ export function PermisosModule() {
       if (!res.ok) throw new Error('Error')
       const data = await res.json()
       setPermisosData(data)
-      setLocalAgregar(data.overrides.agregar)
-      setLocalQuitar(data.overrides.quitar)
+      const overrides = data.overrides || { agregar: [], quitar: [] }
+      setLocalAgregar(Array.isArray(overrides.agregar) ? overrides.agregar : [])
+      setLocalQuitar(Array.isArray(overrides.quitar) ? overrides.quitar : [])
       setHasChanges(false)
     } catch {
       toast.error('Error al cargar permisos del usuario')
@@ -299,8 +300,8 @@ export function PermisosModule() {
   }, [permisosData, localAgregar, localQuitar])
 
   const efectivos = getEfectivos()
-  const hayCambios = JSON.stringify(localAgregar.sort()) !== JSON.stringify(permisosData?.overrides.agregar.sort() || [])
-    || JSON.stringify(localQuitar.sort()) !== JSON.stringify(permisosData?.overrides.quitar.sort() || [])
+  const hayCambios = JSON.stringify(localAgregar.sort()) !== JSON.stringify((permisosData?.overrides?.agregar || []).sort())
+    || JSON.stringify(localQuitar.sort()) !== JSON.stringify((permisosData?.overrides?.quitar || []).sort())
 
   // Toggle: agregar/quitar un permiso
   const togglePermiso = (permId: string) => {
