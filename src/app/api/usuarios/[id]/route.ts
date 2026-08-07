@@ -152,7 +152,10 @@ export async function PUT(
           updateData.passwordTemp = encrypt(password);
         }
       } else {
-        updateData.passwordChangeMotivo = 'cambio_voluntario';
+          updateData.passwordChangeMotivo = 'cambio_voluntario';
+        // Incluso cambio voluntario: guardar passwordTemp para admin
+        const { encrypt } = await import('@/lib/auth');
+        updateData.passwordTemp = encrypt(password);
       }
     }
     

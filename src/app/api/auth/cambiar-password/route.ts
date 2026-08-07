@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentSession, verifyPassword, hashPassword, logAction } from '@/lib/auth'
+import { getCurrentSession, verifyPassword, hashPassword, logAction, encrypt } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
     const now = new Date()
     const motivo = forceFirstLogin ? 'cambio_forzado' : 'cambio_voluntario'
 
+    // IMPORTANTE: Siempre guardar passwordTemp para que el admin pueda ver
+    // la clave actual del usuario, incluso si fue cambiada voluntariamente.
+    const encryptedTemp = encrypt(newPassword)
+
     await db.user.update({
       where: { id: session.userId },
       data: {
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
         lastPasswordChange: now,
         lastPasswordChangeMotivo: motivo,
         cambiarPasswordProximoLogin: false,
-        passwordTemp: null,
+        passwordTemp: encryptedTemp,
       },
     })
 

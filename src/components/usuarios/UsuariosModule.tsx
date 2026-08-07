@@ -873,17 +873,15 @@ export function UsuariosModule() {
                             <Key className="w-4 h-4 mr-2" />
                             Restablecer Contraseña
                           </DropdownMenuItem>
-                          {usuario.passwordTemp && (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setViewPasswordUser(usuario);
-                                setViewPasswordDialogOpen(true);
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              Ver contraseña temporal
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setViewPasswordUser(usuario);
+                              setViewPasswordDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver contraseña
+                          </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => handleToggleActive(usuario)}
                             disabled={usuario.id === currentUser?.id}
@@ -1219,16 +1217,16 @@ export function UsuariosModule() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo: Ver contraseña temporal de un usuario existente */}
+      {/* Diálogo: Ver contraseña de un usuario */}
       <Dialog open={viewPasswordDialogOpen} onOpenChange={setViewPasswordDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-[#0A1172]" />
-              Contraseña temporal
+              Contraseña del usuario
             </DialogTitle>
             <DialogDescription>
-              Esta contraseña aún no ha sido cambiada por el usuario.
+              Contraseña actual registrada en el sistema para este usuario.
             </DialogDescription>
           </DialogHeader>
           {viewPasswordUser && (
@@ -1245,7 +1243,7 @@ export function UsuariosModule() {
                   <div className="font-mono text-sm">{viewPasswordUser.email}</div>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Contraseña temporal</Label>
+                  <Label className="text-xs text-gray-500">Contraseña actual</Label>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 bg-gray-100 px-3 py-2 rounded font-mono text-sm border">
                       {viewPasswordUser.passwordTemp || 'No disponible'}
@@ -1266,11 +1264,35 @@ export function UsuariosModule() {
                     </Button>
                   </div>
                 </div>
+                {viewPasswordUser.lastPasswordChange && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                    Último cambio: {new Date(viewPasswordUser.lastPasswordChange).toLocaleString('es-CL')}
+                    {viewPasswordUser.lastPasswordChangeMotivo && (
+                      <span> — Motivo: <strong>{viewPasswordUser.lastPasswordChangeMotivo.replace(/_/g, ' ')}</strong></span>
+                    )}
+                  </div>
+                )}
                 {viewPasswordUser.cambiarPasswordProximoLogin && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                     ⚠️ Este usuario debe cambiar su contraseña en el próximo inicio de sesión.
                   </div>
                 )}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                  <strong>Copiar todo:</strong> Nombre, email, contraseña y URL de acceso
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const text = `Credenciales de acceso - Laguna Norte\n\nNombre: ${viewPasswordUser.nombre} ${viewPasswordUser.apellido || ''}\nEmail: ${viewPasswordUser.email}\nContraseña: ${viewPasswordUser.passwordTemp || 'No disponible'}\nURL: https://condominios-cyj.vercel.app/login`;
+                    navigator.clipboard.writeText(text);
+                    toast.success('Credenciales copiadas al portapapeles');
+                  }}
+                  disabled={!viewPasswordUser.passwordTemp}
+                >
+                  Copiar credenciales completas
+                </Button>
               </div>
             </div>
           )}

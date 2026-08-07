@@ -221,11 +221,12 @@ export function PerfilesMovilModule() {
 
         autoTable(doc, {
           startY: y,
-          head: [['#', 'Nombre', 'Código Acceso']],
+          head: [['#', 'Nombre', 'Código Acceso', 'Contraseña']],
           body: section.data.map((p, i) => [
             i + 1,
             p.name,
             p.accessCode,
+            p.password || '—',
           ]),
           theme: 'grid',
           headStyles: {
@@ -241,8 +242,9 @@ export function PerfilesMovilModule() {
           },
           columnStyles: {
             0: { halign: 'center', cellWidth: 10 },
-            1: { cellWidth: 120 },
-            2: { halign: 'center', cellWidth: 50 },
+            1: { cellWidth: 90 },
+            2: { halign: 'center', cellWidth: 40 },
+            3: { halign: 'center', cellWidth: 30 },
           },
           margin: { left: 14, right: 14 },
           alternateRowStyles: { fillColor: [248, 250, 252] },
@@ -442,9 +444,8 @@ export function PerfilesMovilModule() {
                 <tr className="border-b bg-slate-50">
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Perfil</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Código Acceso</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Contraseña</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Personal</th>
-                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Icono</th>
-                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Color</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Permisos</th>
                   <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
@@ -452,14 +453,14 @@ export function PerfilesMovilModule() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
                       Cargando perfiles...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-slate-400">
+                    <td colSpan={8} className="p-8 text-center text-slate-400">
                       No se encontraron perfiles
                     </td>
                   </tr>
@@ -479,6 +480,15 @@ export function PerfilesMovilModule() {
                           {perfil.accessCode}
                         </code>
                       </td>
+                      <td className="p-3">
+                        {perfil.password ? (
+                          <code className="px-2 py-1 bg-amber-50 border border-amber-200 rounded text-xs font-mono font-bold text-amber-800">
+                            {perfil.password}
+                          </code>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="p-3 text-sm text-slate-600">
                         {perfil.personal ? (
                           <div>
@@ -488,15 +498,6 @@ export function PerfilesMovilModule() {
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
-                      </td>
-                      <td className="p-3">
-                        <span className="text-xs text-slate-600">{getIconLabel(perfil.icon)}</span>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-1.5">
-                          <div className={`w-3 h-3 rounded-full ${perfil.color}`} />
-                          <span className="text-xs text-slate-600">{getColorLabel(perfil.color)}</span>
-                        </div>
                       </td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-1">
