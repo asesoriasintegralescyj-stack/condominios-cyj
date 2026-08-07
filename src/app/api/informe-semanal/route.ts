@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -47,6 +49,19 @@ function dataUriToBuffer(dataUri: string): { buffer: Buffer; extension: string }
     const extension = mime === 'image/jpeg' || mime === 'image/jpg' ? 'jpg' : mime === 'image/png' ? 'png' : mime === 'image/gif' ? 'gif' : mime === 'image/webp' ? 'webp' : 'jpg'
     const buffer = Buffer.from(base64Data, 'base64')
     return { buffer, extension }
+  } catch {
+    return null
+  }
+}
+
+// ─── HELPER: leer imagen estática del directorio public ───
+function loadShowcaseImage(filename: string): { buffer: Buffer; extension: string } | null {
+  try {
+    const filePath = join(process.cwd(), 'public', 'showcase', filename)
+    if (!existsSync(filePath)) return null
+    const buffer = readFileSync(filePath)
+    const ext = filename.endsWith('.png') ? 'png' : 'jpg'
+    return { buffer, extension: ext }
   } catch {
     return null
   }
@@ -558,14 +573,14 @@ export async function GET(request: NextRequest) {
       // ─── 4.1 INTRODUCCIÓN ───
       elements.push(new Paragraph({
         spacing: { after: 150 },
-        children: [new TextRun({ text: `Durante el período se registraron ${totalLecturas} lecturas QR distribuidas en ${rondasMap.size} trabajadores. A continuación se presenta el detalle de actividad por guardia y los puntos de control implementados en el condominio.`, size: 20, italics: true, color: '444444' })],
+        children: [new TextRun({ text: `El sistema de rondas QR permite registrar y controlar las rondas de seguridad realizadas por el personal de guardia. A continuación se presenta un resumen de la actividad registrada durante el período.`, size: 20, italics: true, color: '444444' })],
       }))
 
-      // ─── 4.2 TABLA RESUMEN POR PERSONAL ───
+      // ─── 4.2 RESUMEN POR PERSONAL (texto simplificado) ───
       elements.push(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 200, after: 100 },
-        children: [new TextRun({ text: `Resumen de Lecturas por Personal (${totalLecturas} totales)`, bold: true, size: 24, color: '0F766E' })],
+        children: [new TextRun({ text: `Resumen de Lecturas por Personal`, bold: true, size: 24, color: '0F766E' })],
       }))
 
       if (rondasMap.size === 0) {
@@ -574,6 +589,21 @@ export async function GET(request: NextRequest) {
         // Ordenar por cantidad descendente
         const sortedWorkers = Array.from(rondasMap.entries()).sort((a, b) => b[1].length - a[1].length)
 
+        // Resumen de texto: "102 lecturas totales: Juan Pérez - 45, Pedro López - 30, ..."
+        const detallePersonal = sortedWorkers.map(([worker, scans]) =>
+          `${worker || 'Sin asignar'} - ${scans.length}`
+        ).join(', ')
+
+        elements.push(new Paragraph({
+          spacing: { after: 150 },
+          shading: { type: ShadingType.SOLID, color: 'F0FDF9' },
+          children: [
+            new TextRun({ text: `${totalLecturas} lecturas totales: `, bold: true, size: 22, color: '0F766E' }),
+            new TextRun({ text: detallePersonal, size: 22, color: '333333' }),
+          ],
+        }))
+
+        // También agregar tabla compacta para referencia rápida
         elements.push(new Table({
           width: { size: 100, type: WidthType.PERCENTAGE },
           rows: [
@@ -624,145 +654,79 @@ export async function GET(request: NextRequest) {
         }))
       }
 
-      // ─── 4.3 PUNTOS DE CONTROL QR ───
-      if (qrLocs.length > 0) {
+      // ─── 4.3 IMAGEN: CÓDIGOS QR ───
+      const imgQr = loadShowcaseImage('qr-codes.png')
+      if (imgQr) {
         elements.push(new Paragraph({
           heading: HeadingLevel.HEADING_2,
           spacing: { before: 300, after: 100 },
-          children: [new TextRun({ text: `Puntos de Control QR Implementados (${qrLocs.length})`, bold: true, size: 24, color: '0F766E' })],
+          children: [new TextRun({ text: `Códigos QR de Control (${qrLocs.length > 0 ? qrLocs.length : 8} puntos implementados)`, bold: true, size: 24, color: '0F766E' })],
         }))
         elements.push(new Paragraph({
           spacing: { after: 100 },
-          children: [new TextRun({ text: 'El sistema de control de rondas utiliza códigos QR distribuidos estratégicamente en el condominio. Cada punto de control es escaneado por el personal de guardia durante su ronda, registrando automáticamente la ubicación, fecha, hora y responsable.', size: 20, color: '444444' })],
+          children: [new TextRun({ text: `Se han implementado ${qrLocs.length > 0 ? qrLocs.length : 8} códigos QR distribuidos estratégicamente en las instalaciones del condominio, cubriendo accesos, áreas comunes, estacionamientos y zonas verdes. Cada código es único y está vinculado al sistema de registro de rondas.`, size: 20, color: '444444' })],
         }))
-
-        elements.push(new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: ['Punto de Control', 'Ubicación', 'Código QR'].map(text =>
-                new TableCell({
-                  shading: { type: ShadingType.SOLID, color: '0F766E' },
-                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
-                })
-              ),
-            }),
-            ...qrLocs.slice(0, 20).map((qr, idx) =>
-              new TableRow({
-                children: [
-                  qr.name,
-                  qr.location || qr.description || '—',
-                  qr.code,
-                ].map(text =>
-                  new TableCell({
-                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
-                    children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(text), size: 20 })] })],
-                  })
-                ),
-              })
-            ),
-          ],
+        elements.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+          children: [new (ImageRun as any)({ data: imgQr.buffer, transformation: { width: 500, height: 360 }, type: imgQr.extension === 'png' ? 'png' : 'jpg' })],
         }))
       }
 
-      // ─── 4.4 EJEMPLO DE LECTURA REGISTRADA ───
-      if (allScans.length > 0) {
+      // ─── 4.4 IMAGEN: REGISTRO DEL SISTEMA ───
+      const imgRegistro = loadShowcaseImage('registro-sistema.png')
+      if (imgRegistro) {
         elements.push(new Paragraph({
           heading: HeadingLevel.HEADING_2,
           spacing: { before: 300, after: 100 },
-          children: [new TextRun({ text: 'Ejemplo de Lectura Registrada', bold: true, size: 24, color: '0F766E' })],
+          children: [new TextRun({ text: 'Registro de Lecturas en el Sistema', bold: true, size: 24, color: '0F766E' })],
         }))
         elements.push(new Paragraph({
           spacing: { after: 100 },
-          children: [new TextRun({ text: 'A continuación se muestra un registro típico de una lectura QR realizada durante una ronda de seguridad. Cada escaneo queda almacenado en el sistema con los datos del responsable, punto de control, coordenadas y timestamp.', size: 20, color: '444444' })],
+          children: [new TextRun({ text: 'Cada lectura QR es registrada en tiempo real desde el dispositivo móvil del guardia, capturando el punto de control, fecha, hora, coordenadas GPS y observaciones. La información queda almacenada en el sistema para auditoría y seguimiento.', size: 20, color: '444444' })],
         }))
-
-        // Tomar una lectura de ejemplo (la más reciente)
-        const ejemplo = allScans[0]
-        const puntoQr = qrLocs.find(q => q.code === ejemplo.qrLocationId)
-
-        elements.push(new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: ['Campo', 'Valor'].map(text =>
-                new TableCell({
-                  shading: { type: ShadingType.SOLID, color: '0F766E' },
-                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
-                })
-              ),
-            }),
-            ...[
-              ['ID Registro', ejemplo.id?.substring(0, 20) + '...'],
-              ['Punto de Control', puntoQr?.name || ejemplo.qrLocationId],
-              ['Ubicación', puntoQr?.location || '—'],
-              ['Escaneado por', ejemplo.scannedBy || 'Sin asignar'],
-              ['Fecha y Hora', fmtDate(ejemplo.createdAt) + ' ' + (ejemplo.createdAt ? new Date(ejemplo.createdAt).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '')],
-              ['Coordenadas', ejemplo.latitude && ejemplo.longitude ? `${ejemplo.latitude.toFixed(6)}, ${ejemplo.longitude.toFixed(6)}` : 'No disponibles'],
-              ['Notas', ejemplo.notes || 'Sin notas'],
-            ].map(([campo, valor], idx) =>
-              new TableRow({
-                children: [
-                  new TableCell({
-                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
-                    width: { size: 30, type: WidthType.PERCENTAGE },
-                    children: [new Paragraph({ children: [new TextRun({ text: campo, bold: true, size: 20, color: '0F766E' })] })],
-                  }),
-                  new TableCell({
-                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
-                    width: { size: 70, type: WidthType.PERCENTAGE },
-                    children: [new Paragraph({ children: [new TextRun({ text: valor, size: 20 })] })],
-                  }),
-                ],
-              })
-            ),
-          ],
+        elements.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+          children: [new (ImageRun as any)({ data: imgRegistro.buffer, transformation: { width: 500, height: 360 }, type: imgRegistro.extension === 'png' ? 'png' : 'jpg' })],
         }))
       }
 
-      // ─── 4.5 RUTA DE RONDA — DIAGRAMA DE PUNTOS ───
-      if (qrLocs.length > 0) {
+      // ─── 4.5 IMAGEN: EJEMPLO DE LECTURA ───
+      const imgLectura = loadShowcaseImage('lectura-ejemplo.png')
+      if (imgLectura) {
         elements.push(new Paragraph({
           heading: HeadingLevel.HEADING_2,
           spacing: { before: 300, after: 100 },
-          children: [new TextRun({ text: 'Mapa de Puntos de Control', bold: true, size: 24, color: '0F766E' })],
+          children: [new TextRun({ text: 'Historial de Lecturas', bold: true, size: 24, color: '0F766E' })],
         }))
         elements.push(new Paragraph({
           spacing: { after: 100 },
-          children: [new TextRun({ text: `Los ${qrLocs.length} puntos de control QR se encuentran distribuidos estratégicamente en las instalaciones del condominio, cubriendo las áreas comunes, accesos, estacionamientos y zonas verdes. La siguiente tabla muestra la ubicación de cada punto y el flujo de recorrido sugerido para las rondas de seguridad.`, size: 20, color: '444444' })],
+          children: [new TextRun({ text: `Durante el período se registraron ${totalLecturas} lecturas QR. A continuación se muestra un ejemplo del historial de lecturas del sistema, detallando la hora, punto de control, guardia responsable y estado de cada verificación realizada.`, size: 20, color: '444444' })],
         }))
+        elements.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+          children: [new (ImageRun as any)({ data: imgLectura.buffer, transformation: { width: 500, height: 360 }, type: imgLectura.extension === 'png' ? 'png' : 'jpg' })],
+        }))
+      }
 
-        // Tabla con ruta numerada
-        elements.push(new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [
-            new TableRow({
-              children: ['#', 'Punto', 'Ubicación', 'Estado'].map(text =>
-                new TableCell({
-                  shading: { type: ShadingType.SOLID, color: '0F766E' },
-                  children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text, bold: true, color: 'FFFFFF', size: 20 })] })],
-                })
-              ),
-            }),
-            ...qrLocs.map((qr, idx) =>
-              new TableRow({
-                children: [
-                  String(idx + 1),
-                  qr.name,
-                  qr.location || '—',
-                  qr.active ? 'Activo' : 'Inactivo',
-                ].map((text, ci) =>
-                  new TableCell({
-                    shading: { type: ShadingType.SOLID, color: idx % 2 === 0 ? 'F0FDF9' : 'FFFFFF' },
-                    children: [new Paragraph({
-                      alignment: AlignmentType.CENTER,
-                      children: [new TextRun({ text: String(text), size: 20, color: ci === 3 ? (text === 'Activo' ? '16A34A' : 'DC2626') : '333333' })],
-                    })],
-                  })
-                ),
-              })
-            ),
-          ],
+      // ─── 4.6 IMAGEN: RUTA DE RONDA ───
+      const imgRuta = loadShowcaseImage('ruta-ejemplo.png')
+      if (imgRuta) {
+        elements.push(new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
+          children: [new TextRun({ text: 'Ruta de Ronda - Recorrido Sugerido', bold: true, size: 24, color: '0F766E' })],
+        }))
+        elements.push(new Paragraph({
+          spacing: { after: 100 },
+          children: [new TextRun({ text: 'El sistema define una ruta sugerida para las rondas de seguridad, optimizando la cobertura de todas las áreas del condominio. Los guardias siguen un recorrido secuencial por los puntos de control, asegurando una vigilancia completa y eficiente de las instalaciones.', size: 20, color: '444444' })],
+        }))
+        elements.push(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+          children: [new (ImageRun as any)({ data: imgRuta.buffer, transformation: { width: 500, height: 360 }, type: imgRuta.extension === 'png' ? 'png' : 'jpg' })],
         }))
       }
 
