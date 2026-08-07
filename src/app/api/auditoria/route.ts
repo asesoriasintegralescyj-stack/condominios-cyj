@@ -21,7 +21,7 @@ export const maxDuration = 30
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return apiError('No autenticado', 401);
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'logs.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'logs.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403);
   }
   try {

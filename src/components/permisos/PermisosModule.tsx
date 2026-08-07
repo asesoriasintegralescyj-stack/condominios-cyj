@@ -1,20 +1,20 @@
 'use client'
 
 /**
- * Módulo "Permisos del Sistema"
- * ----------------------------
- * Vista exclusiva del Administrador para gestionar los permisos por rol.
- *
- * Funciones:
- *  - Visualizar todos los permisos disponibles, agrupados por categoría
- *  - Marcar/desmarcar permisos por rol (admin, supervisor, usuario, personal, auditor, guardia)
- *  - Guardar cambios en el esquema de permisos (PERMISOS_POR_ROL)
- *  - Mostrar descripción de cada permiso
- *
- * Nota: este módulo SOLO es visible para el rol admin (controlado desde Sidebar.tsx).
+ * Modulo Permisos del Sistema v2
+ * ---------------------------------
+ * El admin puede gestionar permisos por USUARIO, no solo por rol.
+ * 
+ * Logica:
+ *   - Cada usuario tiene permisos base segun su rol
+ *   - El admin puede AGREGAR permisos extra a un usuario
+ *   - El admin puede QUITAR permisos del rol base a un usuario
+ *   - Los permisos efectivos = base del rol + agregar - quitar
+ * 
+ * Los cambios se guardan en el campo `permisos` de cada User en la DB.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -22,13 +22,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  Shield, Users, UserCog, User as UserIcon, Wrench, Eye, QrCode,
-  Save, RefreshCw, Info, CheckCircle2, Lock
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  Shield, Users, Eye, EyeOff, Plus, Minus, Save, RefreshCw, Info,
+  CheckCircle2, Lock, UserCog, ArrowRight, Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { apiFetch } from '@/lib/api-client'
 
 // ============================================
-// Definición completa de permisos por categoría
+// Definicion de permisos por categoria
 // ============================================
 interface Permiso {
   id: string
@@ -68,23 +72,23 @@ const CATEGORIAS: Categoria[] = [
     key: 'solicitudescompra',
     label: 'Solicitudes de Compra',
     permisos: [
-      { id: 'solicitudescompra.ver', label: 'Ver', descripcion: 'Ver solicitudes (propias o todas según rol)' },
-      { id: 'solicitudescompra.crear', label: 'Crear', descripcion: 'Crear nuevas solicitudes de compra' },
-      { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Supervisor)', descripcion: 'Aprobar/rechazar en 1ra etapa del flujo' },
-      { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)', descripcion: 'Aprobar/rechazar en 2da etapa y gestionar compra' },
-      { id: 'solicitudescompra.gestionar', label: 'Gestionar', descripcion: 'Marcar como comprada, anular, etc.' },
+      { id: 'solicitudescompra.ver', label: 'Ver', descripcion: 'Ver solicitudes' },
+      { id: 'solicitudescompra.crear', label: 'Crear', descripcion: 'Crear solicitudes' },
+      { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Sup)', descripcion: 'Aprobar en 1ra etapa' },
+      { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)', descripcion: 'Aprobar en 2da etapa' },
+      { id: 'solicitudescompra.gestionar', label: 'Gestionar', descripcion: 'Gestionar compra' },
     ],
   },
   {
     key: 'ordenes_trabajo',
-    label: 'Órdenes de Trabajo',
+    label: 'Ordenes de Trabajo',
     permisos: [
-      { id: 'ots.ver', label: 'Ver', descripcion: 'Ver OT (propias para personal, todas para otros)' },
+      { id: 'ots.ver', label: 'Ver', descripcion: 'Ver ordenes de trabajo' },
       { id: 'ots.crear', label: 'Crear', descripcion: 'Crear nuevas OT' },
       { id: 'ots.editar', label: 'Editar', descripcion: 'Editar OT existentes' },
       { id: 'ots.eliminar', label: 'Eliminar', descripcion: 'Eliminar OT' },
-      { id: 'ots.aprobar', label: 'Aprobar', descripcion: 'Aprobar/rechazar OT completadas' },
-      { id: 'ots.progreso', label: 'Actualizar progreso', descripcion: 'Personal: actualizar progreso de OT asignadas' },
+      { id: 'ots.aprobar', label: 'Aprobar', descripcion: 'Aprobar/rechazar OT' },
+      { id: 'ots.progreso', label: 'Progreso', descripcion: 'Actualizar progreso de OT' },
     ],
   },
   {
@@ -92,8 +96,8 @@ const CATEGORIAS: Categoria[] = [
     label: 'Proyectos',
     permisos: [
       { id: 'proyectos.ver', label: 'Ver', descripcion: 'Ver proyectos' },
-      { id: 'proyectos.crear', label: 'Crear', descripcion: 'Crear nuevos proyectos' },
-      { id: 'proyectos.editar', label: 'Editar', descripcion: 'Editar proyectos existentes' },
+      { id: 'proyectos.crear', label: 'Crear', descripcion: 'Crear proyectos' },
+      { id: 'proyectos.editar', label: 'Editar', descripcion: 'Editar proyectos' },
       { id: 'proyectos.eliminar', label: 'Eliminar', descripcion: 'Eliminar proyectos' },
     ],
   },
@@ -111,8 +115,8 @@ const CATEGORIAS: Categoria[] = [
     key: 'personal',
     label: 'Personal',
     permisos: [
-      { id: 'personal.ver', label: 'Ver', descripcion: 'Ver listado de personal' },
-      { id: 'personal.crear', label: 'Crear', descripcion: 'Crear registros de personal' },
+      { id: 'personal.ver', label: 'Ver', descripcion: 'Ver personal' },
+      { id: 'personal.crear', label: 'Crear', descripcion: 'Crear personal' },
       { id: 'personal.editar', label: 'Editar', descripcion: 'Editar personal' },
       { id: 'personal.eliminar', label: 'Eliminar', descripcion: 'Eliminar personal' },
     ],
@@ -142,19 +146,19 @@ const CATEGORIAS: Categoria[] = [
     label: 'Centros de Costo',
     permisos: [
       { id: 'centros-costo.ver', label: 'Ver', descripcion: 'Ver centros de costo' },
-      { id: 'centros-costo.crear', label: 'Crear', descripcion: 'Crear centros de costo' },
-      { id: 'centros-costo.editar', label: 'Editar', descripcion: 'Editar centros de costo' },
-      { id: 'centros-costo.eliminar', label: 'Eliminar', descripcion: 'Eliminar centros de costo' },
+      { id: 'centros-costo.crear', label: 'Crear', descripcion: 'Crear centros' },
+      { id: 'centros-costo.editar', label: 'Editar', descripcion: 'Editar centros' },
+      { id: 'centros-costo.eliminar', label: 'Eliminar', descripcion: 'Eliminar centros' },
     ],
   },
   {
     key: 'catalogos',
-    label: 'Catálogos (Materiales / Tareas / Herramientas)',
+    label: 'Catalogos',
     permisos: [
-      { id: 'catalogos.ver', label: 'Ver', descripcion: 'Ver catálogos (incluye manuales de herramientas)' },
-      { id: 'catalogos.crear', label: 'Crear', descripcion: 'Crear items de catálogo' },
-      { id: 'catalogos.editar', label: 'Editar', descripcion: 'Editar items de catálogo' },
-      { id: 'catalogos.eliminar', label: 'Eliminar', descripcion: 'Eliminar items de catálogo' },
+      { id: 'catalogos.ver', label: 'Ver', descripcion: 'Ver catalogos' },
+      { id: 'catalogos.crear', label: 'Crear', descripcion: 'Crear items' },
+      { id: 'catalogos.editar', label: 'Editar', descripcion: 'Editar items' },
+      { id: 'catalogos.eliminar', label: 'Eliminar', descripcion: 'Eliminar items' },
     ],
   },
   {
@@ -162,7 +166,7 @@ const CATEGORIAS: Categoria[] = [
     label: 'Inventario',
     permisos: [
       { id: 'inventario.ver', label: 'Ver', descripcion: 'Ver inventario' },
-      { id: 'inventario.editar', label: 'Editar', descripcion: 'Registrar movimientos de inventario' },
+      { id: 'inventario.editar', label: 'Editar', descripcion: 'Movimientos de inventario' },
     ],
   },
   {
@@ -170,192 +174,228 @@ const CATEGORIAS: Categoria[] = [
     label: 'Reportes',
     permisos: [
       { id: 'reportes.ver', label: 'Ver', descripcion: 'Ver reportes' },
-      { id: 'reportes.exportar', label: 'Exportar', descripcion: 'Exportar reportes a PDF/Excel' },
+      { id: 'reportes.exportar', label: 'Exportar', descripcion: 'Exportar reportes' },
     ],
   },
   {
     key: 'configuracion',
-    label: 'Configuración del Sistema',
+    label: 'Configuracion',
     permisos: [
-      { id: 'configuracion.ver', label: 'Ver', descripcion: 'Ver configuración (cumplimiento, SC)' },
-      { id: 'configuracion.editar', label: 'Editar', descripcion: 'Editar configuración y respaldos' },
+      { id: 'configuracion.ver', label: 'Ver', descripcion: 'Ver configuracion' },
+      { id: 'configuracion.editar', label: 'Editar', descripcion: 'Editar configuracion y respaldos' },
     ],
   },
   {
     key: 'logs',
-    label: 'Logs de Auditoría',
+    label: 'Auditoria',
     permisos: [
-      { id: 'logs.ver', label: 'Ver', descripcion: 'Ver logs de auditoría del sistema' },
+      { id: 'logs.ver', label: 'Ver', descripcion: 'Ver logs de auditoria' },
+    ],
+  },
+  {
+    key: 'rendiciongastos',
+    label: 'Rendicion de Gastos',
+    permisos: [
+      { id: 'rendiciongastos.ver', label: 'Ver', descripcion: 'Ver rendiciones' },
+      { id: 'rendiciongastos.crear', label: 'Crear', descripcion: 'Crear rendiciones' },
+      { id: 'rendiciongastos.editar', label: 'Editar', descripcion: 'Editar rendiciones' },
+      { id: 'rendiciongastos.revisar', label: 'Revisar', descripcion: 'Revisar rendiciones' },
+      { id: 'rendiciongastos.eliminar', label: 'Eliminar', descripcion: 'Eliminar rendiciones' },
     ],
   },
 ]
 
+// Todos los IDs de permisos planos
+const ALL_PERM_IDS = CATEGORIAS.flatMap(c => c.permisos.map(p => p.id))
+
 // ============================================
-// Roles disponibles
+// Interfaces
 // ============================================
-interface RolInfo {
-  key: string
-  label: string
-  icon: React.ReactNode
-  descripcion: string
-  locked?: boolean // si true, sus permisos no se pueden modificar desde aquí
+interface UserItem {
+  id: string
+  email: string
+  nombre: string
+  apellido?: string | null
+  rol: string
 }
 
-const ROLES: RolInfo[] = [
-  { key: 'admin', label: 'Administrador', icon: <Shield className="w-4 h-4" />, descripcion: 'Acceso total al sistema', locked: true },
-  { key: 'supervisor', label: 'Supervisor', icon: <UserCog className="w-4 h-4" />, descripcion: 'Gestión operativa + aprueba SC etapa 1' },
-  { key: 'usuario', label: 'Usuario', icon: <UserIcon className="w-4 h-4" />, descripcion: 'Acceso básico + crea SC' },
-  { key: 'personal', label: 'Personal', icon: <Wrench className="w-4 h-4" />, descripcion: 'Solo OT asignadas + crea SC' },
-  { key: 'auditor', label: 'Auditor', icon: <Eye className="w-4 h-4" />, descripcion: 'Solo lectura de todo' },
-  { key: 'guardia', label: 'Guardia', icon: <QrCode className="w-4 h-4" />, descripcion: 'Solo módulo Rondas (página dedicada)' },
-  { key: 'conserje', label: 'Conserje', icon: <UserIcon className="w-4 h-4" />, descripcion: 'Solo puede ver Rondas QR' },
-]
-
-// Permisos por defecto (espejo de lib/auth.ts PERMISOS_POR_ROL)
-const DEFAULT_PERMISOS: Record<string, string[]> = {
-  admin: [
-    'usuarios.ver', 'usuarios.crear', 'usuarios.editar', 'usuarios.eliminar',
-    'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
-    'ots.ver', 'ots.crear', 'ots.editar', 'ots.eliminar', 'ots.aprobar',
-    'proyectos.ver', 'proyectos.crear', 'proyectos.editar', 'proyectos.eliminar',
-    'inspecciones.ver', 'inspecciones.crear', 'inspecciones.editar', 'inspecciones.eliminar',
-    'personal.ver', 'personal.crear', 'personal.editar', 'personal.eliminar',
-    'activos.ver', 'activos.crear', 'activos.editar', 'activos.eliminar',
-    'proveedores.ver', 'proveedores.crear', 'proveedores.editar', 'proveedores.eliminar',
-    'centros-costo.ver', 'centros-costo.crear', 'centros-costo.editar', 'centros-costo.eliminar',
-    'catalogos.ver', 'catalogos.crear', 'catalogos.editar', 'catalogos.eliminar',
-    'inventario.ver', 'inventario.editar',
-    'reportes.ver', 'reportes.exportar',
-    'configuracion.ver', 'configuracion.editar',
-    'logs.ver',
-  ],
-  supervisor: [
-    'usuarios.ver',
-    'rondas.ver', 'rondas.registrar',
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
-    'ots.ver', 'ots.crear', 'ots.editar', 'ots.aprobar',
-    'proyectos.ver', 'proyectos.editar',
-    'inspecciones.ver', 'inspecciones.crear', 'inspecciones.editar',
-    'personal.ver', 'personal.editar',
-    'activos.ver', 'activos.editar',
-    'proveedores.ver',
-    'centros-costo.ver',
-    'catalogos.ver',
-    'inventario.ver', 'inventario.editar',
-    'reportes.ver', 'reportes.exportar',
-  ],
-  usuario: [
-    'rondas.ver',
-    'solicitudescompra.ver', 'solicitudescompra.crear',
-    'ots.ver', 'ots.crear',
-    'inspecciones.ver',
-    'activos.ver',
-    'catalogos.ver',
-    'inventario.ver',
-    'reportes.ver',
-  ],
-  personal: [
-    'rondas.ver',
-    'solicitudescompra.ver', 'solicitudescompra.crear',
-    'ots.ver', 'ots.progreso',
-    'catalogos.ver',
-  ],
-  auditor: [
-    'usuarios.ver',
-    'rondas.ver',
-    'solicitudescompra.ver',
-    'ots.ver',
-    'proyectos.ver',
-    'inspecciones.ver',
-    'personal.ver',
-    'activos.ver',
-    'proveedores.ver',
-    'centros-costo.ver',
-    'catalogos.ver',
-    'inventario.ver',
-    'reportes.ver',
-    'logs.ver',
-  ],
-  guardia: [
-    'rondas.ver',
-    'rondas.registrar',
-  ],
-  conserje: ['rondas.ver'],
+interface PermisosData {
+  permisosBase: string[]
+  overrides: { agregar: string[]; quitar: string[] }
+  permisosEfectivos: string[]
 }
 
+// ============================================
+// Componente principal
+// ============================================
 export function PermisosModule() {
-  const [permisos, setPermisos] = useState<Record<string, Set<string>>>(() => {
-    const init: Record<string, Set<string>> = {}
-    for (const rol of Object.keys(DEFAULT_PERMISOS)) {
-      init[rol] = new Set(DEFAULT_PERMISOS[rol])
-    }
-    return init
-  })
+  const [users, setUsers] = useState<UserItem[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [permisosData, setPermisosData] = useState<PermisosData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingUser, setLoadingUser] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [hasChanges, setHasChanges] = useState(false)
 
-  const togglePermiso = (rol: string, permisoId: string, checked: boolean) => {
-    setPermisos((prev) => {
-      const next = { ...prev }
-      const set = new Set(next[rol])
-      if (checked) {
-        set.add(permisoId)
-      } else {
-        set.delete(permisoId)
+  // Overrides editados localmente
+  const [localAgregar, setLocalAgregar] = useState<string[]>([])
+  const [localQuitar, setLocalQuitar] = useState<string[]>([])
+
+  // Cargar lista de usuarios
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const data = await apiFetch<UserItem[]>('/api/usuarios', [])
+        setUsers(Array.isArray(data) ? data : [])
+      } catch {
+        toast.error('Error al cargar usuarios')
+      } finally {
+        setLoading(false)
       }
-      next[rol] = set
-      return next
-    })
+    }
+    fetchUsers()
+  }, [])
+
+  // Cargar permisos del usuario seleccionado
+  const loadPermisos = useCallback(async (userId: string) => {
+    if (!userId) {
+      setPermisosData(null)
+      setLocalAgregar([])
+      setLocalQuitar([])
+      setHasChanges(false)
+      return
+    }
+    setLoadingUser(true)
+    try {
+      const res = await fetch(`/api/usuarios/${userId}/permisos`)
+      if (!res.ok) throw new Error('Error')
+      const data = await res.json()
+      setPermisosData(data)
+      setLocalAgregar(data.overrides.agregar)
+      setLocalQuitar(data.overrides.quitar)
+      setHasChanges(false)
+    } catch {
+      toast.error('Error al cargar permisos del usuario')
+    } finally {
+      setLoadingUser(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (selectedUserId) {
+      loadPermisos(selectedUserId)
+    }
+  }, [selectedUserId, loadPermisos])
+
+  const selectedUser = users.find(u => u.id === selectedUserId)
+
+  // Calcular permisos efectivos con los overrides locales
+  const getEfectivos = useCallback((): string[] => {
+    if (!permisosData) return []
+    const base = new Set(permisosData.permisosBase)
+    const quitarSet = new Set(localQuitar)
+    localAgregar.forEach(p => base.add(p))
+    return Array.from(base).filter(p => !quitarSet.has(p))
+  }, [permisosData, localAgregar, localQuitar])
+
+  const efectivos = getEfectivos()
+  const hayCambios = JSON.stringify(localAgregar.sort()) !== JSON.stringify(permisosData?.overrides.agregar.sort() || [])
+    || JSON.stringify(localQuitar.sort()) !== JSON.stringify(permisosData?.overrides.quitar.sort() || [])
+
+  // Toggle: agregar/quitar un permiso
+  const togglePermiso = (permId: string) => {
+    const enBase = permisosData?.permisosBase.includes(permId) || false
+    const estaAgregado = localAgregar.includes(permId)
+    const estaQuitado = localQuitar.includes(permId)
+    const estaEfectivo = efectivos.includes(permId)
+
+    if (estaEfectivo) {
+      // Quitar el permiso
+      if (enBase) {
+        // Quitar del base → agregar a quitar
+        setLocalQuitar(prev => [...prev, permId])
+        setLocalAgregar(prev => prev.filter(p => p !== permId))
+      } else {
+        // Era agregado extra → quitar de agregar
+        setLocalAgregar(prev => prev.filter(p => p !== permId))
+      }
+    } else {
+      // Agregar el permiso
+      if (estaQuitado) {
+        // Era quitado del base → quitarlo de quitar (restaurar)
+        setLocalQuitar(prev => prev.filter(p => p !== permId))
+      } else {
+        // No estaba en base ni agregado → agregar como extra
+        setLocalAgregar(prev => [...prev, permId])
+      }
+    }
+    setHasChanges(true)
   }
 
-  const toggleCategoria = (rol: string, categoria: Categoria, checked: boolean) => {
-    setPermisos((prev) => {
-      const next = { ...prev }
-      const set = new Set(next[rol])
-      categoria.permisos.forEach((p) => {
-        if (checked) set.add(p.id)
-        else set.delete(p.id)
+  // Toggle toda una categoria
+  const toggleCategoria = (cat: Categoria) => {
+    const permIds = cat.permisos.map(p => p.id)
+    const todosActivos = permIds.every(p => efectivos.includes(p))
+    
+    if (todosActivos) {
+      // Quitar todos
+      permIds.forEach(pid => {
+        const enBase = permisosData?.permisosBase.includes(pid) || false
+        if (enBase) {
+          if (!localQuitar.includes(pid)) setLocalQuitar(prev => [...prev, pid])
+        } else {
+          setLocalAgregar(prev => prev.filter(p => p !== pid))
+        }
       })
-      next[rol] = set
-      return next
-    })
+    } else {
+      // Activar todos
+      permIds.forEach(pid => {
+        const estaQuitado = localQuitar.includes(pid)
+        const enBase = permisosData?.permisosBase.includes(pid) || false
+        if (estaQuitado) {
+          setLocalQuitar(prev => prev.filter(p => p !== pid))
+        } else if (!enBase && !localAgregar.includes(pid)) {
+          setLocalAgregar(prev => [...prev, pid])
+        }
+      })
+    }
+    setHasChanges(true)
   }
 
-  const isCategoriaCompleta = (rol: string, categoria: Categoria) => {
-    return categoria.permisos.every((p) => permisos[rol]?.has(p.id))
-  }
-
-  const isCategoriaParcial = (rol: string, categoria: Categoria) => {
-    const count = categoria.permisos.filter((p) => permisos[rol]?.has(p.id)).length
-    return count > 0 && count < categoria.permisos.length
-  }
-
+  // Guardar
   const handleSave = async () => {
+    if (!selectedUserId) return
     setSaving(true)
     try {
-      // Por ahora, los permisos están definidos en el código (lib/auth.ts).
-      // Este módulo sirve como visualización documental y referencia.
-      // En el futuro se puede persistir en BD si se requiere.
-      toast.success('Esquema de permisos documentado. Los cambios en código requieren deploy.')
-      // Pequeña demora para UX
-      await new Promise((r) => setTimeout(r, 800))
-    } catch (e) {
-      console.error(e)
-      toast.error('Error al guardar')
+      const res = await fetch(`/api/usuarios/${selectedUserId}/permisos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agregar: localAgregar,
+          quitar: localQuitar,
+        }),
+      })
+      if (res.ok) {
+        toast.success('Permisos guardados correctamente')
+        setHasChanges(false)
+        loadPermisos(selectedUserId)
+      } else {
+        const data = await res.json()
+        toast.error(data.error || 'Error al guardar')
+      }
+    } catch {
+      toast.error('Error de conexion')
     } finally {
       setSaving(false)
     }
   }
 
+  // Restaurar a los del rol
   const handleReset = () => {
-    setPermisos(() => {
-      const init: Record<string, Set<string>> = {}
-      for (const rol of Object.keys(DEFAULT_PERMISOS)) {
-        init[rol] = new Set(DEFAULT_PERMISOS[rol])
-      }
-      return init
-    })
-    toast.info('Permisos restaurados a valores por defecto')
+    setLocalAgregar([])
+    setLocalQuitar([])
+    setHasChanges(true)
+    toast.info('Permisos restaurados al rol base')
   }
 
   return (
@@ -364,132 +404,226 @@ export function PermisosModule() {
       <div>
         <h2 className="text-xl font-bold text-[#0f2044] flex items-center gap-2">
           <Shield className="w-5 h-5" />
-          Permisos del Sistema por Rol
+          Permisos del Sistema
         </h2>
         <p className="text-sm text-gray-600 mt-1">
-          Define qué acciones puede realizar cada tipo de usuario en el sistema.
+          Administra los permisos de visualizacion y edicion de cada trabajador segun su perfil.
         </p>
       </div>
 
-      {/* Info banner */}
+      {/* Info */}
       <Alert className="bg-blue-50 border-blue-200">
         <Info className="h-4 w-4 text-blue-600" />
         <AlertDescription className="text-blue-800 text-sm">
-          <strong>Cómo funciona:</strong> Cada columna representa un rol. Marca o desmarca los permisos según corresponda.
-          El rol <strong>Administrador</strong> tiene acceso total y sus permisos no se pueden modificar (bloqueado por seguridad).
-          Los cambios aplican inmediatamente a nuevos usuarios creados; usuarios existentes conservan sus permisos actuales.
+          <strong>Como funciona:</strong> Selecciona un trabajador. Su permisos base vienen de su rol. 
+          Puedes <Plus className="w-3 h-3 inline" /> <strong>agregar</strong> permisos extra o 
+          <Minus className="w-3 h-3 inline" /> <strong>quitar</strong> permisos del rol base. 
+          Los cambios se aplican inmediatamente al guardar.
         </AlertDescription>
       </Alert>
 
-      {/* Leyenda de roles */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        {ROLES.map((rol) => (
-          <div
-            key={rol.key}
-            className={`border rounded-lg p-3 ${rol.locked ? 'bg-slate-50 border-slate-200' : 'bg-white border-gray-200'}`}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              {rol.icon}
-              <span className="text-xs font-bold">{rol.label}</span>
-              {rol.locked && <Lock className="w-3 h-3 text-slate-400 ml-auto" />}
+      {/* Selector de usuario */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Label className="font-semibold text-[#0f2044] flex items-center gap-2 min-w-fit">
+              <Users className="w-4 h-4" />
+              Seleccionar Trabajador:
+            </Label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger className="w-full max-w-sm">
+                <SelectValue placeholder="Seleccione un usuario..." />
+              </SelectTrigger>
+              <SelectContent>
+                {users
+                  .filter(u => u.rol !== 'admin') // No mostrar admins (siempre tienen todo)
+                  .map(u => (
+                    <SelectItem key={u.id} value={u.id}>
+                      <span className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] font-normal">{u.rol.toUpperCase()}</Badge>
+                        {u.nombre} {u.apellido || ''} ({u.email})
+                      </span>
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Panel de permisos del usuario seleccionado */}
+      {selectedUserId && selectedUser && (
+        <>
+          {/* Info del usuario y resumen */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card className="bg-slate-50">
+              <CardContent className="p-3 text-center">
+                <div className="text-xs text-slate-500">Rol Base</div>
+                <Badge className="mt-1">{selectedUser.rol.toUpperCase()}</Badge>
+              </CardContent>
+            </Card>
+            <Card className="bg-blue-50">
+              <CardContent className="p-3 text-center">
+                <div className="text-xs text-blue-600">Permisos del Rol</div>
+                <div className="text-lg font-bold text-blue-800">{permisosData?.permisosBase.length || 0}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-green-50">
+              <CardContent className="p-3 text-center">
+                <div className="text-xs text-green-600">Permisos Agregados</div>
+                <div className="text-lg font-bold text-green-800">{localAgregar.length}</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-red-50">
+              <CardContent className="p-3 text-center">
+                <div className="text-xs text-red-600">Permisos Quitados</div>
+                <div className="text-lg font-bold text-red-800">{localQuitar.length}</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Botones de accion */}
+          <div className="flex items-center gap-2 justify-between flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                Permisos efectivos: <strong>{efectivos.length}</strong> de {ALL_PERM_IDS.length}
+              </span>
+              {hayCambios && (
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 animate-pulse">
+                  Cambios sin guardar
+                </Badge>
+              )}
             </div>
-            <p className="text-[10px] text-gray-500 leading-tight">{rol.descripcion}</p>
-            <div className="mt-1 text-[10px] font-medium text-[#0f2044]">
-              {permisos[rol.key]?.size || 0} permisos
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleReset}>
+                <RefreshCw className="w-3 h-3 mr-1" />
+                Restaurar al rol
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving || !hayCambios}
+                className="bg-[#0f2044] hover:bg-[#1a3155]"
+              >
+                {saving ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                Guardar
+              </Button>
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Acciones */}
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" onClick={handleReset} disabled={saving}>
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Restaurar defaults
-        </Button>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#0f2044] hover:bg-[#1a3155]">
-          {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Documentar cambios
-        </Button>
-      </div>
-
-      {/* Matriz de permisos por categoría */}
-      {CATEGORIAS.map((cat) => (
-        <Card key={cat.key}>
-          <CardHeader className="py-3">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#0f2044]" />
-              {cat.label}
-              <Badge variant="secondary" className="ml-1">{cat.permisos.length} permisos</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b bg-slate-50">
-                    <th className="text-left p-3 font-bold text-slate-700 sticky left-0 bg-slate-50" style={{ minWidth: '250px' }}>
-                      Permiso
-                    </th>
-                    {ROLES.map((rol) => (
-                      <th key={rol.key} className="p-3 text-center font-bold text-slate-700" style={{ minWidth: '110px' }}>
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="flex items-center gap-1 justify-center">
-                            {rol.icon}
-                            <span className="text-[10px]">{rol.label}</span>
-                          </div>
-                          {permisos[rol.key] && cat.permisos.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              <Checkbox
-                                checked={isCategoriaCompleta(rol.key, cat)}
-                                onCheckedChange={(v) => toggleCategoria(rol.key, cat, !!v)}
-                                disabled={rol.locked}
-                                className="h-3 w-3"
-                              />
-                              <span className="text-[9px] text-slate-500">Todos</span>
-                            </div>
-                          )}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cat.permisos.map((permiso) => (
-                    <tr key={permiso.id} className="border-b last:border-0 hover:bg-slate-50">
-                      <td className="p-3 sticky left-0 bg-white" style={{ minWidth: '250px' }}>
-                        <div className="font-medium text-slate-900">{permiso.label}</div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{permiso.descripcion}</div>
-                        <code className="text-[10px] text-blue-600 bg-blue-50 px-1 rounded">{permiso.id}</code>
-                      </td>
-                      {ROLES.map((rol) => (
-                        <td key={rol.key} className="p-3 text-center">
-                          <Checkbox
-                            checked={permisos[rol.key]?.has(permiso.id) || false}
-                            onCheckedChange={(v) => togglePermiso(rol.key, permiso.id, !!v)}
-                            disabled={rol.locked}
-                            className="h-4 w-4"
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Tabla de permisos */}
+          {loadingUser ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-[#0f2044]" />
             </div>
-          </CardContent>
-        </Card>
-      ))}
+          ) : (
+            CATEGORIAS.map((cat) => {
+              const catPermIds = cat.permisos.map(p => p.id)
+              const todosActivos = catPermIds.every(p => efectivos.includes(p))
+              const algunosActivos = catPermIds.some(p => efectivos.includes(p)) && !todosActivos
+              const noneActivos = catPermIds.every(p => !efectivos.includes(p))
 
-      {/* Footer info */}
-      <Alert className="bg-amber-50 border-amber-200">
-        <Info className="h-4 w-4 text-amber-600" />
-        <AlertDescription className="text-amber-800 text-xs">
-          <strong>Nota técnica:</strong> Los permisos están definidos en <code>src/lib/auth.ts</code> (constante <code>PERMISOS_POR_ROL</code>).
-          Esta vista es la documentación visual oficial. Para modificar permisos a nivel de código, edita ese archivo y haz deploy.
-          Los usuarios individuales pueden tener permisos personalizados que sobrescriben los del rol (gestionable desde el módulo Usuarios).
-        </AlertDescription>
-      </Alert>
+              return (
+                <Card key={cat.key} className={noneActivos ? 'opacity-60' : ''}>
+                  <CardHeader className="py-2.5 px-4">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Checkbox
+                        checked={todosActivos}
+                        ref={(el) => {
+                          if (el) (el as unknown as { indeterminate: boolean }).indeterminate = algunosActivos
+                        }}
+                        onCheckedChange={() => toggleCategoria(cat)}
+                        className="h-4 w-4"
+                      />
+                      <CheckCircle2 className="w-4 h-4 text-[#0f2044]" />
+                      {cat.label}
+                      <Badge variant="secondary" className="ml-1 text-[10px]">
+                        {catPermIds.filter(p => efectivos.includes(p)).length}/{catPermIds.length}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b bg-slate-50/50">
+                          <th className="text-left p-2.5 pl-8 font-semibold text-slate-600 w-[180px]">Permiso</th>
+                          <th className="text-left p-2.5 text-slate-500">Estado</th>
+                          <th className="text-center p-2.5 font-semibold text-slate-600 w-[80px]">
+                            <Eye className="w-3.5 h-3.5 inline mr-1" />Ver/Editar
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cat.permisos.map((perm) => {
+                          const enBase = permisosData?.permisosBase.includes(perm.id) || false
+                          const estaAgregado = localAgregar.includes(perm.id)
+                          const estaQuitado = localQuitar.includes(perm.id)
+                          const estaActivo = efectivos.includes(perm.id)
+
+                          return (
+                            <tr key={perm.id} className="border-b last:border-0 hover:bg-slate-50/50">
+                              <td className="p-2.5 pl-8">
+                                <div className="font-medium text-slate-800">{perm.label}</div>
+                                <code className="text-[10px] text-slate-400">{perm.id}</code>
+                              </td>
+                              <td className="p-2.5">
+                                {estaActivo ? (
+                                  estaAgregado ? (
+                                    <Badge className="bg-green-100 text-green-800 text-[10px]">
+                                      <Plus className="w-2.5 h-2.5 mr-0.5" /> Agregado
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-blue-100 text-blue-800 text-[10px]">
+                                      <CheckCircle2 className="w-2.5 h-2.5 mr-0.5" /> Del rol
+                                    </Badge>
+                                  )
+                                ) : (
+                                  estaQuitado ? (
+                                    <Badge className="bg-red-100 text-red-800 text-[10px]">
+                                      <Minus className="w-2.5 h-2.5 mr-0.5" /> Quitado
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-slate-100 text-slate-500 text-[10px]">
+                                      <EyeOff className="w-2.5 h-2.5 mr-0.5" /> Sin acceso
+                                    </Badge>
+                                  )
+                                )}
+                              </td>
+                              <td className="p-2.5 text-center">
+                                <Checkbox
+                                  checked={estaActivo}
+                                  onCheckedChange={() => togglePermiso(perm.id)}
+                                  className="h-4 w-4"
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )
+            })
+          )}
+
+          {/* Leyenda */}
+          <div className="flex items-center gap-4 flex-wrap text-xs text-slate-600">
+            <span className="flex items-center gap-1"><Badge className="bg-blue-100 text-blue-800 text-[10px]">Del rol</Badge> Viene del perfil base</span>
+            <span className="flex items-center gap-1"><Badge className="bg-green-100 text-green-800 text-[10px]">Agregado</Badge> Permiso extra otorgado</span>
+            <span className="flex items-center gap-1"><Badge className="bg-red-100 text-red-800 text-[10px]">Quitado</Badge> Revocado del perfil base</span>
+            <span className="flex items-center gap-1"><Badge className="bg-slate-100 text-slate-500 text-[10px]">Sin acceso</Badge> No tiene este permiso</span>
+          </div>
+        </>
+      )}
+
+      {/* Sin seleccion */}
+      {!selectedUserId && !loading && (
+        <div className="text-center py-12 text-slate-400">
+          <UserCog className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Selecciona un trabajador para administrar sus permisos</p>
+        </div>
+      )}
     </div>
   )
 }

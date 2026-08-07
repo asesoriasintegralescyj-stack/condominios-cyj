@@ -64,7 +64,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

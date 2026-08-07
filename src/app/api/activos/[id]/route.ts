@@ -15,7 +15,7 @@ export async function GET(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -61,7 +61,7 @@ export async function PUT(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -125,7 +125,7 @@ export async function DELETE(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.eliminar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'activos.eliminar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

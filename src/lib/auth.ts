@@ -291,13 +291,34 @@ export async function deleteSession(token: string): Promise<void> {
 /**
  * Obtiene la sesión actual desde las cookies
  */
-export async function getCurrentSession(): Promise<{ userId: string; user: SafeUser } | null> {
+/**
+ * Tipo de sesión con permisos personalizados del usuario
+ */
+export type SessionWithPermisos = {
+  userId: string;
+  user: SafeUser;
+  userPermisos: string | null; // Campo `permisos` del DB (JSON con agregar/quitar)
+};
+
+export async function getCurrentSession(): Promise<SessionWithPermisos | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   
   if (!token) return null;
   
-  return verifySession(token);
+  const result = await verifySession(token);
+  if (!result) return null;
+  
+  // Obtener los permisos personalizados del usuario desde DB
+  const userRecord = await db.user.findUnique({
+    where: { id: result.userId },
+    select: { permisos: true },
+  });
+  
+  return {
+    ...result,
+    userPermisos: userRecord?.permisos || null,
+  };
 }
 
 /**
@@ -745,16 +766,37 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
 };
 
 /**
- * Verifica si un usuario tiene un permiso específico
+ * Obtiene todos los permisos de un rol, combinados con overrides personalizados del usuario.
+ * El campo `permisos` del usuario en DB tiene formato:
+ *   { "agregar": ["modulo.ver", ...], "quitar": ["modulo.editar", ...] }
+ *
+ * Lógica: permisos del rol base + permisos agregados individualmente - permisos quitados individualmente.
  */
-export function hasPermission(rol: string, permiso: string): boolean {
-  const permisos = PERMISOS_POR_ROL[rol as Rol] || [];
-  return permisos.includes(permiso);
+export function getPermissions(rol: string, userPermisosOverride?: string | null): string[] {
+  const base = PERMISOS_POR_ROL[rol as Rol] || [];
+  if (!userPermisosOverride) return [...base];
+
+  try {
+    const override = JSON.parse(userPermisosOverride);
+    const agregar: string[] = Array.isArray(override.agregar) ? override.agregar : [];
+    const quitar: string[] = Array.isArray(override.quitar) ? override.quitar : [];
+
+    // Base + lo que se agrega individualmente
+    const combined = [...base, ...agregar];
+
+    // Quitar los que se han revocado (sin duplicar)
+    const removeSet = new Set(quitar);
+    return combined.filter(p => !removeSet.has(p));
+  } catch {
+    return [...base];
+  }
 }
 
 /**
- * Obtiene todos los permisos de un rol
+ * Verifica si un usuario tiene un permiso específico.
+ * Soporta overrides personalizados por usuario.
  */
-export function getPermissions(rol: string): string[] {
-  return PERMISOS_POR_ROL[rol as Rol] || [];
+export function hasPermission(rol: string, permiso: string, userPermisosOverride?: string | null): boolean {
+  const permisos = getPermissions(rol, userPermisosOverride);
+  return permisos.includes(permiso);
 }

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Verificar permiso
-    if (!hasPermission(session.user.rol, 'usuarios.ver')) {
+    if (!hasPermission(session.user.rol, 'usuarios.ver', session.userPermisos)) {
       return NextResponse.json(
         { error: 'No tiene permisos para ver usuarios' },
         { status: 403 }
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Verificar permiso
-    if (!hasPermission(session.user.rol, 'usuarios.crear')) {
+    if (!hasPermission(session.user.rol, 'usuarios.crear', session.userPermisos)) {
       return NextResponse.json(
         { error: 'No tiene permisos para crear usuarios' },
         { status: 403 }

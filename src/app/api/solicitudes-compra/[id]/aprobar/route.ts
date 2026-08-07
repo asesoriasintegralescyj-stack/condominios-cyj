@@ -73,7 +73,7 @@ export async function POST(
     return apiError('Solo el Administrador puede realizar esta acción.', 403)
   }
   // Doble validación por permiso (por si el rol tiene permisos personalizados)
-  if (!hasPermission(session.user.rol, permisoRequerido)) {
+  if (!hasPermission(session.user.rol, permisoRequerido, session.userPermisos)) {
     return apiError(`No tiene permisos para realizar esta acción (${accion})`, 403)
   }
 

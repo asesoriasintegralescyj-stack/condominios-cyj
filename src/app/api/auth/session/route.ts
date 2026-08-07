@@ -20,7 +20,8 @@ export async function GET() {
       );
     }
     
-    const permisos = getPermissions(session.user.rol);
+    // Combinar permisos del rol con overrides personalizados del usuario
+    const permisos = getPermissions(session.user.rol, session.userPermisos);
     
     return NextResponse.json({
       authenticated: true,
