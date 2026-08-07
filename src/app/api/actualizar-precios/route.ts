@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 /**
  * Endpoint para refrescar los valores del sistema de inventario.
  *

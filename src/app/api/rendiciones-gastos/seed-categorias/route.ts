@@ -2,6 +2,9 @@ import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, apiSuccess, handlePrismaError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const CONDOMINIO_LAGUNA_NORTE = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
 const DEFAULT_CATEGORIAS = [

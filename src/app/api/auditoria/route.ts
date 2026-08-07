@@ -15,6 +15,9 @@ import { Prisma } from '@prisma/client'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession();
   if (!session) return apiError('No autenticado', 401);

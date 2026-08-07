@@ -3,6 +3,9 @@ import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import ZAI from 'z-ai-web-dev-sdk'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 /**
  * Endpoint que devuelve el mejor precio (más bajo) de un producto entre
  * las 5 tiendas: Sodimac, Easy, Imperial, Construplaza y MercadoLibre.

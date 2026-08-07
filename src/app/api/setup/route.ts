@@ -15,6 +15,9 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 export async function GET() {
   // Bloquear creación de admin en producción
   if (process.env.NODE_ENV === 'production') {

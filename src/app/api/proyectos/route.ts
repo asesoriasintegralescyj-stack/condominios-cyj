@@ -4,6 +4,9 @@ import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
 // Tipo para los recursos relacionados

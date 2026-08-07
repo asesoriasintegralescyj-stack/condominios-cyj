@@ -17,6 +17,9 @@ import {
   decrypt,
 } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Obtener usuario por ID
 export async function GET(
   request: NextRequest,

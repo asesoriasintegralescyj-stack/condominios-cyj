@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission, decrypt } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - List all ordenes de trabajo
 // Para rol 'personal': solo devuelve las OT asignadas al trabajador (vía email → Personal.id)
 export async function GET(request: NextRequest) {

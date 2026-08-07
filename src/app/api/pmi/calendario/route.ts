@@ -4,6 +4,9 @@ import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 import { leCorrespondeALaFecha } from '@/lib/pmi/lv-data'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Calendario mensual de LVs programadas
 // ?mes=YYYY-MM → devuelve { "YYYY-MM-DD": [lvs programadas] } para todo el mes
 // Si no se pasa mes, se usa el mes actual.

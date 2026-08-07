@@ -3,6 +3,8 @@ import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * IMPORTACIÓN MASIVA DE MATERIALES DESDE CSV/JSON.
  *

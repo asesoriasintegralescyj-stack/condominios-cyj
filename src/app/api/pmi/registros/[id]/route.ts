@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // PUT - Actualizar un registro de LV (cambiar estado, observaciones, items)
 export async function PUT(
   request: NextRequest,

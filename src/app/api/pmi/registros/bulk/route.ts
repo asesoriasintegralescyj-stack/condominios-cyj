@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // POST - Operación masiva sobre registros de un día
 // Body: { fecha: 'YYYY-MM-DD', lvIds?: string[], accion: 'completar' | 'desmarcar' | 'eliminar' }
 export async function POST(request: NextRequest) {

@@ -121,9 +121,15 @@ export function Dashboard() {
   useEffect(() => {
     const fetchData = () => {
       fetch('/api/dashboard')
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(`Error del servidor (${res.status})`)
+          return res.json()
+        })
         .then(d => { setData(d); setLoading(false) })
-        .catch(() => setLoading(false))
+        .catch(err => {
+          console.error('Error al cargar dashboard:', err)
+          setLoading(false)
+        })
     }
     fetchData()
     const interval = setInterval(fetchData, 300000) // 5 min (optimizado BD)

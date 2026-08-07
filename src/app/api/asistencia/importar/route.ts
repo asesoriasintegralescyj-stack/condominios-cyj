@@ -24,6 +24,9 @@ import {
   calcularCiclo4x4Inicio,
 } from '@/lib/asistencia-engine'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) {

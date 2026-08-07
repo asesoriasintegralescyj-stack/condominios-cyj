@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Registros por fecha (y opcionalmente por lvId)
 // ?fecha=YYYY-MM-DD → devuelve registros de ese día
 // ?lvId=xxx&fecha=YYYY-MM-DD → registros de esa LV en esa fecha

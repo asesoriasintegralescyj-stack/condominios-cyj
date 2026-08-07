@@ -4,6 +4,10 @@ import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 import { LV_DATA } from '@/lib/pmi/lv-data'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+
 // POST - Cargar las 20 LVs del PMI (solo admin)
 // Si una LV con el mismo código ya existe, se actualiza en lugar de crear.
 export async function POST() {

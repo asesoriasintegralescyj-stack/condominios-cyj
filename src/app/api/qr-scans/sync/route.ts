@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+
 /**
  * POST /api/qr-scans/sync
  * Sincroniza escaneos realizados offline por la app móvil de guardias.

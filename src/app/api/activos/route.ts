@@ -4,6 +4,9 @@ import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - List all activos
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()

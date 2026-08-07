@@ -9,6 +9,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
+
 // GET — Obtener una ubicación QR por ID
 export async function GET(
   request: NextRequest,

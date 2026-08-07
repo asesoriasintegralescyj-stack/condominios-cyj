@@ -4,6 +4,9 @@ import { getCurrentSession } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 interface Context {
   params: Promise<{ id: string }>
 }

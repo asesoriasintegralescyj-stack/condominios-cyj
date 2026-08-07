@@ -7,6 +7,9 @@ import {
   type MaterialSolicitud,
 } from '@/lib/email-solicitud-compra'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const CONDOMINIO_LAGUNA_NORTE = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
 // GET - Listar solicitudes de compra con filtros

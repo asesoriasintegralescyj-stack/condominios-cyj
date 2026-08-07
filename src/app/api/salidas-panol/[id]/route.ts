@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // PUT - Registrar ingreso (devolución) de herramienta + LV después de uso
 export async function PUT(
   request: NextRequest,

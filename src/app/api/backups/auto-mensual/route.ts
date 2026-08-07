@@ -43,6 +43,9 @@ import { generateProyectoPdfBuffer, type ProyectoPdfInput } from '@/lib/pdf-proy
 import { generateSolicitudCompraPdfBuffer, type PdfSolicitudCompraInput } from '@/lib/pdf-solicitud-compra'
 import { jsPDF } from 'jspdf'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // Modelos a respaldar en el JSON completo de la BD
 const MODELOS_BACKUP = [
   'condominio', 'propiedad', 'personal', 'user',

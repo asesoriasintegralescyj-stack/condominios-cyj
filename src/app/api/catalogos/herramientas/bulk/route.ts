@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // POST - Bulk create herramientas from CSV data
 export async function POST(request: NextRequest) {
   try {

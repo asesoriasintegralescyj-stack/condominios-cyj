@@ -3,6 +3,9 @@ import { db, withRetry } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Listar todas las LVs (con items parseados)
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()

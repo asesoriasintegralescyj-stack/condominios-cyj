@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // POST - Bulk create personal from CSV data
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()

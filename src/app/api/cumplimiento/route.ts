@@ -4,6 +4,8 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+
 // Aumentar límite de body size para permitir archivos PDF en base64.
 // Vercel Hobby plan tiene límite de 4.5MB por request; el base64 aumenta
 // el tamaño ~33%, así que un PDF de 3MB se convierte en ~4MB.

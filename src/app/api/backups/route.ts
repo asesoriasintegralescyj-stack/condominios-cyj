@@ -14,6 +14,9 @@ import { Prisma } from '@prisma/client'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // Modelos a respaldar (excluyendo Backup mismo para evitar recursión)
 const MODELOS_BACKUP = [
   'condominio', 'propiedad', 'personal', 'user',

@@ -22,6 +22,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission, logAction } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const ETAPAS = {
   aprobar_supervisor: 'Aprobada Supervisor',
   rechazar_supervisor: 'Rechazada Supervisor',

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Get material by ID
 export async function GET(
   request: NextRequest,

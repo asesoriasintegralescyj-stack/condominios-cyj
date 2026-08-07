@@ -9,6 +9,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Obtener detalle de un respaldo
 export async function GET(
   request: NextRequest,

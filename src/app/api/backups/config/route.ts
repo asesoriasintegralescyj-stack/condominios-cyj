@@ -4,6 +4,9 @@ import { Prisma } from '@prisma/client'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Get backup configuration (requiere admin)
 export async function GET() {
   const session = await getCurrentSession()

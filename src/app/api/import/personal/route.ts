@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // Mapeo de columnas del Excel a campos del modelo
 const fieldMapping: Record<string, string> = {
   'Nombre': 'nombre',

@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Get orden de trabajo by ID
 // Query params:
 //   ?fotos=true  → incluye fotosAntes/fotosDespues (puede ser MUY grande, ~1MB+)

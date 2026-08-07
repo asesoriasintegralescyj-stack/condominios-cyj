@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Get activo by ID
 // Si el header X-Incluir-Manual viene en 'true', se incluyen manualBase64
 // e informeMantencionBase64 (para no inflar el payload por defecto)

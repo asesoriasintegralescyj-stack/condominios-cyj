@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // ─── TYPES ───
 interface ReportData {
   periodo: { desde: string; hasta: string }

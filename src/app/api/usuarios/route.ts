@@ -17,6 +17,9 @@ import {
   createUser,
 } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Listar usuarios
 export async function GET(request: NextRequest) {
   try {

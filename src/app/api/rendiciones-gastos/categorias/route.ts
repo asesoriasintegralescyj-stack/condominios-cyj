@@ -3,6 +3,9 @@ import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError, apiSuccess, handlePrismaError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET: listar categorías activas
 export async function GET() {
   try {

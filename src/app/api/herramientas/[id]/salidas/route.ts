@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // GET - Listar salidas de pañol de una herramienta
 export async function GET(
   request: NextRequest,

@@ -5,6 +5,9 @@ import { apiError } from '@/lib/api-helpers'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // Configuración de la empresa
 const EMPRESA = {
   nombre: 'Asesorías Integrales CyJ',

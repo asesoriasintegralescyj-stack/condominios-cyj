@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 const EMAIL_USER = 'asesoriasintegralescyj@gmail.com'
 const EMAIL_PASS = process.env.EMAIL_PASSWORD || ''
 

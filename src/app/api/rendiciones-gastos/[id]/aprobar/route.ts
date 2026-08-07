@@ -5,6 +5,9 @@ import { apiError, apiSuccess, handlePrismaError } from '@/lib/api-helpers'
 import { sendEmail, emailWrap, escapeHtml } from '@/lib/email'
 import { generateRendicionGastoPdfBuffer, type BoletaPdfRow } from '@/lib/pdf-rendicion-gasto'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // POST: aprobar / rechazar / enviar a revision
 export async function POST(
   req: NextRequest,

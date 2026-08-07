@@ -3,6 +3,9 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
+export const dynamic = 'force-dynamic'
+export const maxDuration = 30
+
 // Categorías predeterminadas basadas en la Ley 21.442 de Copropiedad Inmobiliaria de Chile
 const CATEGORIAS_DEFAULT = [
   // Documentos Legales
