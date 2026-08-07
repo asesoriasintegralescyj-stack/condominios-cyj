@@ -22,112 +22,90 @@ export async function GET() {
   if (!session) return apiError('No autenticado', 401);
 
   try {
-    // Ejecutar queries con withRetry para reintentar automáticamente
-    // cuando el pool de Aiven se agota intermitentemente.
-    // Se dividen en 2 lotes para no saturar el pool.
-    // Lote 1: Counts y aggregates (10 queries, rápidas)
-    const [
-      totalPersonal,
-      totalActivos,
-      valorActivosAgg,
-      caja,
-      totalCentros,
-      otCompletadasAprobacion,
-      documentosCumplimiento,
-      resumenCumplimiento,
-      scTotal,
-      scMontoAgg,
-    ] = await Promise.all([
-      withRetry(() => db.personal.count()),
-      withRetry(() => db.activo.count()),
-      withRetry(() => db.activo.aggregate({ _sum: { valorActual: true } })),
-      withRetry(() => db.cajaChica.findFirst()),
-      withRetry(() => db.centroCostoMaster.count()),
-      withRetry(() => db.ordenTrabajo.count({ where: { estado: 'Completado' } })),
-      withRetry(() => db.documentoCumplimiento.findMany({
-        select: {
-          id: true,
-          titulo: true,
-          estado: true,
-          cumple: true,
-          fechaVencimiento: true,
-          categoriaId: true,
-        },
-      })),
-      withRetry(() => db.resumenCumplimiento.findFirst()),
-      withRetry(() => db.solicitudCompra.count()),
-      withRetry(() => db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } })),
-    ]);
+    // Ejecutar queries SECUENCIALMENTE para no saturar el pool de Aiven.
+    // Antes se usaba Promise.all con 10+ queries concurrentes, lo que
+    // agotaba las conexiones disponibles ("remaining connection slots reserved
+    // for roles with SUPERUSER attribute").
+    // Ahora cada query espera a que la anterior termine antes de ejecutarse.
+    
+    // Counts y aggregates simples
+    const totalPersonal = await withRetry(() => db.personal.count());
+    const totalActivos = await withRetry(() => db.activo.count());
+    const valorActivosAgg = await withRetry(() => db.activo.aggregate({ _sum: { valorActual: true } }));
+    const caja = await withRetry(() => db.cajaChica.findFirst());
+    const totalCentros = await withRetry(() => db.centroCostoMaster.count());
+    const otCompletadasAprobacion = await withRetry(() => db.ordenTrabajo.count({ where: { estado: 'Completado' } }));
+    const documentosCumplimiento = await withRetry(() => db.documentoCumplimiento.findMany({
+      select: {
+        id: true,
+        titulo: true,
+        estado: true,
+        cumple: true,
+        fechaVencimiento: true,
+        categoriaId: true,
+      },
+    }));
+    const resumenCumplimiento = await withRetry(() => db.resumenCumplimiento.findFirst());
+    const scTotal = await withRetry(() => db.solicitudCompra.count());
+    const scMontoAgg = await withRetry(() => db.solicitudCompra.aggregate({ _sum: { totalEstimado: true } }));
 
-    // Lote 2: GroupBy y findMany con relaciones (6 queries, más pesadas)
-    const [
-      otGroupByEstado,
-      otGroupByAprobacion,
-      recentOT,
-      scGroupByEstado,
-      scRecent,
-      centros,
-    ] = await Promise.all([
-      withRetry(() => db.ordenTrabajo.groupBy({
-        by: ['estado'],
-        _count: true,
-      })),
-      withRetry(() => db.ordenTrabajo.groupBy({
-        by: ['estadoAprobacion'],
-        where: { estado: 'Completado' },
-        _count: true,
-      })),
-      withRetry(() => db.ordenTrabajo.findMany({
-        // NO incluir fotosAntes/fotosDespues (pueden ser >1MB cada una)
-        // Las fotos se cargan individualmente al abrir el detalle de la OT
-        select: {
-          id: true,
-          otNum: true,
-          titulo: true,
-          tipo: true,
-          prioridad: true,
-          estado: true,
-          ubicacion: true,
-          fechaInicio: true,
-          fechaLimite: true,
-          fechaInicioReal: true,
-          fechaFinReal: true,
-          costoEstimado: true,
-          costoReal: true,
-          progreso: true,
-          descripcion: true,
-          estadoAprobacion: true,
-          createdAt: true,
-          updatedAt: true,
-          // Excluir explícitamente: fotosAntes, fotosDespues, notas
-          propiedad: { select: { id: true, nombre: true } },
-          asignado: { select: { id: true, nombre: true, cargo: true } },
-          centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 6,
-      })),
-      withRetry(() => db.solicitudCompra.groupBy({
-        by: ['estado'],
-        _count: true,
-      })),
-      withRetry(() => db.solicitudCompra.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          codigo: true,
-          titulo: true,
-          estado: true,
-          prioridad: true,
-          totalEstimado: true,
-          emailEnviado: true,
-          createdAt: true,
-          origenCodigo: true,
-        },
-      })),
-      withRetry(() => db.centroCostoMaster.findMany()),
-    ]);
+    // GroupBy y findMany con relaciones (más pesadas)
+    const otGroupByEstado = await withRetry(() => db.ordenTrabajo.groupBy({
+      by: ['estado'],
+      _count: true,
+    }));
+    const otGroupByAprobacion = await withRetry(() => db.ordenTrabajo.groupBy({
+      by: ['estadoAprobacion'],
+      where: { estado: 'Completado' },
+      _count: true,
+    }));
+    const recentOT = await withRetry(() => db.ordenTrabajo.findMany({
+      select: {
+        id: true,
+        otNum: true,
+        titulo: true,
+        tipo: true,
+        prioridad: true,
+        estado: true,
+        ubicacion: true,
+        fechaInicio: true,
+        fechaLimite: true,
+        fechaInicioReal: true,
+        fechaFinReal: true,
+        costoEstimado: true,
+        costoReal: true,
+        progreso: true,
+        descripcion: true,
+        estadoAprobacion: true,
+        createdAt: true,
+        updatedAt: true,
+        propiedad: { select: { id: true, nombre: true } },
+        asignado: { select: { id: true, nombre: true, cargo: true } },
+        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 6,
+    }));
+    const scGroupByEstado = await withRetry(() => db.solicitudCompra.groupBy({
+      by: ['estado'],
+      _count: true,
+    }));
+    const scRecent = await withRetry(() => db.solicitudCompra.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        codigo: true,
+        titulo: true,
+        estado: true,
+        prioridad: true,
+        totalEstimado: true,
+        emailEnviado: true,
+        createdAt: true,
+        origenCodigo: true,
+      },
+    }));
+    const centros = await withRetry(() => db.centroCostoMaster.findMany());
 
     const countByEstado = (estado: string): number =>
       otGroupByEstado.find(g => g.estado === estado)?._count ?? 0;

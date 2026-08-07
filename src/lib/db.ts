@@ -8,14 +8,16 @@ const globalForPrisma = globalThis as unknown as {
 // Singleton correcto: reutilizar la instancia en desarrollo para evitar
 // quedarse sin conexiones durante hot-reload de Next.js.
 //
-// OPTIMIZADO: En producción (Vercel Pro + Aiven) usamos connection_limit=3
-// y pool_timeout=30s. Con el plan Pro hay más capacidad de servidorless
-// functions, permitiendo mayor paralelismo sin saturar el pool de Aiven.
+// OPTIMIZADO: En producción (Vercel + Aiven) usamos connection_limit=1
+// para evitar saturar el pool de conexiones de Aiven.
+// Cada serverless function usa su propia conexión, y con múltiples
+// funciones ejecutándose en paralelo, un límite mayor causa:
+// "remaining connection slots are reserved for SUPERUSER"
 //
-// Antes: connection_limit=1 (free tier)
-// Ahora: connection_limit=3 (plan Pro)
+// Antes: connection_limit=3 (causaba saturación)
+// Ahora: connection_limit=1 (una conexión por función, más seguro)
 const databaseUrl = process.env.DATABASE_URL || ''
-const connectionLimit = 3
+const connectionLimit = 1
 const poolTimeout = 30
 
 const connectionString = databaseUrl.includes('?')
@@ -46,17 +48,18 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
  *  - Reinicios del servicio gratuito
  *  - "Too many database connections opened"
  *
- * Esta función reintenta la operación hasta 3 veces (reducido de 5) con
- * backoff exponencial antes de propagar el error. Reducimos de 5 a 3
- * reintentos para no bloquear serverless functions por más de ~10s.
+ * Esta función reintenta hasta 5 veces con backoff exponencial.
+ * Para errores de saturación de conexiones, agrega un delay extra
+ * de 2s antes del backoff normal para dar tiempo a que otras
+ * serverless functions liberen sus conexiones.
  *
  * Uso:
  *   const personal = await withRetry(() => db.personal.findMany())
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelayMs: number = 500
+  maxRetries: number = 5,
+  baseDelayMs: number = 800
 ): Promise<T> {
   let lastError: unknown
 
@@ -100,7 +103,17 @@ export async function withRetry<T>(
         throw error
       }
 
-      // Backoff exponencial: 500ms, 1000ms, 2000ms
+      // Si es error de saturación de conexiones, agregar delay extra
+      // para dar chance a que otras funciones liberen sus pools
+      const isSaturation = err?.message?.includes('Too many database connections') ||
+        err?.message?.includes('remaining connection slots') ||
+        err?.message?.includes('too many clients already')
+
+      if (isSaturation) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+
+      // Backoff exponencial: 800ms, 1600ms, 3200ms, 6400ms, 12800ms
       const delay = baseDelayMs * Math.pow(2, attempt - 1)
       console.warn(
         `[withRetry] Intento ${attempt}/${maxRetries} falló (${err?.code || 'unknown'}), ` +

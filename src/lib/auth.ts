@@ -3,7 +3,7 @@
  * Condominio Laguna Norte - Sistema de Gestión v2
  */
 
-import { db } from '@/lib/db';
+import { db, withRetry } from '@/lib/db';
 import { randomBytes, randomInt, createCipheriv, createDecipheriv, createHash, scryptSync } from 'crypto';
 import { cookies } from 'next/headers';
 import * as bcrypt from 'bcrypt';
@@ -215,7 +215,8 @@ export async function verifySession(token: string): Promise<{ userId: string; us
   if (!token) return null;
   
   // Usar queryRaw en vez de db.session.findUnique (que requiere relaciones)
-  const sessions = await db.$queryRawUnsafe(`
+  // Envuelto en withRetry para reintentar si el pool de conexiones está saturado
+  const sessions = await withRetry(() => db.$queryRawUnsafe(`
     SELECT s.*, u."id" as u_id, u."email" as u_email, u."nombre" as u_nombre, u."apellido" as u_apellido,
            u."rut" as u_rut, u."telefono" as u_telefono, u."direccion" as u_direccion, u."rol" as u_rol,
            u."permisos" as u_permisos, u."activo" as u_activo, u."emailVerificado" as u_emailVerificado,
@@ -224,7 +225,7 @@ export async function verifySession(token: string): Promise<{ userId: string; us
     FROM "Session" s
     JOIN "User" u ON s."userId" = u."id"
     WHERE s."token" = $1 LIMIT 1
-  `, token) as any[]
+  `, token) as any[])
 
   const sessionRow = sessions[0]
   if (!sessionRow) return null
@@ -346,7 +347,7 @@ export async function authenticateUser(
   ip?: string
 ): Promise<{ success: boolean; error?: string; token?: string }> {
   // Usar queryRaw para evitar problemas de compatibilidad del Prisma client
-  const users = await db.$queryRawUnsafe(`SELECT * FROM "User" WHERE email = $1 LIMIT 1`, email.toLowerCase()) as any[]
+  const users = await withRetry(() => db.$queryRawUnsafe(`SELECT * FROM "User" WHERE email = $1 LIMIT 1`, email.toLowerCase()) as any[])
   const user = users[0]
   
   // Usuario no encontrado
