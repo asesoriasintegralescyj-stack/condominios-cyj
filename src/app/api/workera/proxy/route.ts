@@ -18,6 +18,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1'
+// IP del cliente en Chile — se envía como header para intentar bypass de geo-block
+const CHILE_CLIENT_IP = '181.43.202.93'
 
 export const runtime = 'edge'
 export const dynamic = 'force-dynamic'
@@ -71,6 +73,12 @@ async function workeraFetch(endpoint: string, params: Record<string, string>): P
       'API_USER': apiUser,
       'API_KEY': apiKey,
       'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      // Headers clave: intentan hacer que Workera vea la petición como originada desde Chile
+      'ip_client': CHILE_CLIENT_IP,
+      'X-Forwarded-For': CHILE_CLIENT_IP,
+      'X-Real-IP': CHILE_CLIENT_IP,
     },
   })
 
@@ -105,6 +113,7 @@ export async function GET(request: NextRequest) {
       apiBase: WORKERA_BASE_URL,
       credentials: isUsingEnv ? 'env_vars' : 'fallback_embedded',
       cacheSize: cache.size,
+      ipClientHeader: CHILE_CLIENT_IP,
       edgeLocation: {
         country: request.headers.get('x-vercel-ip-country') || 'unknown',
         city: request.headers.get('x-vercel-edge-city') || 'unknown',

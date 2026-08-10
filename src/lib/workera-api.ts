@@ -420,6 +420,8 @@ async function workeraFetchDirect(endpoint: string, params?: Record<string, stri
       'Accept': 'application/json',
       'Content-Type': 'application/json',
       'Accept-Language': 'es-CL,es;q=0.9',
+      // Header ip_client: intenta bypass de geo-block enviando IP del cliente chileno
+      'ip_client': '181.43.202.93',
     },
   });
 
