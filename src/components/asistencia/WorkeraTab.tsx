@@ -393,28 +393,53 @@ export function WorkeraTab() {
   const [attendancePage, setAttendancePage] = useState(1)
   const [attendanceTotalPages, setAttendanceTotalPages] = useState(1)
 
-  // Verificar conexión al montar - cascada de 3 modos
+  // Verificar conexión al montar - cascada: Directo → Cloudflare → Proxy
   useEffect(() => {
     const testConnection = async () => {
       try {
         setLoadingView(prev => ({ ...prev, test: true }))
-        
-        // MODO 1: Cloudflare Worker (desde Santiago, Chile - sin geo-block)
-        if (hasCloudflareWorker()) {
+
+        // MODO 1: DIRECTO desde navegador (el usuario en Chile hace fetch directo)
+        // Workera tiene CORS habilitado (*) y la IP chilena evita geo-block
+        const credRes = await fetch('/api/workera/credentials')
+        if (credRes.ok) {
+          const creds = await credRes.json()
+          setConnectionMode('direct', creds.apiUser, creds.apiKey)
           try {
             const branches = await workeraApi.getBranchOffices(1)
             setSucursales(branches.data || [])
             setConnected(true)
             setConnectionError(null)
-            toast.success('Conectado via Cloudflare Worker (Chile)')
+            toast.success('Conectado directamente desde tu navegador (Chile)')
+            return
+          } catch (directErr: any) {
+            const isGeoBlocked = directErr.geoBlocked ||
+              directErr.message?.includes('406') ||
+              directErr.message?.includes('bloqueada') ||
+              directErr.message?.includes('Country request');
+            if (!isGeoBlocked) throw directErr
+            console.warn('Modo directo geo-bloqueado (usuario no esta en Chile?), intentando Cloudflare Worker...')
+          }
+        } else {
+          console.warn('No se pudieron obtener credenciales del servidor')
+        }
+
+        // MODO 2: Cloudflare Worker (si esta configurado y el usuario esta en Chile)
+        if (hasCloudflareWorker()) {
+          try {
+            setConnectionMode('cloudflare')
+            const branches = await workeraApi.getBranchOffices(1)
+            setSucursales(branches.data || [])
+            setConnected(true)
+            setConnectionError(null)
+            toast.success('Conectado via Cloudflare Worker')
             return
           } catch (cfErr: any) {
             console.warn('Cloudflare Worker fallo:', cfErr.message)
-            // Continuar al siguiente modo
           }
         }
 
-        // MODO 2: Proxy Servidor (Edge Function Vercel - puede ser geo-bloqueado)
+        // MODO 3: Proxy Servidor (Edge Function Vercel - probablemente geo-bloqueado)
         setConnectionMode('proxy')
         try {
           const branches = await workeraApi.getBranchOffices(1)
@@ -424,34 +449,22 @@ export function WorkeraTab() {
           toast.success('Conectado via proxy servidor')
           return
         } catch (proxyErr: any) {
-          const isGeoBlocked = proxyErr.geoBlocked || 
-            proxyErr.message?.includes('Country request') || 
+          const isGeoBlocked = proxyErr.geoBlocked ||
+            proxyErr.message?.includes('Country request') ||
             proxyErr.message?.includes('406') ||
             proxyErr.message?.includes('bloqueada');
-
           if (!isGeoBlocked) throw proxyErr
-          console.warn('Proxy geo-bloqueado, intentando modo directo...')
-        }
-
-        // MODO 3: Directo desde navegador (requiere credenciales + CORS)
-        const credRes = await fetch('/api/workera/credentials')
-        if (credRes.ok) {
-          const creds = await credRes.json()
-          setConnectionMode('direct', creds.apiUser, creds.apiKey)
-          const branches = await workeraApi.getBranchOffices(1)
-          setSucursales(branches.data || [])
-          setConnected(true)
-          setConnectionError(null)
-          toast.success('Conectado en modo directo (desde tu navegador)')
-          return
+          console.warn('Proxy geo-bloqueado tambien')
         }
 
         // Todos los modos fallaron
         setConnected(false)
         setConnectionError(
-          'No se pudo conectar con Workera. El proxy del servidor esta bloqueado geograficamente y las llamadas directas desde el navegador son bloqueadas por CORS. ' +
-          'SOLUCION: Desplegar el Cloudflare Worker incluido en /workera-proxy-worker/ (ver README). ' +
-          'El Worker corre en Santiago (Chile) y evita ambos bloqueos. Costo: GRATIS (100,000 peticiones/dia).'
+          'No se pudo conectar con Workera. Todos los modos de conexion fallaron:\n' +
+          '- Directo: posiblemente no estas en Chile\n' +
+          '- Cloudflare Worker: Workera bloquea IPs de Cloudflare\n' +
+          '- Proxy: Workera bloquea servidores extranjeros\n\n' +
+          'SOLUCION: Asegurate de estar conectado desde una red chilena.'
         )
       } catch (err: any) {
         setConnected(false)

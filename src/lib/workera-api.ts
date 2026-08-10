@@ -1,23 +1,24 @@
 /**
- * Cliente API Workera v1.4 CL
+ * Cliente API Workera v2.0 CL
  * --------------------------
  * Servicio para interactuar con la API REST de Workera Chile.
  * 
- * ARQUITECTURA TRIPLE (cascada automática):
+ * ARQUITECTURA DE CONEXIÓN:
  * 
- * 1. Modo Cloudflare Worker (RECOMENDADO):
- *    - Petición desde navegador → Worker de Cloudflare en Santiago (Chile)
- *    - El Worker hace fetch a Workera desde IP chilena
- *    - SIN geo-block, SIN problemas de CORS
- *    - Requiere: Worker deployado en Cloudflare con secrets WORKERA_API_USER/KEY
+ * MODO DIRECTO (PRINCIPAL - RECOMENDADO):
+ *    - El navegador del usuario (en Chile) hace fetch directo a api.workera.com
+ *    - Workera tiene CORS habilitado (access-control-allow-origin: *)
+ *    - La IP del usuario es chilena → sin geo-block
+ *    - Credenciales obtenidas del servidor (solo admin)
  * 
- * 2. Modo Proxy Servidor (Edge Function):
- *    - Petición desde navegador → Edge Function en Vercel
- *    - LIMITACIÓN: Workera bloquea desde servidores no chilenos
+ * MODO CLOUDFLARE WORKER (fallback):
+ *    - Cloudflare Workers NO pueden evadir geo-block (fetch sale del mismo PoP)
+ *    - Solo funciona si el usuario está en Chile (PoP chileno)
+ *    - LIMITADO: Si Workera bloquea IPs de Cloudflare, no funciona
  * 
- * 3. Modo Directo + CORS Proxy (fallback):
- *    - Petición desde navegador → CORS proxy público → Workera
- *    - LIMITACIÓN: CORS proxies públicos son poco confiables
+ * MODO PROXY SERVIDOR (último recurso):
+ *    - Edge Function en Vercel (generalmente sale desde EE.UU.)
+ *    - Workera bloquea peticiones desde servidores no chilenos
  */
 
 // ============================================================
@@ -264,7 +265,7 @@ export const ORIGIN_LABELS: Record<string, string> = {
 
 export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
 
-let _connectionMode: ConnectionMode = 'cloudflare';
+let _connectionMode: ConnectionMode = 'direct';
 let _apiUser = '';
 let _apiKey = '';
 
@@ -317,7 +318,9 @@ function buildParamsUrl(baseUrl: string, endpoint: string, params?: Record<strin
 }
 
 /**
- * Modo 1: Cloudflare Worker (corre en Santiago, Chile)
+ * Modo Cloudflare Worker: fallback cuando el modo directo falla
+ * NOTA: Cloudflare Workers NO evaden geo-block. Solo funcionan
+ * si el usuario está en Chile (PoP chileno).
  */
 async function workeraFetchCloudflare(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
   if (!CLOUDFLARE_WORKER_URL) {
@@ -365,7 +368,9 @@ async function workeraFetchProxy(endpoint: string, params?: Record<string, strin
 }
 
 /**
- * Modo 3: Directo desde navegador (fallback con CORS proxy)
+ * Modo Directo: Fetch desde el navegador del usuario (en Chile)
+ * Workera tiene CORS habilitado (access-control-allow-origin: *)
+ * La IP del usuario en Chile evita el geo-block.
  */
 async function workeraFetchDirect(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
   if (!_apiUser || !_apiKey) {
@@ -374,28 +379,36 @@ async function workeraFetchDirect(endpoint: string, params?: Record<string, stri
 
   const workeraUrl = buildUrl(endpoint, params);
 
-  // Intentar llamada directa (Workera podría tener CORS habilitado en el futuro)
-  try {
-    const response = await fetch(workeraUrl, {
-      method: 'GET',
-      headers: {
-        'API_USER': _apiUser,
-        'API_KEY': _apiKey,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-    });
-    if (response.ok) return response.json();
-  } catch {
-    // CORS bloqueó, intentar con proxy
+  const response = await fetch(workeraUrl, {
+    method: 'GET',
+    headers: {
+      'API_USER': _apiUser,
+      'API_KEY': _apiKey,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Accept-Language': 'es-CL,es;q=0.9',
+    },
+  });
+
+  // Geo-block: Workera retorna 406 con HTML
+  if (response.status === 406) {
+    const error: any = new Error('Workera bloqueo la peticion por geo-restriccion (406)');
+    error.geoBlocked = true;
+    throw error;
   }
 
-  // Si no hay Worker de Cloudflare, no hay CORS proxy funcional
-  throw new Error(
-    'Workera bloquea peticiones desde servidores extranjeros (proxy) y ' +
-    'no tiene CORS habilitado para llamadas desde el navegador (directo). ' +
-    'Se necesita el Cloudflare Worker desplegado para conectar desde Chile.'
-  );
+  // Otros errores HTTP
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    let errorData: any = {};
+    try { errorData = JSON.parse(text); } catch {}
+    const error: any = new Error(`Workera API ${response.status}: ${errorData.message || text.substring(0, 200)}`);
+    error.status = response.status;
+    error.geoBlocked = response.status === 406;
+    throw error;
+  }
+
+  return response.json();
 }
 
 /**
@@ -619,4 +632,4 @@ export const workeraApi = {
     return fetchAllPages<WorkeraDepartment>('department');
   },
 };
-// trigger deploy
+// v2.0: modo directo como principal
