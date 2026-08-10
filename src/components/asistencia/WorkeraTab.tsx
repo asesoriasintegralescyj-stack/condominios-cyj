@@ -3,14 +3,13 @@
 /**
  * Pestaña Workera - Integración con API Workera v1.4 CL
  * ---------------------------------------------------
- * Permite sincronizar datos de asistencia desde Workera directamente
- * desde el navegador del admin (en Chile) para evitar el bloqueo
- * geográfico que aplica Workera a servidores extranjeros.
+ * Permite sincronizar datos de asistencia desde Workera.
+ * Todas las llamadas pasan por un proxy servidor (/api/workera/proxy)
+ * para evitar problemas de CORS.
  * 
  * Flujo:
- * 1. Al montar, obtiene credenciales desde /api/workera/credentials
- * 2. Con las credenciales, llama directamente a la API de Workera
- * 3. Muestra datos de sucursales, empleados, marcaciones, turnos, permisos
+ * 1. Al montar, intenta conectar a Workera via proxy
+ * 2. Muestra datos de sucursales, empleados, marcaciones, turnos, permisos
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -355,10 +354,8 @@ function EmpleadosTable({ empleados }: { empleados: WorkeraEmployee[] }) {
 export function WorkeraTab() {
   const { isAdmin } = useSession()
 
-  // Credenciales
-  const [apiUser, setApiUser] = useState('')
-  const [apiKey, setApiKey] = useState('')
-  const [credentialsLoaded, setCredentialsLoaded] = useState(false)
+  // Estado de conexión
+  const [connectionError, setConnectionError] = useState<string | null>(null)
 
   // Datos
   const [empleados, setEmpleados] = useState<WorkeraEmployee[]>([])
@@ -390,31 +387,33 @@ export function WorkeraTab() {
   const [attendancePage, setAttendancePage] = useState(1)
   const [attendanceTotalPages, setAttendanceTotalPages] = useState(1)
 
-  // Obtener credenciales
+  // Verificar conexión al montar
   useEffect(() => {
-    const fetchCredentials = async () => {
+    const testConnection = async () => {
       try {
-        const res = await fetch('/api/workera/credentials')
-        if (res.ok) {
-          const data = await res.json()
-          setApiUser(data.apiUser)
-          setApiKey(data.apiKey)
-          setCredentialsLoaded(true)
-        } else {
-          toast.error('No se pudieron obtener las credenciales de Workera')
+        setLoadingView(prev => ({ ...prev, test: true }))
+        const branches = await workeraApi.getBranchOffices(1)
+        setSucursales(branches.data || [])
+        setConnected(true)
+        setConnectionError(null)
+      } catch (err: any) {
+        setConnected(false)
+        setConnectionError(err.message)
+        if (err.message?.includes('Country request') || err.message?.includes('406')) {
+          setConnectionError('Workera bloquea peticiones desde servidores extranjeros. Se requiere un proxy en Chile.')
         }
-      } catch {
-        toast.error('Error de conexión al obtener credenciales')
+      } finally {
+        setLoadingView(prev => ({ ...prev, test: false }))
       }
     }
-    fetchCredentials()
+    testConnection()
   }, [])
 
   // Sincronización principal
   const syncData = useCallback(async (view?: string) => {
-    if (!apiUser || !apiKey) return
     const targetView = view || activeView
     setLoadingView(prev => ({ ...prev, [targetView]: true }))
+    setConnectionError(null)
 
     try {
       const commonParams = {
@@ -425,13 +424,13 @@ export function WorkeraTab() {
 
       switch (targetView) {
         case 'empleados': {
-          const res = await workeraApi.getAllEmployees(apiUser, apiKey)
+          const res = await workeraApi.getAllEmployees()
           setEmpleados(res)
           setConnected(true)
           break
         }
         case 'marcaciones': {
-          const res = await workeraApi.getAttendance(apiUser, apiKey, {
+          const res = await workeraApi.getAttendance({
             start: fechaDesde,
             end: fechaHasta,
             page: view ? 1 : attendancePage,
@@ -442,14 +441,14 @@ export function WorkeraTab() {
           if (view) {
             setMarcaciones(res.data || [])
           } else {
-            setMarcaciones(prev => view === undefined ? res.data || [] : [...prev, ...(res.data || [])])
+            setMarcaciones(prev => [...prev, ...(res.data || [])])
           }
           setAttendanceTotalPages(res.totalPages || 1)
           setConnected(true)
           break
         }
         case 'permisos': {
-          const res = await workeraApi.getAllPermissions(apiUser, apiKey, {
+          const res = await workeraApi.getAllPermissions({
             start: fechaDesde,
             end: fechaHasta,
             ...commonParams,
@@ -459,7 +458,7 @@ export function WorkeraTab() {
           break
         }
         case 'turnos': {
-          const res = await workeraApi.getWorkshiftAssigns(apiUser, apiKey, {
+          const res = await workeraApi.getWorkshiftAssigns({
             start: fechaDesde,
             end: fechaHasta,
             ...commonParams,
@@ -469,7 +468,7 @@ export function WorkeraTab() {
           break
         }
         case 'horarios': {
-          const res = await workeraApi.getAllSchedules(apiUser, apiKey, {
+          const res = await workeraApi.getAllSchedules({
             start: fechaDesde,
             end: fechaHasta,
             ...commonParams,
@@ -479,7 +478,7 @@ export function WorkeraTab() {
           break
         }
         case 'horasExtras': {
-          const res = await workeraApi.getAllOvertimeAuthorizations(apiUser, apiKey, {
+          const res = await workeraApi.getAllOvertimeAuthorizations({
             start: fechaDesde,
             end: fechaHasta,
             ...commonParams,
@@ -493,27 +492,31 @@ export function WorkeraTab() {
       setLastSync(new Date().toLocaleTimeString('es-CL'))
     } catch (err: any) {
       setConnected(false)
+      setConnectionError(err.message)
+      if (err.message?.includes('Country request') || err.message?.includes('406')) {
+        setConnectionError('Workera bloquea peticiones desde servidores extranjeros. Se requiere un proxy en Chile.')
+      }
       toast.error(`Error al sincronizar: ${err.message}`)
     } finally {
       setLoadingView(prev => ({ ...prev, [targetView]: false }))
       setLoading(false)
     }
-  }, [apiUser, apiKey, activeView, fechaDesde, fechaHasta, selectedBranch, selectedDept, selectedEmployee, attendancePage])
+  }, [activeView, fechaDesde, fechaHasta, selectedBranch, selectedDept, selectedEmployee, attendancePage])
 
   // Sincronizar todo
   const syncAll = async () => {
     setLoading(true)
+    setConnectionError(null)
     try {
       // Sucursales primero
-      if (apiUser && apiKey) {
-        const branches = await workeraApi.getAllBranchOffices(apiUser, apiKey)
-        setSucursales(branches)
-      }
+      const branches = await workeraApi.getAllBranchOffices()
+      setSucursales(branches)
 
       // Luego el view activo
       await syncData(activeView)
       toast.success('Datos sincronizados con Workera')
     } catch (err: any) {
+      setConnectionError(err.message)
       toast.error(`Error: ${err.message}`)
     } finally {
       setLoading(false)
@@ -535,9 +538,7 @@ export function WorkeraTab() {
 
   // Efecto al cambiar view
   useEffect(() => {
-    if (apiUser && apiKey) {
-      syncData(activeView)
-    }
+    syncData(activeView)
   }, [activeView])
 
   // Obtener departamentos filtrados
@@ -568,7 +569,7 @@ export function WorkeraTab() {
         </div>
         <Button
           onClick={syncAll}
-          disabled={loading || !credentialsLoaded}
+          disabled={loading}
           size="sm"
           className="bg-[#0f2044] hover:bg-[#1a3155]"
         >
@@ -581,14 +582,22 @@ export function WorkeraTab() {
         </Button>
       </div>
 
-      {/* Info */}
-      <Alert className="bg-blue-50 border-blue-200">
-        <AlertCircle className="h-4 w-4 text-blue-600" />
-        <AlertDescription className="text-blue-800 text-sm">
-          Conectado directamente a la API de Workera v1.4 CL desde tu navegador.
-          Los datos se obtienen en tiempo real del sistema de control de asistencia.
-        </AlertDescription>
-      </Alert>
+      {/* Info / Error */}
+      {connectionError ? (
+        <Alert className="bg-red-50 border-red-200">
+          <AlertCircle className="h-4 w-4 text-red-600" />
+          <AlertDescription className="text-red-800 text-sm">
+            Error de conexión: {connectionError}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="bg-blue-50 border-blue-200">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800 text-sm">
+            Conectado a Workera v1.4 CL via proxy servidor. Datos en tiempo real del sistema de control de asistencia.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Filtros */}
       <Card>
