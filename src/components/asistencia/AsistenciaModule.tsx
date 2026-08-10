@@ -17,10 +17,11 @@ import {
 import {
   Clock, CheckCircle, XCircle, Calendar, AlertCircle, LogIn, LogOut,
   Upload, FileText, Download, RefreshCw, Loader2, Users, AlertTriangle,
-  CheckSquare, FileDown, Search, Filter,
+  CheckSquare, FileDown, Search, Filter, Activity,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSession } from '@/hooks/use-session'
+import { WorkeraTab } from './WorkeraTab'
 
 // ============================================
 // Tipos
@@ -371,7 +372,7 @@ export function AsistenciaModule() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-5 w-full">
           <TabsTrigger value="analisis" className="text-xs">
             <AlertTriangle className="w-3.5 h-3.5 mr-1" />
             Análisis
@@ -392,6 +393,10 @@ export function AsistenciaModule() {
               Importar
             </TabsTrigger>
           )}
+          <TabsTrigger value="workera" className="text-xs">
+            <Activity className="w-3.5 h-3.5 mr-1" />
+            Workera
+          </TabsTrigger>
         </TabsList>
 
         {/* ============================================ */}
@@ -797,6 +802,13 @@ export function AsistenciaModule() {
             <ImportTab onImport={handleImport} importing={importing} onCleaned={fetchData} />
           </TabsContent>
         )}
+
+        {/* ============================================ */}
+        {/* TAB: WORKERA API */
+        {/* ============================================ */}
+        <TabsContent value="workera" className="space-y-3 mt-3">
+          <WorkeraTab />
+        </TabsContent>
       </Tabs>
 
       {/* ============================================ */}
