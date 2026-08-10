@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
   try {
     // Verificar autenticación: la cookie de sesión debe existir
     const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('condominio-cyj-session');
+    const sessionCookie = cookieStore.get('condominio_session');
 
     if (!sessionCookie?.value) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
