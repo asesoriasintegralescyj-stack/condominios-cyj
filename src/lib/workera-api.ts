@@ -265,12 +265,13 @@ export const ORIGIN_LABELS: Record<string, string> = {
 
 export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
 
-let _connectionMode: ConnectionMode = 'direct';
+let _connectionMode: ConnectionMode = 'cloudflare';
 let _apiUser = '';
 let _apiKey = '';
 
-// URL del Worker de Cloudflare (configurar después de deployar)
-const CLOUDFLARE_WORKER_URL = process.env.NEXT_PUBLIC_WORKERA_PROXY_URL || '';
+// URL del Worker de Cloudflare (proxy para evadir CORS + geo-block)
+// Se usa la variable de entorno si está configurada, sino la URL por defecto del Worker deployado
+const CLOUDFLARE_WORKER_URL = process.env.NEXT_PUBLIC_WORKERA_PROXY_URL || 'https://workera-proxy.asesoriasintegralescyj.workers.dev';
 
 export function setConnectionMode(mode: ConnectionMode, apiUser?: string, apiKey?: string) {
   _connectionMode = mode;

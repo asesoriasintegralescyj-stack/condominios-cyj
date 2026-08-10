@@ -393,38 +393,15 @@ export function WorkeraTab() {
   const [attendancePage, setAttendancePage] = useState(1)
   const [attendanceTotalPages, setAttendanceTotalPages] = useState(1)
 
-  // Verificar conexión al montar - cascada: Directo → Cloudflare → Proxy
+  // Verificar conexion al montar - Cloudflare Worker (sin CORS, sin geo-block desde Chile)
   useEffect(() => {
     const testConnection = async () => {
       try {
         setLoadingView(prev => ({ ...prev, test: true }))
 
-        // MODO 1: DIRECTO desde navegador (el usuario en Chile hace fetch directo)
-        // Workera tiene CORS habilitado (*) y la IP chilena evita geo-block
-        const credRes = await fetch('/api/workera/credentials')
-        if (credRes.ok) {
-          const creds = await credRes.json()
-          setConnectionMode('direct', creds.apiUser, creds.apiKey)
-          try {
-            const branches = await workeraApi.getBranchOffices(1)
-            setSucursales(branches.data || [])
-            setConnected(true)
-            setConnectionError(null)
-            toast.success('Conectado directamente desde tu navegador (Chile)')
-            return
-          } catch (directErr: any) {
-            const isGeoBlocked = directErr.geoBlocked ||
-              directErr.message?.includes('406') ||
-              directErr.message?.includes('bloqueada') ||
-              directErr.message?.includes('Country request');
-            if (!isGeoBlocked) throw directErr
-            console.warn('Modo directo geo-bloqueado (usuario no esta en Chile?), intentando Cloudflare Worker...')
-          }
-        } else {
-          console.warn('No se pudieron obtener credenciales del servidor')
-        }
-
-        // MODO 2: Cloudflare Worker (si esta configurado y el usuario esta en Chile)
+        // MODO 1: Cloudflare Worker (proxy server-to-server, sin CORS)
+        // El Worker corre en el PoP de Cloudflare mas cercano al usuario.
+        // Si el usuario esta en Chile, el fetch() sale desde Chile → sin geo-block.
         if (hasCloudflareWorker()) {
           try {
             setConnectionMode('cloudflare')
@@ -436,10 +413,18 @@ export function WorkeraTab() {
             return
           } catch (cfErr: any) {
             console.warn('Cloudflare Worker fallo:', cfErr.message)
+            const errMsg = cfErr.message || ''
+            // Mostrar info diagnostica si esta disponible
+            if (errMsg.includes('debug')) {
+              try {
+                const debugInfo = JSON.parse(errMsg.split('debug:')[1] || '{}')
+                console.log('Worker debug:', debugInfo)
+              } catch {}
+            }
           }
         }
 
-        // MODO 3: Proxy Servidor (Edge Function Vercel - probablemente geo-bloqueado)
+        // MODO 2: Proxy Servidor (Edge Function Vercel)
         setConnectionMode('proxy')
         try {
           const branches = await workeraApi.getBranchOffices(1)
@@ -449,22 +434,19 @@ export function WorkeraTab() {
           toast.success('Conectado via proxy servidor')
           return
         } catch (proxyErr: any) {
-          const isGeoBlocked = proxyErr.geoBlocked ||
-            proxyErr.message?.includes('Country request') ||
-            proxyErr.message?.includes('406') ||
-            proxyErr.message?.includes('bloqueada');
-          if (!isGeoBlocked) throw proxyErr
-          console.warn('Proxy geo-bloqueado tambien')
+          console.warn('Proxy servidor fallo:', proxyErr.message)
         }
 
-        // Todos los modos fallaron
+        // Todos fallaron
         setConnected(false)
         setConnectionError(
-          'No se pudo conectar con Workera. Todos los modos de conexion fallaron:\n' +
-          '- Directo: posiblemente no estas en Chile\n' +
-          '- Cloudflare Worker: Workera bloquea IPs de Cloudflare\n' +
-          '- Proxy: Workera bloquea servidores extranjeros\n\n' +
-          'SOLUCION: Asegurate de estar conectado desde una red chilena.'
+          'No se pudo conectar con Workera.\n\n' +
+          'El Cloudflare Worker y el proxy servidor no pudieron reachar la API.\n' +
+          'Esto puede ocurrir si:\n' +
+          '- No estas conectado desde Chile\n' +
+          '- Workera esta bloqueando IPs de Cloudflare\n' +
+          '- Las credenciales API son incorrectas\n\n' +
+          'Accion: Abre la consola del navegador (F12) para ver detalles del error.'
         )
       } catch (err: any) {
         setConnected(false)
