@@ -270,7 +270,7 @@ async function workeraFetch(
   apiUser: string,
   apiKey: string,
   endpoint: string,
-  params?: Record<string, string>
+  params?: Record<string, string | undefined>
 ): Promise<any> {
   const url = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
   if (params) {
@@ -306,7 +306,7 @@ async function fetchAllPages<T>(
   apiUser: string,
   apiKey: string,
   endpoint: string,
-  params?: Record<string, string>
+  params?: Record<string, string | undefined>
 ): Promise<T[]> {
   const firstPage = await workeraFetch(apiUser, apiKey, endpoint, { ...params, page: '1' });
   const totalPages = firstPage.totalPages || 1;
@@ -318,7 +318,7 @@ async function fetchAllPages<T>(
   const allData: T[] = [...(firstPage.data || [])];
   
   // Fetch remaining pages in parallel (max 5 at a time)
-  const pages = [];
+  const pages: number[] = [];
   for (let i = 2; i <= totalPages; i++) {
     pages.push(i);
   }

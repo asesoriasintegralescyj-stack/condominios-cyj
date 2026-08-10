@@ -804,7 +804,7 @@ export function AsistenciaModule() {
         )}
 
         {/* ============================================ */}
-        {/* TAB: WORKERA API */
+        {/* TAB: WORKERA API */}
         {/* ============================================ */}
         <TabsContent value="workera" className="space-y-3 mt-3">
           <WorkeraTab />
