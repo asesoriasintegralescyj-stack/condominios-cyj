@@ -265,7 +265,7 @@ export const ORIGIN_LABELS: Record<string, string> = {
 
 export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
 
-let _connectionMode: ConnectionMode = 'cloudflare';
+let _connectionMode: ConnectionMode = 'proxy';
 let _apiUser = '';
 let _apiKey = '';
 
@@ -641,4 +641,4 @@ export const workeraApi = {
     return fetchAllPages<WorkeraDepartment>('department');
   },
 };
-// v2.0: modo directo como principal
+// v2.1: modo proxy como principal (Edge Function Vercel con credenciales embebidas)
