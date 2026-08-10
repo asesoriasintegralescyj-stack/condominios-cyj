@@ -339,13 +339,14 @@ async function workeraFetchCloudflare(endpoint: string, params?: Record<string, 
 
   const data = await response.json();
   if (!response.ok) {
-    // Incluir detalles completos del error para diagnostico
+    const status = data.status || response.status;
+    const geoBlocked = data.geoBlocked ? ' [GEO-BLOCKED]' : '';
     const debugInfo = data.debug ? ` [${JSON.stringify(data.debug)}]` : '';
     const bodySnippet = data.workeraBody ? ` | Body: ${data.workeraBody.substring(0, 200)}` : '';
-    const err = `${data.error || 'Error Cloudflare Worker ' + response.status}${bodySnippet}${debugInfo}`;
+    const err = `Workera API ${status}${geoBlocked}${bodySnippet}${debugInfo}`;
     const error: any = new Error(err);
     error.geoBlocked = data.geoBlocked === true;
-    error.status = data.status;
+    error.status = status;
     error.debug = data.debug;
     throw error;
   }
