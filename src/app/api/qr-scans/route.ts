@@ -8,6 +8,9 @@ export const revalidate = 0
  * GET /api/qr-scans
  * Lista escaneos QR (compatibilidad con app móvil).
  * La app móvil usa esta URL en vez de /api/qr-rondas/scans.
+ *
+ * OPTIMIZADO: Batch location lookup (1 sola query en vez de N+1)
+ * para evitar saturar el pool de conexiones de Aiven.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -30,34 +33,39 @@ export async function GET(request: NextRequest) {
       if (to) where.createdAt.lte = new Date(Number(to))
     }
 
-    const scansRaw = await withRetry(() =>
-      db.movilQrScan.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-    )
-    const total = await withRetry(() => db.movilQrScan.count({ where }))
+    // 2 queries en paralelo (no más)
+    const [scansRaw, total] = await Promise.all([
+      withRetry(() =>
+        db.movilQrScan.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+      ),
+      withRetry(() => db.movilQrScan.count({ where })),
+    ])
 
-    const locationCache = new Map<string, { id: string; name: string; location: string; code: string } | null>()
-    const scans = await Promise.all(
-      scansRaw.map(async (s) => {
-        let loc = locationCache.get(s.qrLocationId)
-        if (loc === undefined) {
-          try {
-            loc = await withRetry(() =>
-              db.movilQrLocation.findUnique({
-                where: { id: s.qrLocationId },
-                select: { id: true, name: true, location: true, code: true },
-              }),
-            )
-          } catch { loc = null }
-          locationCache.set(s.qrLocationId, loc)
-        }
-        return { ...s, location: loc }
+    if (scansRaw.length === 0) {
+      return NextResponse.json({ scans: [], total })
+    }
+
+    // OPTIMIZACIÓN: 1 sola query batch para todas las ubicaciones
+    const locationIds = [...new Set(scansRaw.map((s) => s.qrLocationId))]
+    const locations = await withRetry(() =>
+      db.movilQrLocation.findMany({
+        where: { id: { in: locationIds } },
+        select: { id: true, name: true, location: true, code: true },
       }),
     )
+
+    const locMap = new Map<string, { id: string; name: string; location: string; code: string }>()
+    for (const loc of locations) locMap.set(loc.id, loc)
+
+    const scans = scansRaw.map((s) => ({
+      ...s,
+      location: locMap.get(s.qrLocationId) || null,
+    }))
 
     return NextResponse.json({ scans, total })
   } catch (err) {
@@ -69,12 +77,18 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/qr-scans
  * Registra un nuevo escaneo QR desde la app móvil.
+ *
+ * OPTIMIZADO: Mínimas queries (lookup + create + location enrichment)
+ * para no saturar el pool de conexiones de Aiven.
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
     let qrLocationId: string | undefined = body.qrLocationId
+    let locationName: string | undefined
+
+    // Solo hacer lookup si no se proporciona qrLocationId directamente
     if (!qrLocationId && body.code) {
       const loc = await withRetry(() =>
         db.movilQrLocation.findUnique({ where: { code: String(body.code).trim() } }),
@@ -86,6 +100,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `La ubicación ${loc.name} está inactiva` }, { status: 400 })
       }
       qrLocationId = loc.id
+      locationName = loc.name
     }
 
     if (!qrLocationId) {
@@ -105,21 +120,28 @@ export async function POST(request: NextRequest) {
           : new Date()
     const createdAt = isNaN(scannedAt.getTime()) ? new Date() : scannedAt
 
+    // Crear escaneo
     const scan = await withRetry(() =>
       db.movilQrScan.create({
         data: { qrLocationId, scannedBy, profileId, latitude, longitude, notes, createdAt },
       }),
     )
 
+    // Enriquecer con datos de ubicación si no se obtuvieron antes
     let locationData: { id: string; name: string; location: string; code: string } | null = null
-    try {
-      locationData = await withRetry(() =>
-        db.movilQrLocation.findUnique({
-          where: { id: qrLocationId! },
-          select: { id: true, name: true, location: true, code: true },
-        }),
-      )
-    } catch { /* ignore */ }
+    if (!locationName) {
+      try {
+        locationData = await withRetry(() =>
+          db.movilQrLocation.findUnique({
+            where: { id: qrLocationId! },
+            select: { id: true, name: true, location: true, code: true },
+          }),
+        )
+      } catch { /* ignore */ }
+    } else {
+      // Si ya tenemos el nombre, devolver lo que podemos sin query extra
+      locationData = { id: qrLocationId!, name: locationName, location: '', code: String(body.code || '') }
+    }
 
     return NextResponse.json({ ...scan, location: locationData })
   } catch (err) {
