@@ -306,7 +306,9 @@ function buildUrl(endpoint: string, params?: Record<string, string | undefined>)
 }
 
 function buildParamsUrl(baseUrl: string, endpoint: string, params?: Record<string, string | undefined>): string {
-  const url = new URL(baseUrl, window.location.origin);
+  // Si es URL relativa, resolver contra el origin del navegador
+  const fullBase = baseUrl.startsWith('http') ? baseUrl : `${window.location.origin}${baseUrl}`;
+  const url = new URL(fullBase);
   url.searchParams.set('endpoint', endpoint);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
