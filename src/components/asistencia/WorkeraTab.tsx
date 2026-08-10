@@ -100,34 +100,34 @@ export default function WorkeraTab() {
   const handleTestConnection = useCallback(async () => {
     setConnection({ status: 'testing' })
     try {
-      // Test diagnostic
-      const diagResp = await fetch('/api/workera/proxy?action=diag')
-      const diag = await diagResp.json()
-
-      // Test real API call
-      let geoTest: { geoTest: string; data?: unknown; error?: string } = { geoTest: 'unknown' }
-      try {
-        const geoResp = await fetch('/api/workera/proxy?action=testgeo')
-        geoTest = await geoResp.json()
-      } catch {
-        // skip
-      }
-
-      if (diag.status === 'ok' && geoTest.geoTest === 'OK') {
-        setConnection({ status: 'connected', diag, geoTest })
-        toast.success('Conexión con Workera API exitosa')
-      } else if (diag.status === 'ok' && geoTest.geoTest === 'FAILED') {
-        setConnection({ status: 'error', diag, geoTest, error: geoTest.error || 'Geo-block detectado' })
-        toast.error('Workera bloqueó la petición (geo-block)')
-      } else {
-        setConnection({ status: 'error', diag, error: 'Proxy no responde correctamente' })
-        toast.error('Error en proxy Workera')
-      }
+      // Probar usando la API real con el modo actual de conexión
+      const result = await workeraApi.getBranchOffices(1)
+      setConnection({
+        status: 'connected',
+        diag: {
+          status: 'ok',
+          runtime: connectionMode,
+          timestamp: new Date().toISOString(),
+          apiBase: 'https://api.workera.com/apiClient/v1',
+          credentials: 'embedded',
+          cacheSize: 0,
+          edgeLocation: { country: 'CL (browser)', city: 'user-location' },
+        },
+        geoTest: { geoTest: 'OK', data: result },
+      })
+      toast.success(`Conexión exitosa (modo: ${connectionMode})`)
     } catch (err: any) {
-      setConnection({ status: 'error', error: err.message })
-      toast.error(`Error: ${err.message}`)
+      const isGeo = err.message?.includes('geo') || err.message?.includes('406') || err.message?.includes('Country') || err.geoBlocked
+      setConnection({
+        status: 'error',
+        error: isGeo
+          ? `Geo-block en modo ${connectionMode}. Workera bloquea peticiones desde este origen.`
+          : err.message || 'Error desconocido',
+        geoTest: { geoTest: 'FAILED', error: err.message },
+      })
+      toast.error(isGeo ? `Geo-block (${connectionMode}). Intenta modo "Directo" si estás en Chile.` : `Error: ${err.message}`)
     }
-  }, [])
+  }, [connectionMode])
 
   // Load employees
   const loadEmployees = useCallback(async (page: number) => {

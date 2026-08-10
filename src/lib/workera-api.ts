@@ -265,7 +265,7 @@ export const ORIGIN_LABELS: Record<string, string> = {
 
 export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
 
-let _connectionMode: ConnectionMode = 'proxy';
+let _connectionMode: ConnectionMode = 'direct';
 let _apiUser = '';
 let _apiKey = '';
 
@@ -380,10 +380,34 @@ async function workeraFetchProxy(endpoint: string, params?: Record<string, strin
  * Modo Directo: Fetch desde el navegador del usuario (en Chile)
  * Workera tiene CORS habilitado (access-control-allow-origin: *)
  * La IP del usuario en Chile evita el geo-block.
+ * Obtiene credenciales automáticamente del proxy si no están seteadas.
  */
+let _credsLoaded = false;
+
+async function ensureCredentials(): Promise<void> {
+  if (_apiUser && _apiKey) return; // Ya tiene credenciales
+  if (_credsLoaded) return; // Ya intentó cargarlas y falló
+
+  try {
+    _credsLoaded = true;
+    const resp = await fetch('/api/workera/proxy?action=creds');
+    if (resp.ok) {
+      const { apiUser, apiKey } = await resp.json();
+      if (apiUser && apiKey) {
+        _apiUser = apiUser;
+        _apiKey = apiKey;
+      }
+    }
+  } catch {
+    // Si falla, el modo directo no funcionará
+  }
+}
+
 async function workeraFetchDirect(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
+  await ensureCredentials();
+
   if (!_apiUser || !_apiKey) {
-    throw new Error('Credenciales no configuradas para modo directo');
+    throw new Error('No se pudieron obtener credenciales para modo directo');
   }
 
   const workeraUrl = buildUrl(endpoint, params);

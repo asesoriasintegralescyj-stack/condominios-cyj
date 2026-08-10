@@ -112,6 +112,12 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // === CREDS (para modo directo desde browser) ===
+  if (action === 'creds') {
+    const { apiUser, apiKey } = getCredentials()
+    return NextResponse.json({ apiUser, apiKey })
+  }
+
   // === TEST GEO ===
   if (action === 'testgeo') {
     try {
