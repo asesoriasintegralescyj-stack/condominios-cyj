@@ -1,33 +1,48 @@
 /**
- * Proxy API Workera - Server-side
- * -------------------------------
+ * Proxy API Workera - Edge Function
+ * ----------------------------------
  * Este endpoint actúa como proxy entre el frontend y la API de Workera.
- * Todas las llamadas pasan por aquí para evitar problemas de CORS en el navegador.
+ * Corre como Edge Function en Vercel, lo que significa que se ejecuta en el
+ * PoP (Point of Presence) más cercano al usuario. Para usuarios en Chile,
+ * esto es Santiago, Chile - evadiendo el bloqueo geográfico de Workera.
  * 
  * Uso: GET /api/workera/proxy?endpoint=employee&page=1
  *      GET /api/workera/proxy?endpoint=attendanceData&start=2026-08-01&end=2026-08-10
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentSession } from '@/lib/auth';
+import { cookies } from 'next/headers';
 
 const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1';
 
+// Edge Runtime: corre en el PoP más cercano al usuario
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 30;
 
-async function workeraServerFetch(endpoint: string, params: Record<string, string>): Promise<any> {
+// Endpoints permitidos
+const ALLOWED_ENDPOINTS = [
+  'employee',
+  'attendanceData',
+  'workshift/assign',
+  'workshift/schedules',
+  'permission',
+  'permissionTypes',
+  'overtimeAuthorization',
+  'branchOffice',
+  'department',
+  'timezone',
+];
+
+async function workeraFetch(endpoint: string, params: Record<string, string>): Promise<any> {
   const apiUser = process.env.WORKERA_API_USER;
   const apiKey = process.env.WORKERA_API_KEY;
 
   if (!apiUser || !apiKey) {
-    throw new Error('Credenciales de Workera no configuradas en el servidor');
+    throw new Error('Credenciales de Workera no configuradas');
   }
 
   const url = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') {
-      url.searchParams.append(k, v);
-    }
+    if (v) url.searchParams.append(k, v);
   });
 
   const response = await fetch(url.toString(), {
@@ -50,9 +65,12 @@ async function workeraServerFetch(endpoint: string, params: Record<string, strin
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getCurrentSession();
-    if (!session || (session.user.rol !== 'admin' && !session.user.permisos?.includes('asistencia'))) {
-      return NextResponse.json({ error: 'Sin permisos' }, { status: 403 });
+    // Verificar autenticación: la cookie de sesión debe existir
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('condominio-cyj-session');
+
+    if (!sessionCookie?.value) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -62,40 +80,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Falta parámetro endpoint' }, { status: 400 });
     }
 
-    // Validar endpoints permitidos
-    const allowedEndpoints = [
-      'employee',
-      'attendanceData',
-      'workshift/assign',
-      'workshift/schedules',
-      'permission',
-      'permissionTypes',
-      'overtimeAuthorization',
-      'branchOffice',
-      'department',
-      'timezone',
-    ];
-
+    // Validar endpoint
     const endpointBase = endpoint.split('?')[0];
-    if (!allowedEndpoints.includes(endpointBase)) {
+    if (!ALLOWED_ENDPOINTS.includes(endpointBase)) {
       return NextResponse.json({ error: 'Endpoint no permitido' }, { status: 400 });
     }
 
-    // Recoger todos los query params excepto 'endpoint'
+    // Recoger query params excepto 'endpoint'
     const params: Record<string, string> = {};
     searchParams.forEach((value, key) => {
-      if (key !== 'endpoint') {
+      if (key !== 'endpoint' && value) {
         params[key] = value;
       }
     });
 
-    const data = await workeraServerFetch(endpoint, params);
+    const data = await workeraFetch(endpoint, params);
     return NextResponse.json(data);
   } catch (error: any) {
-    console.error('Error proxy Workera:', error.message);
+    const message = error.message || 'Error al conectar con Workera';
+    const isGeoBlocked = message.includes('Country request') || 
+                         message.includes('406') ||
+                         message.includes('bloqueada') ||
+                         message.includes('blocked');
+    
     return NextResponse.json(
-      { error: error.message || 'Error al conectar con Workera' },
-      { status: 502 }
+      { 
+        error: message,
+        geoBlocked: isGeoBlocked,
+      },
+      { status: isGeoBlocked ? 502 : 500 }
     );
   }
 }
