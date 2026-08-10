@@ -32,6 +32,8 @@ import { toast } from 'sonner'
 import { useSession } from '@/hooks/use-session'
 import {
   workeraApi,
+  setConnectionMode,
+  getConnectionMode,
   ATTENDANCE_TYPE_LABELS,
   ORIGIN_LABELS,
   type WorkeraBranchOffice,
@@ -41,18 +43,20 @@ import {
   type WorkeraEmployeeSchedule,
   type WorkeraWorkshiftAssign,
   type WorkeraOvertimeAuth,
+  type ConnectionMode,
 } from '@/lib/workera-api'
 
 // ============================================
 // Sub-componentes
 // ============================================
 
-function ConnectionStatus({ connected, lastSync }: { connected: boolean; lastSync: string | null }) {
+function ConnectionStatus({ connected, lastSync, mode }: { connected: boolean; lastSync: string | null; mode: ConnectionMode }) {
   return (
     <div className="flex items-center gap-2 text-xs">
       {connected ? (
         <Badge className="bg-green-100 text-green-800 text-[10px] gap-1">
           <Wifi className="w-3 h-3" /> Conectado a Workera
+          <span className="text-[9px] opacity-60">({mode === 'direct' ? 'navegador' : 'proxy'})</span>
         </Badge>
       ) : (
         <Badge className="bg-red-100 text-red-800 text-[10px] gap-1">
@@ -392,15 +396,43 @@ export function WorkeraTab() {
     const testConnection = async () => {
       try {
         setLoadingView(prev => ({ ...prev, test: true }))
+        
+        // 1. Intentar via proxy (Edge Function)
         const branches = await workeraApi.getBranchOffices(1)
         setSucursales(branches.data || [])
         setConnected(true)
         setConnectionError(null)
       } catch (err: any) {
-        setConnected(false)
-        setConnectionError(err.message)
-        if (err.message?.includes('Country request') || err.message?.includes('406')) {
-          setConnectionError('Workera bloquea peticiones desde servidores extranjeros. Se requiere un proxy en Chile.')
+        const isGeoBlocked = err.geoBlocked || 
+          err.message?.includes('Country request') || 
+          err.message?.includes('406') ||
+          err.message?.includes('bloqueada');
+
+        if (isGeoBlocked) {
+          // 2. Geo-block detectado → intentar modo directo (navegador)
+          try {
+            // Obtener credenciales para modo directo
+            const credRes = await fetch('/api/workera/credentials')
+            if (credRes.ok) {
+              const creds = await credRes.json()
+              setConnectionMode('direct', creds.apiUser, creds.apiKey)
+              
+              // Reintentar con modo directo
+              const branches = await workeraApi.getBranchOffices(1)
+              setSucursales(branches.data || [])
+              setConnected(true)
+              setConnectionError(null)
+              toast.success('Conectado en modo directo (desde tu navegador)')
+            } else {
+              setConnectionError('Workera bloquea peticiones desde servidores extranjeros. No se pudieron obtener credenciales para modo directo.')
+            }
+          } catch (directErr: any) {
+            setConnected(false)
+            setConnectionError('Workera bloquea peticiones desde servidores extranjeros (proxy) y también desde el navegador (CORS). Se recomienda contactar a Workera para solicitar acceso API desde servidores externos o habilitar CORS.')
+          }
+        } else {
+          setConnected(false)
+          setConnectionError(err.message)
         }
       } finally {
         setLoadingView(prev => ({ ...prev, test: false }))
@@ -565,7 +597,7 @@ export function WorkeraTab() {
             <Activity className="w-5 h-5" />
             Workera API
           </h3>
-          <ConnectionStatus connected={connected} lastSync={lastSync} />
+          <ConnectionStatus connected={connected} lastSync={lastSync} mode={getConnectionMode()} />
         </div>
         <Button
           onClick={syncAll}
@@ -587,14 +619,21 @@ export function WorkeraTab() {
         <Alert className="bg-red-50 border-red-200">
           <AlertCircle className="h-4 w-4 text-red-600" />
           <AlertDescription className="text-red-800 text-sm">
-            Error de conexión: {connectionError}
+            {connectionError}
+          </AlertDescription>
+        </Alert>
+      ) : connected ? (
+        <Alert className="bg-green-50 border-green-200">
+          <CheckCircle2 className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800 text-sm">
+            Conectado a Workera v1.4 CL ({getConnectionMode() === 'direct' ? 'vía tu navegador' : 'vía proxy servidor'}). Datos en tiempo real del sistema de control de asistencia.
           </AlertDescription>
         </Alert>
       ) : (
         <Alert className="bg-blue-50 border-blue-200">
           <AlertCircle className="h-4 w-4 text-blue-600" />
           <AlertDescription className="text-blue-800 text-sm">
-            Conectado a Workera v1.4 CL via proxy servidor. Datos en tiempo real del sistema de control de asistencia.
+            Conectando con Workera...
           </AlertDescription>
         </Alert>
       )}

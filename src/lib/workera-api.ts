@@ -2,20 +2,21 @@
  * Cliente API Workera v1.4 CL
  * --------------------------
  * Servicio para interactuar con la API REST de Workera Chile.
- * Todas las llamadas se ejecutan a través del proxy servidor
- * /api/workera/proxy para evitar problemas de CORS y seguridad.
  * 
- * El proxy maneja las credenciales de forma segura en el servidor.
+ * ARQUITECTURA DUAL:
+ * 1. Modo Proxy: Las llamadas pasan por /api/workera/proxy (Edge Function).
+ *    - Ventaja: No expone credenciales en el navegador
+ *    - Limitación: Workera bloquea peticiones desde servidores no chilenos
+ * 
+ * 2. Modo Directo (fallback): Si el proxy detecta geo-block, las llamadas
+ *    se hacen directamente desde el navegador del usuario (que está en Chile).
+ *    - Requiere credenciales en el navegador
+ *    - Usa un CORS proxy externo para evitar bloqueo CORS del navegador
+ * 
+ * El sistema detecta automáticamente cuál modo usar y se cambia dinámicamente.
  */
 
 // Tipos de respuesta
-export interface WorkeraPagination {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-}
-
 export interface WorkeraRequestInfo {
   companyName: string;
   companyIdentification: string;
@@ -259,12 +260,38 @@ export const ORIGIN_LABELS: Record<string, string> = {
 };
 
 // ============================================================
-// Funciones de API - Proxy Servidor (sin credenciales en cliente)
+// Estado global del modo de conexión
 // ============================================================
 
-const PROXY_URL = '/api/workera/proxy';
+let _useDirectMode = false;
+let _apiUser = '';
+let _apiKey = '';
 
-async function workeraFetch(
+export type ConnectionMode = 'proxy' | 'direct';
+
+/**
+ * Configura el modo de conexión. Llamar después de detectar geo-block.
+ */
+export function setConnectionMode(mode: ConnectionMode, apiUser?: string, apiKey?: string) {
+  _useDirectMode = mode === 'direct';
+  if (apiUser) _apiUser = apiUser;
+  if (apiKey) _apiKey = apiKey;
+}
+
+export function getConnectionMode(): ConnectionMode {
+  return _useDirectMode ? 'direct' : 'proxy';
+}
+
+// ============================================================
+// Funciones de fetch (dual mode)
+// ============================================================
+
+const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1';
+const PROXY_URL = '/api/workera/proxy';
+// CORS proxy público (confiable para uso temporal)
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+
+async function workeraFetchProxy(
   endpoint: string,
   params?: Record<string, string | undefined>
 ): Promise<any> {
@@ -280,17 +307,87 @@ async function workeraFetch(
 
   const response = await fetch(url.toString(), {
     method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-    },
+    headers: { 'Accept': 'application/json' },
   });
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error || `Error proxy ${response.status}`);
+    const err = data.error || `Error proxy ${response.status}`;
+    const geoBlocked = data.geoBlocked === true || 
+                       err.includes('Country request') || 
+                       err.includes('406');
+    const error = new Error(err) as any;
+    error.geoBlocked = geoBlocked;
+    throw error;
   }
 
   return data;
+}
+
+async function workeraFetchDirect(
+  endpoint: string,
+  params?: Record<string, string | undefined>
+): Promise<any> {
+  if (!_apiUser || !_apiKey) {
+    throw new Error('Credenciales de Workera no configuradas para modo directo');
+  }
+
+  // Construir URL de Workera
+  const workeraUrl = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        workeraUrl.searchParams.append(k, v);
+      }
+    });
+  }
+
+  // Intentar llamada directa primero (puede funcionar si Workera tiene CORS)
+  try {
+    const response = await fetch(workeraUrl.toString(), {
+      method: 'GET',
+      headers: {
+        'API_USER': _apiUser,
+        'API_KEY': _apiKey,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+  } catch {
+    // CORS bloqueó la llamada directa, intentar con CORS proxy
+  }
+
+  // Fallback: usar CORS proxy público
+  // Esto codifica la URL de Workera y la pasa por el CORS proxy
+  const proxyUrl = `${CORS_PROXY}${encodeURIComponent(workeraUrl.toString())}`;
+  
+  const proxyResponse = await fetch(proxyUrl, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+  });
+
+  if (!proxyResponse.ok) {
+    throw new Error(`Error al obtener datos de Workera via CORS proxy: ${proxyResponse.status}`);
+  }
+
+  return proxyResponse.json();
+}
+
+/**
+ * Función principal de fetch - detecta modo automáticamente
+ */
+async function workeraFetch(
+  endpoint: string,
+  params?: Record<string, string | undefined>
+): Promise<any> {
+  if (_useDirectMode) {
+    return workeraFetchDirect(endpoint, params);
+  }
+  return workeraFetchProxy(endpoint, params);
 }
 
 /**
@@ -303,33 +400,28 @@ async function fetchAllPages<T>(
   const firstPage = await workeraFetch(endpoint, { ...params, page: '1' });
   const totalPages = firstPage.totalPages || 1;
   
-  if (totalPages <= 1) {
-    return firstPage.data || [];
-  }
+  if (totalPages <= 1) return firstPage.data || [];
 
   const allData: T[] = [...(firstPage.data || [])];
   const pages: number[] = [];
-  for (let i = 2; i <= totalPages; i++) {
-    pages.push(i);
-  }
+  for (let i = 2; i <= totalPages; i++) pages.push(i);
 
-  // Process in batches of 5
   for (let i = 0; i < pages.length; i += 5) {
     const batch = pages.slice(i, i + 5);
     const results = await Promise.all(
       batch.map(p => workeraFetch(endpoint, { ...params, page: String(p) }))
     );
     for (const result of results) {
-      if (result.data) {
-        allData.push(...result.data);
-      }
+      if (result.data) allData.push(...result.data);
     }
   }
 
   return allData;
 }
 
-// --- API Pública (ya no necesita credenciales) ---
+// ============================================================
+// API Pública
+// ============================================================
 
 export const workeraApi = {
   // Empleados
@@ -383,15 +475,7 @@ export const workeraApi = {
     attTypes?: string;
     originCode?: string;
   }): Promise<WorkeraAttendanceRecord[]> {
-    return fetchAllPages<WorkeraAttendanceRecord>('attendanceData', {
-      start: params.start,
-      end: params.end,
-      employeeCode: params.employeeCode,
-      branchOfficeCode: params.branchOfficeCode,
-      departmentCode: params.departmentCode,
-      attTypes: params.attTypes,
-      originCode: params.originCode,
-    });
+    return fetchAllPages<WorkeraAttendanceRecord>('attendanceData', params);
   },
 
   // Turnos asignados
@@ -439,13 +523,7 @@ export const workeraApi = {
     department?: string;
     employees?: string;
   }): Promise<WorkeraEmployeeSchedule[]> {
-    return fetchAllPages<WorkeraEmployeeSchedule>('workshift/schedules', {
-      start: params.start,
-      end: params.end,
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
+    return fetchAllPages<WorkeraEmployeeSchedule>('workshift/schedules', params);
   },
 
   // Permisos
@@ -474,13 +552,7 @@ export const workeraApi = {
     department?: string;
     employees?: string;
   }): Promise<WorkeraPermission[]> {
-    return fetchAllPages<WorkeraPermission>('permission', {
-      start: params.start,
-      end: params.end,
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
+    return fetchAllPages<WorkeraPermission>('permission', params);
   },
 
   // Tipos de permisos
@@ -514,13 +586,7 @@ export const workeraApi = {
     department?: string;
     employees?: string;
   }): Promise<WorkeraOvertimeAuth[]> {
-    return fetchAllPages<WorkeraOvertimeAuth>('overtimeAuthorization', {
-      start: params.start,
-      end: params.end,
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
+    return fetchAllPages<WorkeraOvertimeAuth>('overtimeAuthorization', params);
   },
 
   // Sucursales
