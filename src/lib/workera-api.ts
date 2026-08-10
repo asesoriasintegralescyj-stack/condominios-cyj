@@ -3,20 +3,27 @@
  * --------------------------
  * Servicio para interactuar con la API REST de Workera Chile.
  * 
- * ARQUITECTURA DUAL:
- * 1. Modo Proxy: Las llamadas pasan por /api/workera/proxy (Edge Function).
- *    - Ventaja: No expone credenciales en el navegador
- *    - Limitación: Workera bloquea peticiones desde servidores no chilenos
+ * ARQUITECTURA TRIPLE (cascada automática):
  * 
- * 2. Modo Directo (fallback): Si el proxy detecta geo-block, las llamadas
- *    se hacen directamente desde el navegador del usuario (que está en Chile).
- *    - Requiere credenciales en el navegador
- *    - Usa un CORS proxy externo para evitar bloqueo CORS del navegador
+ * 1. Modo Cloudflare Worker (RECOMENDADO):
+ *    - Petición desde navegador → Worker de Cloudflare en Santiago (Chile)
+ *    - El Worker hace fetch a Workera desde IP chilena
+ *    - SIN geo-block, SIN problemas de CORS
+ *    - Requiere: Worker deployado en Cloudflare con secrets WORKERA_API_USER/KEY
  * 
- * El sistema detecta automáticamente cuál modo usar y se cambia dinámicamente.
+ * 2. Modo Proxy Servidor (Edge Function):
+ *    - Petición desde navegador → Edge Function en Vercel
+ *    - LIMITACIÓN: Workera bloquea desde servidores no chilenos
+ * 
+ * 3. Modo Directo + CORS Proxy (fallback):
+ *    - Petición desde navegador → CORS proxy público → Workera
+ *    - LIMITACIÓN: CORS proxies públicos son poco confiables
  */
 
-// Tipos de respuesta
+// ============================================================
+// TIPOS
+// ============================================================
+
 export interface WorkeraRequestInfo {
   companyName: string;
   companyIdentification: string;
@@ -24,7 +31,6 @@ export interface WorkeraRequestInfo {
   userEmail: string;
 }
 
-// --- Empleados ---
 export interface WorkeraEmployee {
   code: string;
   deviceCode: number;
@@ -59,7 +65,6 @@ export interface WorkeraEmployeeResponse {
   data: WorkeraEmployee[];
 }
 
-// --- Asistencia ---
 export type AttendanceType = 0 | 1 | 2 | 3 | 4 | 5;
 export type AttendanceStatus = 'ACTIVO' | 'INACTIVO' | 'MODIFICADO';
 export type OriginCode = 'RELOJ' | 'MOVIL' | 'SISTEMA' | 'PORTAL' | 'DESKTOP';
@@ -101,7 +106,6 @@ export interface WorkeraAttendanceResponse {
   data: WorkeraAttendanceRecord[];
 }
 
-// --- Turnos ---
 export interface WorkeraWorkshiftAssign {
   id: number;
   employee: WorkeraEmployeeMini;
@@ -148,7 +152,6 @@ export interface WorkeraSchedulesResponse {
   data: WorkeraEmployeeSchedule[];
 }
 
-// --- Permisos ---
 export type PermissionType = 'TRABAJADOR' | 'TRABAJADO_EN_HORARIO' | 'NO_TRABAJADO' | 'LICENCIA_MEDICA' | 'VACACIONES' | 'PRENATAL' | 'POSTNATAL';
 
 export interface WorkeraPermission {
@@ -177,7 +180,6 @@ export interface WorkeraPermissionType {
   description?: string;
 }
 
-// --- Horas Extras ---
 export interface WorkeraOvertimeAuth {
   employee: WorkeraEmployeeMini;
   authDate: string;
@@ -198,7 +200,6 @@ export interface WorkeraOvertimeResponse {
   data: WorkeraOvertimeAuth[];
 }
 
-// --- Sucursales ---
 export interface WorkeraBranchOffice {
   id: number;
   name: string;
@@ -221,7 +222,6 @@ export interface WorkeraBranchResponse {
   data: WorkeraBranchOffice[];
 }
 
-// --- Departamentos ---
 export interface WorkeraDepartment {
   id: number;
   name: string;
@@ -241,61 +241,70 @@ export interface WorkeraDepartmentResponse {
   data: WorkeraDepartment[];
 }
 
-// --- Tipos de asistencia ---
 export const ATTENDANCE_TYPE_LABELS: Record<number, string> = {
   0: 'Entrada',
   1: 'Salida',
   2: 'Salida Extraordinaria',
   3: 'Entrada Extraordinaria',
   4: 'Inicio Descanso',
-  5: 'Término Descanso',
+  5: 'Termino Descanso',
 };
 
 export const ORIGIN_LABELS: Record<string, string> = {
-  RELOJ: 'Reloj Biométrico',
-  MOVIL: 'App Móvil',
+  RELOJ: 'Reloj Biometrico',
+  MOVIL: 'App Movil',
   SISTEMA: 'Sistema',
   PORTAL: 'Portal Trabajador',
   DESKTOP: 'App Escritorio',
 };
 
 // ============================================================
-// Estado global del modo de conexión
+// ESTADO DE CONEXIÓN
 // ============================================================
 
-let _useDirectMode = false;
+export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
+
+let _connectionMode: ConnectionMode = 'cloudflare';
 let _apiUser = '';
 let _apiKey = '';
 
-export type ConnectionMode = 'proxy' | 'direct';
+// URL del Worker de Cloudflare (configurar después de deployar)
+const CLOUDFLARE_WORKER_URL = process.env.NEXT_PUBLIC_WORKERA_PROXY_URL || '';
 
-/**
- * Configura el modo de conexión. Llamar después de detectar geo-block.
- */
 export function setConnectionMode(mode: ConnectionMode, apiUser?: string, apiKey?: string) {
-  _useDirectMode = mode === 'direct';
+  _connectionMode = mode;
   if (apiUser) _apiUser = apiUser;
   if (apiKey) _apiKey = apiKey;
 }
 
 export function getConnectionMode(): ConnectionMode {
-  return _useDirectMode ? 'direct' : 'proxy';
+  return _connectionMode;
+}
+
+export function hasCloudflareWorker(): boolean {
+  return !!CLOUDFLARE_WORKER_URL;
 }
 
 // ============================================================
-// Funciones de fetch (dual mode)
+// FETCH POR MODO
 // ============================================================
 
 const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1';
-const PROXY_URL = '/api/workera/proxy';
-// CORS proxy público (confiable para uso temporal)
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 
-async function workeraFetchProxy(
-  endpoint: string,
-  params?: Record<string, string | undefined>
-): Promise<any> {
-  const url = new URL(PROXY_URL, window.location.origin);
+function buildUrl(endpoint: string, params?: Record<string, string | undefined>): string {
+  const url = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
+  if (params) {
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        url.searchParams.append(k, v);
+      }
+    });
+  }
+  return url.toString();
+}
+
+function buildParamsUrl(baseUrl: string, endpoint: string, params?: Record<string, string | undefined>): string {
+  const url = new URL(baseUrl);
   url.searchParams.set('endpoint', endpoint);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -304,8 +313,42 @@ async function workeraFetchProxy(
       }
     });
   }
+  return url.toString();
+}
 
-  const response = await fetch(url.toString(), {
+/**
+ * Modo 1: Cloudflare Worker (corre en Santiago, Chile)
+ */
+async function workeraFetchCloudflare(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
+  if (!CLOUDFLARE_WORKER_URL) {
+    throw new Error('Cloudflare Worker no configurado');
+  }
+
+  const url = buildParamsUrl(CLOUDFLARE_WORKER_URL, endpoint, params);
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const err = data.error || `Error Cloudflare Worker ${response.status}`;
+    const error: any = new Error(err);
+    error.geoBlocked = data.geoBlocked === true;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Modo 2: Proxy Servidor (Edge Function en Vercel)
+ */
+async function workeraFetchProxy(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
+  const url = buildParamsUrl('/api/workera/proxy', endpoint, params);
+
+  const response = await fetch(url, {
     method: 'GET',
     headers: { 'Accept': 'application/json' },
   });
@@ -313,38 +356,27 @@ async function workeraFetchProxy(
   const data = await response.json();
   if (!response.ok) {
     const err = data.error || `Error proxy ${response.status}`;
-    const geoBlocked = data.geoBlocked === true || 
-                       err.includes('Country request') || 
-                       err.includes('406');
-    const error = new Error(err) as any;
-    error.geoBlocked = geoBlocked;
+    const error: any = new Error(err);
+    error.geoBlocked = data.geoBlocked === true;
     throw error;
   }
 
   return data;
 }
 
-async function workeraFetchDirect(
-  endpoint: string,
-  params?: Record<string, string | undefined>
-): Promise<any> {
+/**
+ * Modo 3: Directo desde navegador (fallback con CORS proxy)
+ */
+async function workeraFetchDirect(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
   if (!_apiUser || !_apiKey) {
-    throw new Error('Credenciales de Workera no configuradas para modo directo');
+    throw new Error('Credenciales no configuradas para modo directo');
   }
 
-  // Construir URL de Workera
-  const workeraUrl = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        workeraUrl.searchParams.append(k, v);
-      }
-    });
-  }
+  const workeraUrl = buildUrl(endpoint, params);
 
-  // Intentar llamada directa primero (puede funcionar si Workera tiene CORS)
+  // Intentar llamada directa (Workera podría tener CORS habilitado en el futuro)
   try {
-    const response = await fetch(workeraUrl.toString(), {
+    const response = await fetch(workeraUrl, {
       method: 'GET',
       headers: {
         'API_USER': _apiUser,
@@ -353,53 +385,42 @@ async function workeraFetchDirect(
         'Content-Type': 'application/json',
       },
     });
-
-    if (response.ok) {
-      return response.json();
-    }
+    if (response.ok) return response.json();
   } catch {
-    // CORS bloqueó la llamada directa, intentar con CORS proxy
+    // CORS bloqueó, intentar con proxy
   }
 
-  // Fallback: usar CORS proxy público
-  // Esto codifica la URL de Workera y la pasa por el CORS proxy
-  const proxyUrl = `${CORS_PROXY}${encodeURIComponent(workeraUrl.toString())}`;
-  
-  const proxyResponse = await fetch(proxyUrl, {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-  });
-
-  if (!proxyResponse.ok) {
-    throw new Error(`Error al obtener datos de Workera via CORS proxy: ${proxyResponse.status}`);
-  }
-
-  return proxyResponse.json();
+  // Si no hay Worker de Cloudflare, no hay CORS proxy funcional
+  throw new Error(
+    'Workera bloquea peticiones desde servidores extranjeros (proxy) y ' +
+    'no tiene CORS habilitado para llamadas desde el navegador (directo). ' +
+    'Se necesita el Cloudflare Worker desplegado para conectar desde Chile.'
+  );
 }
 
 /**
- * Función principal de fetch - detecta modo automáticamente
+ * Fetch principal: intenta cada modo en cascada
  */
-async function workeraFetch(
-  endpoint: string,
-  params?: Record<string, string | undefined>
-): Promise<any> {
-  if (_useDirectMode) {
-    return workeraFetchDirect(endpoint, params);
+async function workeraFetch(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
+  switch (_connectionMode) {
+    case 'cloudflare':
+      return workeraFetchCloudflare(endpoint, params);
+    case 'proxy':
+      return workeraFetchProxy(endpoint, params);
+    case 'direct':
+      return workeraFetchDirect(endpoint, params);
+    default:
+      return workeraFetchProxy(endpoint, params);
   }
-  return workeraFetchProxy(endpoint, params);
 }
 
 /**
  * Obtiene todas las páginas de un endpoint paginado
  */
-async function fetchAllPages<T>(
-  endpoint: string,
-  params?: Record<string, string | undefined>
-): Promise<T[]> {
+async function fetchAllPages<T>(endpoint: string, params?: Record<string, string | undefined>): Promise<T[]> {
   const firstPage = await workeraFetch(endpoint, { ...params, page: '1' });
   const totalPages = firstPage.totalPages || 1;
-  
+
   if (totalPages <= 1) return firstPage.data || [];
 
   const allData: T[] = [...(firstPage.data || [])];
@@ -420,11 +441,10 @@ async function fetchAllPages<T>(
 }
 
 // ============================================================
-// API Pública
+// API PÚBLICA
 // ============================================================
 
 export const workeraApi = {
-  // Empleados
   async getEmployees(params?: {
     branchOffice?: string;
     department?: string;
@@ -443,7 +463,6 @@ export const workeraApi = {
     return fetchAllPages<WorkeraEmployee>('employee');
   },
 
-  // Asistencia
   async getAttendance(params: {
     start: string;
     end: string;
@@ -478,7 +497,6 @@ export const workeraApi = {
     return fetchAllPages<WorkeraAttendanceRecord>('attendanceData', params);
   },
 
-  // Turnos asignados
   async getWorkshiftAssigns(params: {
     start: string;
     end: string;
@@ -497,7 +515,6 @@ export const workeraApi = {
     });
   },
 
-  // Horarios
   async getSchedules(params: {
     start: string;
     end: string;
@@ -526,7 +543,6 @@ export const workeraApi = {
     return fetchAllPages<WorkeraEmployeeSchedule>('workshift/schedules', params);
   },
 
-  // Permisos
   async getPermissions(params: {
     start: string;
     end: string;
@@ -555,12 +571,10 @@ export const workeraApi = {
     return fetchAllPages<WorkeraPermission>('permission', params);
   },
 
-  // Tipos de permisos
   async getPermissionTypes(): Promise<WorkeraPermissionType[]> {
     return workeraFetch('permissionTypes');
   },
 
-  // Horas Extras
   async getOvertimeAuthorizations(params: {
     start: string;
     end: string;
@@ -589,7 +603,6 @@ export const workeraApi = {
     return fetchAllPages<WorkeraOvertimeAuth>('overtimeAuthorization', params);
   },
 
-  // Sucursales
   async getBranchOffices(page?: number): Promise<WorkeraBranchResponse> {
     return workeraFetch('branchOffice', { page: String(page || 1) });
   },
@@ -598,7 +611,6 @@ export const workeraApi = {
     return fetchAllPages<WorkeraBranchOffice>('branchOffice');
   },
 
-  // Departamentos
   async getDepartments(page?: number): Promise<WorkeraDepartmentResponse> {
     return workeraFetch('department', { page: String(page || 1) });
   },
