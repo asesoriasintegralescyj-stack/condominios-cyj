@@ -306,7 +306,7 @@ function buildUrl(endpoint: string, params?: Record<string, string | undefined>)
 }
 
 function buildParamsUrl(baseUrl: string, endpoint: string, params?: Record<string, string | undefined>): string {
-  const url = new URL(baseUrl);
+  const url = new URL(baseUrl, window.location.origin);
   url.searchParams.set('endpoint', endpoint);
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
@@ -337,9 +337,14 @@ async function workeraFetchCloudflare(endpoint: string, params?: Record<string, 
 
   const data = await response.json();
   if (!response.ok) {
-    const err = data.error || `Error Cloudflare Worker ${response.status}`;
+    // Incluir detalles completos del error para diagnostico
+    const debugInfo = data.debug ? ` [${JSON.stringify(data.debug)}]` : '';
+    const bodySnippet = data.workeraBody ? ` | Body: ${data.workeraBody.substring(0, 200)}` : '';
+    const err = `${data.error || 'Error Cloudflare Worker ' + response.status}${bodySnippet}${debugInfo}`;
     const error: any = new Error(err);
     error.geoBlocked = data.geoBlocked === true;
+    error.status = data.status;
+    error.debug = data.debug;
     throw error;
   }
 
