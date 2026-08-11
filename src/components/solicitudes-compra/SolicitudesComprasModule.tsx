@@ -229,7 +229,8 @@ export function SolicitudesComprasModule() {
       const url = `/api/solicitudes-compra${params.toString() ? `?${params.toString()}` : ''}`
       const res = await fetch(url)
       if (!res.ok) throw new Error('Error al cargar')
-      const data = await res.json()
+      const json = await res.json()
+      const data = Array.isArray(json.items) ? json.items : Array.isArray(json) ? json : []
       setSolicitudes(data)
     } catch (error) {
       console.error(error)

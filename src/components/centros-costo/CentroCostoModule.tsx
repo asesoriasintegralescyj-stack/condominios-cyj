@@ -63,7 +63,8 @@ export function CentroCostoModule() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const centros = await apiFetch<CentroCosto[]>('/api/centros-costo', [])
+      const json = await apiFetch<{ items?: CentroCosto[] }>('/api/centros-costo', {} as any)
+      const centros: CentroCosto[] = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : []
       setCentros(centros)
       // Módulo de gastos fue eliminado; setear array vacío
       setGastos([])

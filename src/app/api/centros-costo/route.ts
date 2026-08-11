@@ -7,18 +7,27 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 // GET - List all centros de costo
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
   if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'centros-costo.ver')) {
     return apiError('Sin permisos', 403)
   }
   try {
-    const centros = await withRetry(() => db.centroCostoMaster.findMany({
-      orderBy: { codigo: 'asc' }
-    }))
+    const searchParams = request.nextUrl.searchParams
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
+
+    const [centros, total] = await Promise.all([
+      withRetry(() => db.centroCostoMaster.findMany({
+        take: limit,
+        skip: offset,
+        orderBy: { codigo: 'asc' }
+      })),
+      db.centroCostoMaster.count(),
+    ])
     
-    return NextResponse.json(centros)
+    return NextResponse.json({ items: centros, total })
   } catch (error) {
     console.error('Error fetching centros:', error)
     return NextResponse.json({ error: 'Error fetching centros' }, { status: 500 })

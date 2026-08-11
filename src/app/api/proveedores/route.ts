@@ -16,19 +16,28 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
+
+    const whereClause = search ? {
+      OR: [
+        { razonSocial: { contains: search } },
+        { rut: { contains: search } },
+        { giro: { contains: search } },
+      ]
+    } : undefined
+
+    const [proveedores, total] = await Promise.all([
+      withRetry(() => db.proveedor.findMany({
+        where: whereClause,
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: 'desc' }
+      })),
+      db.proveedor.count({ where: whereClause }),
+    ])
     
-    const proveedores = await withRetry(() => db.proveedor.findMany({
-      where: search ? {
-        OR: [
-          { razonSocial: { contains: search } },
-          { rut: { contains: search } },
-          { giro: { contains: search } },
-        ]
-      } : undefined,
-      orderBy: { createdAt: 'desc' }
-    }))
-    
-    return NextResponse.json(proveedores)
+    return NextResponse.json({ items: proveedores, total })
   } catch (error) {
     console.error('Error fetching proveedores:', error)
     return NextResponse.json({ error: 'Error fetching proveedores' }, { status: 500 })

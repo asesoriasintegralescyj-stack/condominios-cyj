@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
     const estado = searchParams.get('estado') || ''
     const prioridad = searchParams.get('prioridad') || ''
     const origenTipo = searchParams.get('origenTipo') || ''
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
     const where: any = {
       condominioId: CONDOMINIO_LAGUNA_NORTE,
@@ -50,10 +52,15 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    const solicitudes = await db.solicitudCompra.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    })
+    const [solicitudes, total] = await Promise.all([
+      db.solicitudCompra.findMany({
+        where,
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.solicitudCompra.count({ where }),
+    ])
 
     // Parse materiales JSON for client convenience
     const parsed = solicitudes.map((s) => ({
@@ -62,7 +69,7 @@ export async function GET(request: NextRequest) {
       links: safeParseLinks(s.links),
     }))
 
-    return NextResponse.json(parsed)
+    return NextResponse.json({ items: parsed, total })
   } catch (error) {
     console.error('Error fetching solicitudes de compra:', error)
     return handlePrismaError(error)

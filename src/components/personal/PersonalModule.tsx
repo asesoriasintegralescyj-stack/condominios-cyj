@@ -132,7 +132,8 @@ export function PersonalModule() {
     try {
       const url = searchTerm ? `/api/personal?search=${encodeURIComponent(searchTerm)}` : '/api/personal'
       const res = await fetch(url)
-      const data = await res.json()
+      const json = await res.json()
+      const data = Array.isArray(json.items) ? json.items : Array.isArray(json) ? json : []
       setPersonal(data)
     } catch (error) {
       console.error('Error fetching personal:', error)

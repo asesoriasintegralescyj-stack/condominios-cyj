@@ -14,6 +14,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const fecha = searchParams.get('fecha')
     const condominioId = searchParams.get('condominioId')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
     if (!fecha) {
       return NextResponse.json({ error: 'Fecha requerida' }, { status: 400 })
@@ -25,10 +27,13 @@ export async function GET(request: Request) {
       whereClause.condominioId = condominioId
     }
 
-    const personal = await db.personal.findMany({
-      where: whereClause,
-      orderBy: { nombre: 'asc' }
-    })
+    const [personal, total] = await Promise.all([
+      db.personal.findMany({
+        where: whereClause,
+        orderBy: { nombre: 'asc' }
+      }),
+      db.personal.count({ where: whereClause }),
+    ])
 
     // Obtener asistencias existentes para la fecha
     const asistencias = await db.asistencia.findMany({
@@ -53,7 +58,9 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json(registros)
+    const paginatedRegistros = registros.slice(offset, offset + limit)
+
+    return NextResponse.json({ items: paginatedRegistros, total })
   } catch (error) {
     console.error('Error fetching asistencia:', error)
     return NextResponse.json({ error: 'Error al obtener asistencia' }, { status: 500 })

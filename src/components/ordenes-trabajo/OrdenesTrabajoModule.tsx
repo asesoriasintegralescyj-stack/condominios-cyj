@@ -282,8 +282,9 @@ export function OrdenesTrabajoModule() {
     try {
       const url = searchTerm ? `/api/ordenes-trabajo?search=${encodeURIComponent(searchTerm)}` : '/api/ordenes-trabajo'
       const res = await fetch(url)
-      const data = await res.json()
-      setOrdenes(data)
+      const json = await res.json()
+      // API ahora retorna { items: [...], total: N } con paginación server-side
+      setOrdenes(Array.isArray(json.items) ? json.items : Array.isArray(json) ? json : [])
     } catch (error) {
       console.error('Error fetching ordenes:', error)
     }

@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
 
     // Para rol personal, buscar el registro de Personal por email y filtrar OT
     let personalFilter: any = undefined
@@ -57,23 +59,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const ordenes = await db.ordenTrabajo.findMany({
-      where: Object.keys(where).length > 0 ? where : undefined,
-      select: {
-        id: true, otNum: true, titulo: true, tipo: true, prioridad: true,
-        estado: true, ubicacion: true, fechaInicio: true, fechaLimite: true,
-        fechaInicioReal: true, fechaFinReal: true, costoEstimado: true,
-        costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
-        tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
-        propiedad: { select: { id: true, nombre: true } },
-        asignado: { select: { id: true, nombre: true, cargo: true } },
-        centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        _count: {
-          select: { materiales: true, herramientas: true, tareas: true, personalOT: true, documentos: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const finalWhere = Object.keys(where).length > 0 ? where : undefined
+
+    const [ordenes, total] = await Promise.all([
+      db.ordenTrabajo.findMany({
+        where: finalWhere,
+        take: limit,
+        skip: offset,
+        select: {
+          id: true, otNum: true, titulo: true, tipo: true, prioridad: true,
+          estado: true, ubicacion: true, fechaInicio: true, fechaLimite: true,
+          fechaInicioReal: true, fechaFinReal: true, costoEstimado: true,
+          costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
+          tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
+          propiedad: { select: { id: true, nombre: true } },
+          asignado: { select: { id: true, nombre: true, cargo: true } },
+          centroCosto: { select: { id: true, codigo: true, nombre: true } },
+          _count: {
+            select: { materiales: true, herramientas: true, tareas: true, personalOT: true, documentos: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      }),
+      db.ordenTrabajo.count({ where: finalWhere }),
+    ])
 
     const ordenesWithCC = ordenes.map(ot => ({
       ...ot,
@@ -81,7 +90,7 @@ export async function GET(request: NextRequest) {
       fotosDespues: [],
     }))
 
-    return NextResponse.json(ordenesWithCC)
+    return NextResponse.json({ items: ordenesWithCC, total })
   } catch (error) {
     console.error('Error fetching ordenes:', error)
     return NextResponse.json({ error: 'Error fetching ordenes' }, { status: 500 })

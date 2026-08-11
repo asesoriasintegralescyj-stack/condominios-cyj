@@ -8,20 +8,29 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 // GET - List all cat herramientas
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
   if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'catalogos.ver')) {
     return apiError('Sin permisos', 403)
   }
   try {
+    const searchParams = request.nextUrl.searchParams
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
+
     // Excluir manualBase64 de la lista para no inflar el payload
-    const herramientas = await db.catHerramienta.findMany({
-      orderBy: { nombre: 'asc' },
-      include: {
-        centroCosto: true,
-      },
-    })
+    const [herramientas, total] = await Promise.all([
+      db.catHerramienta.findMany({
+        take: limit,
+        skip: offset,
+        orderBy: { nombre: 'asc' },
+        include: {
+          centroCosto: true,
+        },
+      }),
+      db.catHerramienta.count(),
+    ])
     // Ocultar manualBase64 e informeMantencionBase64 en la lista (puede ser muy pesado); solo enviar metadatos
     const result = herramientas.map(
       ({
@@ -35,7 +44,7 @@ export async function GET() {
       })
     )
     
-    return NextResponse.json(result)
+    return NextResponse.json({ items: result, total })
   } catch (error) {
     console.error('Error fetching herramientas:', error)
     return NextResponse.json({ error: 'Error fetching herramientas' }, { status: 500 })

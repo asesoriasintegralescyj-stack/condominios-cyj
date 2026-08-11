@@ -71,7 +71,8 @@ export function ProveedoresModule() {
     setLoading(true)
     try {
       const url = searchTerm ? `/api/proveedores?search=${encodeURIComponent(searchTerm)}` : '/api/proveedores'
-      const data = await apiFetch<Proveedor[]>(url, [])
+      const json = await apiFetch<{ items?: Proveedor[] }>(url, {} as any)
+      const data: Proveedor[] = Array.isArray(json?.items) ? json.items : Array.isArray(json) ? json : []
       setProveedores(data)
     } catch (error) {
       console.error('Error fetching proveedores:', error)

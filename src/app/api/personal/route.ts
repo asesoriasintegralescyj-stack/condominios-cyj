@@ -16,20 +16,29 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10) || 50, 200)
+    const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0)
+
+    const whereClause = search ? {
+      OR: [
+        { nombre: { contains: search } },
+        { rut: { contains: search } },
+        { cargo: { contains: search } },
+        { estado: { contains: search } },
+      ]
+    } : undefined
+
+    const [personal, total] = await Promise.all([
+      withRetry(() => db.personal.findMany({
+        where: whereClause,
+        take: limit,
+        skip: offset,
+        orderBy: { createdAt: 'desc' }
+      })),
+      db.personal.count({ where: whereClause }),
+    ])
     
-    const personal = await withRetry(() => db.personal.findMany({
-      where: search ? {
-        OR: [
-          { nombre: { contains: search } },
-          { rut: { contains: search } },
-          { cargo: { contains: search } },
-          { estado: { contains: search } },
-        ]
-      } : undefined,
-      orderBy: { createdAt: 'desc' }
-    }))
-    
-    return NextResponse.json(personal)
+    return NextResponse.json({ items: personal, total })
   } catch (error) {
     console.error('Error fetching personal:', error)
     return NextResponse.json({ error: 'Error fetching personal' }, { status: 500 })
