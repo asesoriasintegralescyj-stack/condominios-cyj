@@ -30,34 +30,43 @@ export async function GET(request: NextRequest) {
       if (to) where.createdAt.lte = new Date(Number(to))
     }
 
-    const scansRaw = await withRetry(() =>
-      db.movilQrScan.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        skip: offset,
-      }),
-    )
-    const total = await withRetry(() => db.movilQrScan.count({ where }))
+    // OPTIMIZADO: 2 queries en paralelo (findMany + count) en vez de N+2.
+    // El schema Prisma no define @relation entre MovilQrScan y MovilQrLocation,
+    // así que usamos batch lookup con findMany({ where: { id: { in: [...] } } }).
+    const [scansRaw, total] = await Promise.all([
+      withRetry(() =>
+        db.movilQrScan.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+      ),
+      withRetry(() => db.movilQrScan.count({ where })),
+    ])
 
-    const locationCache = new Map<string, { id: string; name: string; location: string; code: string } | null>()
-    const scans = await Promise.all(
-      scansRaw.map(async (s) => {
-        let loc = locationCache.get(s.qrLocationId)
-        if (loc === undefined) {
-          try {
-            loc = await withRetry(() =>
-              db.movilQrLocation.findUnique({
-                where: { id: s.qrLocationId },
-                select: { id: true, name: true, location: true, code: true },
-              }),
-            )
-          } catch { loc = null }
-          locationCache.set(s.qrLocationId, loc)
-        }
-        return { ...s, location: loc }
+    // Si no hay escaneos, devolver vacío sin query extra
+    if (scansRaw.length === 0) {
+      return NextResponse.json({ scans: [], total })
+    }
+
+    // OPTIMIZACIÓN: Batch location lookup (1 sola query en vez de N)
+    const locationIds = [...new Set(scansRaw.map((s) => s.qrLocationId))]
+    const locations = await withRetry(() =>
+      db.movilQrLocation.findMany({
+        where: { id: { in: locationIds } },
+        select: { id: true, name: true, location: true, code: true },
       }),
     )
+
+    const locMap = new Map<string, { id: string; name: string; location: string; code: string }>()
+    for (const loc of locations) locMap.set(loc.id, loc)
+
+    // Enriquecer sin queries adicionales
+    const scans = scansRaw.map((s) => ({
+      ...s,
+      location: locMap.get(s.qrLocationId) || null,
+    }))
 
     return NextResponse.json({ scans, total })
   } catch (err) {
@@ -75,9 +84,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     let qrLocationId: string | undefined = body.qrLocationId
+    // OPTIMIZACIÓN: Reutilizar datos del lookup inicial para evitar query extra
+    let locationData: { id: string; name: string; location: string; code: string } | null = null
     if (!qrLocationId && body.code) {
       const loc = await withRetry(() =>
-        db.movilQrLocation.findUnique({ where: { code: String(body.code).trim() } }),
+        db.movilQrLocation.findUnique({
+          where: { code: String(body.code).trim() },
+          select: { id: true, name: true, location: true, code: true },
+        }),
       )
       if (!loc) {
         return NextResponse.json({ error: `Código QR no reconocido: ${body.code}` }, { status: 404 })
@@ -86,6 +100,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `La ubicación ${loc.name} está inactiva` }, { status: 400 })
       }
       qrLocationId = loc.id
+      locationData = loc
     }
 
     if (!qrLocationId) {
@@ -110,17 +125,8 @@ export async function POST(request: NextRequest) {
         data: { qrLocationId, scannedBy, profileId, latitude, longitude, notes, createdAt },
       }),
     )
-
-    let locationData: { id: string; name: string; location: string; code: string } | null = null
-    try {
-      locationData = await withRetry(() =>
-        db.movilQrLocation.findUnique({
-          where: { id: qrLocationId! },
-          select: { id: true, name: true, location: true, code: true },
-        }),
-      )
-    } catch { /* ignore */ }
-
+    // locationData ya viene del lookup por code (si aplica).
+    // Si vino qrLocationId directo, no hacemos query extra.
     return NextResponse.json({ ...scan, location: locationData })
   } catch (err) {
     console.error('POST /api/qr-scans error:', err)
