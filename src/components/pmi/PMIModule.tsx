@@ -214,11 +214,16 @@ export function PMIModule() {
 
   // Auto-refresh cada 60s
   useEffect(() => {
+    const controller = new AbortController()
     const id = setInterval(() => {
+      controller.abort()
       cargarLvs()
       cargarCalendario()
     }, 300000) // 5 min (optimizado BD)
-    return () => clearInterval(id)
+    return () => {
+      clearInterval(id)
+      controller.abort()
+    }
   }, [cargarLvs, cargarCalendario])
 
   // Navegación del calendario

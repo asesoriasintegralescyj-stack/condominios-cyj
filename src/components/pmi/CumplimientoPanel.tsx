@@ -89,8 +89,15 @@ export function CumplimientoPanel() {
   useEffect(() => {
     cargar()
     // Auto-refresh cada 5 minutos
-    const id = setInterval(() => cargar(), 5 * 60 * 1000)
-    return () => clearInterval(id)
+    const controller = new AbortController()
+    const id = setInterval(() => {
+      controller.abort()
+      cargar()
+    }, 5 * 60 * 1000)
+    return () => {
+      clearInterval(id)
+      controller.abort()
+    }
   }, [cargar])
 
   const enviarAlerta = async () => {

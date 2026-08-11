@@ -132,8 +132,15 @@ export function Dashboard() {
         })
     }
     fetchData()
-    const interval = setInterval(fetchData, 300000) // 5 min (optimizado BD)
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    const interval = setInterval(() => {
+      controller.abort()
+      fetchData()
+    }, 300000) // 5 min (optimizado BD)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [])
 
   if (loading) {

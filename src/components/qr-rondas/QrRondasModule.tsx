@@ -325,11 +325,19 @@ export function QrRondasModule() {
     fetchPatentes()
   }, [fetchPatentes])
 
-  // Auto-refresh patentes cada 30s (optimizado para reducir carga del servidor)
+  // Auto-refresh patentes cada 45s (stagger: lecturas=60s, patentes=45s)
+  // AbortController previene fetches huérfanos al desmontar
   useEffect(() => {
     if (tab !== 'patentes') return
-    const interval = setInterval(() => { fetchPatentes(false) }, 30000)
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    const interval = setInterval(() => {
+      controller.abort() // cancelar fetch anterior si aún está en vuelo
+      fetchPatentes(false)
+    }, 45000)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [tab, fetchPatentes])
 
   // ─── Cargar ubicaciones ───
@@ -410,12 +418,20 @@ export function QrRondasModule() {
     fetchScans()
   }, [fetchScans])
 
-  // Auto-refresh lecturas cada 30s (silencioso, sin toast ni spinner)
-  // Optimizado: 30s en vez de 15s para reducir carga en BD Aiven
+  // Auto-refresh lecturas cada 60s (optimizado: 60s para reducir carga BD Aiven,
+  // stagger con patentes para evitar que coincidan las queries)
+  // AbortController previene fetches huérfanos al desmontar
   useEffect(() => {
     if (tab !== 'lecturas') return
-    const interval = setInterval(() => { fetchScans(false) }, 30000)
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    const interval = setInterval(() => {
+      controller.abort() // cancelar fetch anterior si aún está en vuelo
+      fetchScans(false)
+    }, 60000)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [tab, fetchScans])
 
   // ─── Abrir modal de crear/editar ───
@@ -1252,9 +1268,16 @@ export function QrRondasModule() {
       }
     }
     cargarMetricas()
-    // Refrescar métricas cada 30s
-    const id = setInterval(cargarMetricas, 30000)
-    return () => clearInterval(id)
+    // Refrescar métricas cada 30s con AbortController
+    const controller = new AbortController()
+    const id = setInterval(() => {
+      controller.abort() // cancelar fetch anterior si aún está en vuelo
+      cargarMetricas()
+    }, 30000)
+    return () => {
+      clearInterval(id)
+      controller.abort()
+    }
   }, [locations, patentes])
 
   // ─── Acciones del dashboard (hipervínculos) ───

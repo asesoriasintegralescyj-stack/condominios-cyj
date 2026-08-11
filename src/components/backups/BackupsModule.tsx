@@ -205,11 +205,19 @@ export function BackupsModule() {
 
   // Poll for updates if there's a backup in progress
   useEffect(() => {
+    const controller = new AbortController()
     const inProgress = backups.some(b => b.estado === 'EnProgreso' || b.estado === 'Pendiente')
     if (inProgress) {
-      const interval = setInterval(fetchData, 2000)
-      return () => clearInterval(interval)
+      const interval = setInterval(() => {
+        controller.abort()
+        fetchData()
+      }, 2000)
+      return () => {
+        clearInterval(interval)
+        controller.abort()
+      }
     }
+    return () => controller.abort()
   }, [backups, fetchData])
 
   const createBackup = async () => {

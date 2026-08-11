@@ -242,10 +242,15 @@ export function SolicitudesComprasModule() {
   useEffect(() => {
     void fetchSolicitudes()
     // Auto-refresh cada 60 segundos
+    const controller = new AbortController()
     const interval = setInterval(() => {
+      controller.abort()
       void fetchSolicitudes()
     }, 300000) // 5 min (optimizado BD)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {

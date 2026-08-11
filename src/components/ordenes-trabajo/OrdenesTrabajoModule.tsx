@@ -333,10 +333,15 @@ export function OrdenesTrabajoModule() {
       await fetchCatalogs()
     })()
     // Auto-refresh cada 60 segundos
+    const controller = new AbortController()
     const interval = setInterval(() => {
+      controller.abort()
       fetchOrdenes(search)
     }, 300000) // 5 min (optimizado BD)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {
