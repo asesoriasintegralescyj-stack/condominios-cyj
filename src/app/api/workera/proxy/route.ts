@@ -1,211 +1,400 @@
 /**
- * Proxy API Workera - Edge Function
- * ----------------------------------
- * Este endpoint actúa como proxy entre el frontend y la API de Workera.
- * Corre como Edge Function en Vercel (runtime=edge), ejecutándose en el
- * PoP más cercano al usuario. Para usuarios en Chile, esto es Santiago (SCL),
- * evadiendo el bloqueo geográfico de Workera/Cloudflare.
+ * Vercel Edge Function - Workera Proxy v4.0
+ * =========================================
+ * Se ejecuta en el edge de Vercel mas cercano al usuario (Chile=SCL).
+ * Autentica con Keycloak (workera.com/auth/realms/UBootProjekt/)
+ * y reenvia peticiones a workera.com/api/tr/
  *
- * Autenticación Workera: Headers API_USER + API_KEY
- * API Base: https://api.workera.com/apiClient/v1/{servicio}
- *
- * GET  /api/workera/proxy?action=diag          - Diagnóstico
- * GET  /api/workera/proxy?action=testgeo       - Test geo-block
- * GET  /api/workera/proxy?action=clearcache     - Limpiar cache
- * POST /api/workera/proxy                       - Proxy request
- *        Body: { "endpoint": "employee", "params": { "page": "1" } }
+ * Credenciales desde environment variables con fallback.
+ * Retry con exponential backoff (3 intentos).
+ * Timeout de 15s en cada fetch a Workera.
  */
-import { NextRequest, NextResponse } from 'next/server'
 
-const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1'
-// IP del cliente en Chile — se envía como header para intentar bypass de geo-block
-const CHILE_CLIENT_IP = '181.43.202.93'
+import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge'
-export const dynamic = 'force-dynamic'
+// ── Configuracion desde env vars (con fallback) ──
+const WORKERA_BASE = process.env.WORKERA_BASE_URL || 'https://workera.com/api/tr';
+const KEYCLOAK_TOKEN_URL = process.env.WORKERA_KEYCLOAK_URL || 'https://workera.com/auth/realms/UBootProjekt/protocol/openid-connect/token';
+const DEFAULT_COMPANY = process.env.WORKERA_COMPANY || 'lagunanorte';
+const DEFAULT_IP = process.env.WORKERA_IP || '181.43.202.93';
+const WORKERA_USER = process.env.WORKERA_USER || 'administracionlagunanorte@gmail.com';
+const WORKERA_PASSWORD = process.env.WORKERA_PASSWORD || 'Jai.1985';
 
-// Credenciales: prioridad env vars > fallback
-function getCredentials(): { apiUser: string; apiKey: string } {
-  const envUser = process.env.WORKERA_API_USER
-  const envKey = process.env.WORKERA_API_KEY
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1000;
+const FETCH_TIMEOUT_MS = 15000;
 
-  // Si hay env vars configuradas, usar esas
-  if (envUser && envKey) {
-    return { apiUser: envUser, apiKey: envKey }
-  }
+// Cache de tokens en memoria (Edge runtime)
+let tokenCache: {
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+  expires: number;
+  jsessionid: string;
+} | null = null;
 
-  // Fallback: credenciales embebidas (mover a env vars en producción)
-  return {
-    apiUser: 'administracionlagunanorte@gmail.com',
-    apiKey: '2aa45c642463dfa30a7d903ee06b08e3',
+// ============================================================
+// HELPERS
+// ============================================================
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    return resp;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-// Endpoints permitidos (whitelist)
-const ALLOWED_ENDPOINTS = [
-  'employee',
-  'attendanceData',
-  'workshift/assign',
-  'workshift/schedules',
-  'permission',
-  'permissionTypes',
-  'overtimeAuthorization',
-  'branchOffice',
-  'department',
-  'timezone',
-]
-
-// Cache simple en memoria (Edge Functions no tienen persistencia entre requests)
-const cache = new Map<string, { data: unknown; timestamp: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
-
-async function workeraFetch(endpoint: string, params: Record<string, string>): Promise<unknown> {
-  const { apiUser, apiKey } = getCredentials()
-
-  const url = new URL(`${WORKERA_BASE_URL}/${endpoint}`)
-  Object.entries(params).forEach(([k, v]) => {
-    if (v) url.searchParams.append(k, v)
-  })
-
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      'API_USER': apiUser,
-      'API_KEY': apiKey,
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      // Headers clave: intentan hacer que Workera vea la petición como originada desde Chile
-      'ip_client': CHILE_CLIENT_IP,
-      'X-Forwarded-For': CHILE_CLIENT_IP,
-      'X-Real-IP': CHILE_CLIENT_IP,
-    },
-  })
-
-  // Detectar geo-block: Workera devuelve HTML cuando bloquea por país
-  const contentType = response.headers.get('content-type') || ''
-  if (contentType.includes('text/html')) {
-    const text = await response.text()
-    throw new Error(`Workera bloqueó la petición (geo-block). Edge location: ${text.substring(0, 200)}`)
-  }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => 'Error desconocido')
-    throw new Error(`Workera API ${response.status}: ${text.substring(0, 300)}`)
-  }
-
-  return response.json()
+function isHtmlResponse(contentType: string, text: string): boolean {
+  return contentType.includes('html') || text.trim().startsWith('<') || text.trim().startsWith('<!DOCTYPE');
 }
 
-// GET handler: diagnósticos y cache management
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const action = searchParams.get('action')
+function generateSessionId(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  let r = '';
+  for (let i = 0; i < 30; i++) r += chars[Math.floor(Math.random() * chars.length)];
+  return r;
+}
 
-  // === DIAG ===
-  if (action === 'diag') {
-    const creds = getCredentials()
-    const isUsingEnv = !!process.env.WORKERA_API_USER && !!process.env.WORKERA_API_KEY
-    return NextResponse.json({
-      status: 'ok',
-      runtime: 'edge',
-      timestamp: new Date().toISOString(),
-      apiBase: WORKERA_BASE_URL,
-      credentials: isUsingEnv ? 'env_vars' : 'fallback_embedded',
-      cacheSize: cache.size,
-      ipClientHeader: CHILE_CLIENT_IP,
-      edgeLocation: {
-        country: request.headers.get('x-vercel-ip-country') || 'unknown',
-        city: request.headers.get('x-vercel-edge-city') || 'unknown',
-      },
-    })
+function buildCookies(tokens: { accessToken: string; refreshToken: string; jsessionid: string }, company: string): string {
+  return `SID=${tokens.accessToken}; HSID=${tokens.refreshToken}; JSESSIONID=${tokens.jsessionid}; company=${company}`;
+}
+
+function decodeJwt(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return { error: 'Not a JWT' };
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      realm_access: payload.realm_access,
+      resource_access: payload.resource_access,
+      roles: payload.realm_access?.roles || [],
+      azp: payload.azp,
+      aud: payload.aud,
+    };
+  } catch {
+    return { error: 'decode failed' };
   }
+}
 
-  // === CREDS (para modo directo desde browser) ===
-  if (action === 'creds') {
-    const { apiUser, apiKey } = getCredentials()
-    return NextResponse.json({ apiUser, apiKey })
-  }
+// ============================================================
+// KEYCLOAK AUTH: Multi-client password grant con retry
+// ============================================================
+async function authenticateWithRetry(): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+  jsessionid: string;
+  expires: number;
+}> {
+  // Return cached if valid (con margen de 60s)
+  if (tokenCache && tokenCache.expires > Date.now() + 60000) return tokenCache;
 
-  // === TEST GEO ===
-  if (action === 'testgeo') {
+  // Try refresh first
+  if (tokenCache?.refreshToken) {
     try {
-      const data = await workeraFetch('branchOffice', { page: '1' })
-      return NextResponse.json({ geoTest: 'OK', data })
-    } catch (err: any) {
-      return NextResponse.json({
-        geoTest: 'FAILED',
-        error: err.message,
-        edgeLocation: request.headers.get('x-vercel-ip-country') || 'unknown',
-      })
+      const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: tokenCache.clientId,
+          refresh_token: tokenCache.refreshToken,
+        }).toString(),
+      });
+
+      const text = await resp.text();
+
+      if (isHtmlResponse(resp.headers.get('content-type') || '', text)) {
+        tokenCache = null;
+      } else {
+        const data = JSON.parse(text);
+        if (data.access_token) {
+          tokenCache = {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token || tokenCache.refreshToken,
+            clientId: tokenCache.clientId,
+            jsessionid: tokenCache.jsessionid,
+            expires: Date.now() + ((data.expires_in || 300) * 1000) - 60000,
+          };
+          return tokenCache;
+        }
+      }
+    } catch {
+      tokenCache = null;
     }
   }
 
-  // === CLEAR CACHE ===
-  if (action === 'clearcache') {
-    cache.clear()
-    return NextResponse.json({ status: 'cache_cleared' })
+  // Password grant - try multiple clients with retries
+  const clients = [
+    'employed-portal-client',
+    'workera-frontend',
+    'admin-cli',
+  ];
+
+  for (const clientId of clients) {
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
+          body: new URLSearchParams({
+            grant_type: 'password',
+            client_id: clientId,
+            username: WORKERA_USER,
+            password: WORKERA_PASSWORD,
+            scope: 'openid email profile',
+          }).toString(),
+        });
+
+        const contentType = resp.headers.get('content-type') || '';
+        const text = await resp.text();
+
+        if (isHtmlResponse(contentType, text)) {
+          if (attempt < MAX_RETRIES) {
+            await delay(BASE_RETRY_DELAY_MS * attempt);
+            continue;
+          }
+          break;
+        }
+
+        const data = JSON.parse(text);
+        if (data.access_token) {
+          tokenCache = {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token || '',
+            clientId,
+            jsessionid: generateSessionId(),
+            expires: Date.now() + ((data.expires_in || 300) * 1000) - 60000,
+          };
+          return tokenCache;
+        }
+
+        if (data.error === 'invalid_grant' || data.error === 'unauthorized_client') {
+          break;
+        }
+
+        if (attempt < MAX_RETRIES) {
+          await delay(BASE_RETRY_DELAY_MS * attempt);
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError' && attempt < MAX_RETRIES) {
+          await delay(BASE_RETRY_DELAY_MS * attempt);
+          continue;
+        }
+        break;
+      }
+    }
   }
 
-  // === PROXY DIRECTO (legacy: ?endpoint=xxx) ===
-  const endpoint = searchParams.get('endpoint')
-  if (endpoint) {
+  throw new Error('Autenticacion con Keycloak fallo para todos los clientes despues de reintentos');
+}
+
+// ============================================================
+// PROXY: Request a Workera API con retry
+// ============================================================
+async function proxyToWorkera(
+  endpoint: string,
+  apiBody: Record<string, any> | string | undefined,
+  httpMethod: string,
+  tokens: { accessToken: string; refreshToken: string; jsessionid: string },
+  company: string,
+): Promise<{ ok: boolean; status: number; contentType: string; text: string }> {
+  const workeraUrl = `${WORKERA_BASE}/${endpoint}`;
+  const cookies = buildCookies(tokens, company);
+
+  const headers: Record<string, string> = {
+    'Accept': 'application/json, text/plain, */*',
+    'Content-Type': 'application/json',
+    'Cookie': cookies,
+    'Origin': 'https://workera.com',
+    'Referer': `https://workera.com/app/${company}/people/employees`,
+    'ip_client': DEFAULT_IP,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-CL,es;q=0.9,en;q=0.8',
+  };
+
+  const fetchOptions: RequestInit = { method: httpMethod, headers };
+
+  if (httpMethod === 'POST' || httpMethod === 'PUT' || httpMethod === 'PATCH') {
+    fetchOptions.body = typeof apiBody === 'string' ? apiBody : JSON.stringify(apiBody || {});
+  }
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const endpointBase = endpoint.split('?')[0]
-      if (!ALLOWED_ENDPOINTS.includes(endpointBase)) {
-        return NextResponse.json({ error: `Endpoint no permitido: ${endpointBase}` }, { status: 400 })
+      const resp = await fetchWithTimeout(workeraUrl, fetchOptions);
+      const responseText = await resp.text();
+      const responseContentType = resp.headers.get('content-type') || '';
+
+      if (isHtmlResponse(responseContentType, responseText)) {
+        if (attempt < MAX_RETRIES) {
+          tokenCache = null;
+          try {
+            const newTokens = await authenticateWithRetry();
+            return proxyToWorkera(endpoint, apiBody, httpMethod, newTokens, company);
+          } catch {
+            await delay(BASE_RETRY_DELAY_MS * attempt);
+            continue;
+          }
+        }
+        return { ok: false, status: 502, contentType: 'text/html', text: responseText };
       }
 
-      const params: Record<string, string> = {}
-      searchParams.forEach((value, key) => {
-        if (key !== 'endpoint' && value) params[key] = value
-      })
-
-      const data = await workeraFetch(endpoint, params)
-      return NextResponse.json(data)
+      return { ok: resp.ok, status: resp.status, contentType: responseContentType, text: responseText };
     } catch (err: any) {
-      const isGeo = err.message.includes('geo-block') || err.message.includes('Country')
-      return NextResponse.json({ error: err.message, geoBlocked: isGeo }, { status: isGeo ? 502 : 500 })
+      if (err.name === 'AbortError' && attempt < MAX_RETRIES) {
+        await delay(BASE_RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      throw err;
     }
   }
 
-  return NextResponse.json({ error: 'Acción no reconocida. Usa ?action=diag|testgeo|clearcache o ?endpoint=xxx' }, { status: 400 })
+  throw new Error('Todos los reintentos fallaron');
 }
 
-// POST handler: proxy requests con body JSON
+// ============================================================
+// EDGE RUNTIME
+// ============================================================
+export const runtime = 'edge';
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get('action');
+
+  if (action === 'diag') {
+    try {
+      const tokens = await authenticateWithRetry();
+      const tokenInfo = decodeJwt(tokens.accessToken);
+      const roles = tokenInfo.realm_access?.roles || [];
+
+      return NextResponse.json({
+        success: true,
+        mode: 'vercel-edge',
+        authClient: tokens.clientId,
+        hasRoles: roles.length > 0,
+        roles,
+        tokenAzp: tokenInfo.azp,
+        tokenAud: tokenInfo.aud,
+        expiresAt: new Date(tokens.expires).toISOString(),
+        cacheExpiresIn: Math.round((tokens.expires - Date.now()) / 1000),
+      });
+    } catch (err: any) {
+      return NextResponse.json({
+        success: false,
+        mode: 'vercel-edge',
+        error: err.message,
+      }, { status: 500 });
+    }
+  }
+
+  if (action === 'clearcache') {
+    tokenCache = null;
+    return NextResponse.json({ message: 'Cache limpiado' });
+  }
+
+  if (action === 'testgeo') {
+    const results: Array<{ client: string; status: number; blocked: boolean; preview?: string }> = [];
+    const testClients = ['employed-portal-client', 'workera-frontend', 'admin-cli'];
+
+    for (const clientId of testClients) {
+      try {
+        const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': '*/*' },
+          body: new URLSearchParams({
+            grant_type: 'password',
+            client_id: clientId,
+            username: WORKERA_USER,
+            password: WORKERA_PASSWORD,
+          }).toString(),
+        });
+        const contentType = resp.headers.get('content-type') || '';
+        const text = await resp.text();
+        const isHtml = isHtmlResponse(contentType, text);
+
+        results.push({
+          client: clientId,
+          status: resp.status,
+          blocked: isHtml || resp.status === 406,
+          preview: text.substring(0, 200),
+        });
+      } catch (err: any) {
+        results.push({
+          client: clientId,
+          status: 0,
+          blocked: true,
+          preview: err.message,
+        });
+      }
+    }
+
+    const anyReachable = results.some(r => !r.blocked);
+
+    return NextResponse.json({
+      reachable: anyReachable,
+      edgeHint: anyReachable
+        ? 'Edge funciona desde esta ubicacion'
+        : 'Ningun cliente reachable - posible geo-bloque en el Edge location',
+      results,
+    });
+  }
+
+  return NextResponse.json({
+    error: 'Accion no reconocida. Usar ?action=diag, ?action=clearcache, o ?action=testgeo'
+  }, { status: 400 });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { endpoint, params = {} } = body
+    const body = await request.json();
+    const { endpoint, body: apiBody, method } = body;
+    const company = DEFAULT_COMPANY;
 
     if (!endpoint) {
-      return NextResponse.json({ error: 'Falta "endpoint" en el body (ej: "employee", "attendanceData")' }, { status: 400 })
+      return NextResponse.json({ error: 'Falta "endpoint" en el body' }, { status: 400 });
     }
 
-    const endpointBase = endpoint.split('?')[0]
-    if (!ALLOWED_ENDPOINTS.includes(endpointBase)) {
-      return NextResponse.json({ error: `Endpoint no permitido: ${endpointBase}` }, { status: 400 })
+    const tokens = await authenticateWithRetry();
+    const httpMethod = (method || 'POST').toUpperCase();
+    const result = await proxyToWorkera(endpoint, apiBody, httpMethod, tokens, company);
+
+    if (result.ok) {
+      return new NextResponse(result.text, {
+        status: 200,
+        headers: { 'Content-Type': result.contentType || 'application/json' },
+      });
     }
 
-    // Verificar cache
-    const cacheKey = `${endpoint}:${JSON.stringify(params)}`
-    const cached = cache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (isHtmlResponse(result.contentType, result.text)) {
       return NextResponse.json({
-        ...(cached.data as Record<string, unknown>),
-        _cached: true,
-        _cacheAge: Math.round((Date.now() - cached.timestamp) / 1000),
-      })
+        error: 'Workera devolvio HTML (posible geo-bloque)',
+        status: result.status,
+        htmlPreview: result.text.substring(0, 300),
+        suggestion: 'La Edge Function puede estar ejecutandose desde fuera de Chile.',
+      }, { status: 502 });
     }
 
-    const data = await workeraFetch(endpoint, params)
+    return NextResponse.json({
+      error: `Workera API ${result.status}`,
+      authClient: tokens.clientId,
+      body: result.text.substring(0, 500),
+    }, { status: result.status >= 500 ? 502 : result.status });
 
-    // Guardar en cache
-    cache.set(cacheKey, { data, timestamp: Date.now() })
-
-    return NextResponse.json(data)
   } catch (err: any) {
-    const isGeo = err.message.includes('geo-block') || err.message.includes('Country')
-    return NextResponse.json({ error: err.message, geoBlocked: isGeo }, { status: isGeo ? 502 : 500 })
+    return NextResponse.json({
+      error: err.message,
+    }, { status: 500 });
   }
 }

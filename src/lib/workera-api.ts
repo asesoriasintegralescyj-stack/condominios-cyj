@@ -1,670 +1,260 @@
 /**
- * Cliente API Workera v2.0 CL
- * --------------------------
- * Servicio para interactuar con la API REST de Workera Chile.
- * 
- * ARQUITECTURA DE CONEXIÓN:
- * 
- * MODO DIRECTO (PRINCIPAL - RECOMENDADO):
- *    - El navegador del usuario (en Chile) hace fetch directo a api.workera.com
- *    - Workera tiene CORS habilitado (access-control-allow-origin: *)
- *    - La IP del usuario es chilena → sin geo-block
- *    - Credenciales obtenidas del servidor (solo admin)
- * 
- * MODO CLOUDFLARE WORKER (fallback):
- *    - Cloudflare Workers NO pueden evadir geo-block (fetch sale del mismo PoP)
- *    - Solo funciona si el usuario está en Chile (PoP chileno)
- *    - LIMITADO: Si Workera bloquea IPs de Cloudflare, no funciona
- * 
- * MODO PROXY SERVIDOR (último recurso):
- *    - Edge Function en Vercel (generalmente sale desde EE.UU.)
- *    - Workera bloquea peticiones desde servidores no chilenos
+ * Workera API Client v6.0 (Desktop)
+ * ==================================
+ * Cliente para comunicarse con el proxy Edge de Workera.
+ *
+ * Workera tiene geo-bloqueo: solo acepta peticiones desde Chile.
+ * El proxy Edge Function se ejecuta desde el PoP mas cercano al usuario.
+ *
+ * - Timeout de 20s en requests al proxy
+ * - Retry con exponential backoff (2 intentos) solo para errores 5xx/timeout
+ * - Cache de conexion status (5s cooldown)
  */
 
-// ============================================================
-// TIPOS
-// ============================================================
-
-export interface WorkeraRequestInfo {
-  companyName: string;
-  companyIdentification: string;
-  companyNickname: string;
-  userEmail: string;
-}
+const API_URL = '/api/workera/proxy';
+const CLIENT_TIMEOUT_MS = 20000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
+const STATUS_COOLDOWN_MS = 5000;
 
 export interface WorkeraEmployee {
-  code: string;
-  deviceCode: number;
-  identification: string;
-  name: string;
-  secondName?: string;
-  lastName: string;
-  secondLastName?: string;
-  branchOfficeCode: string;
-  branchOfficeName: string;
-  departmentCode: string;
-  departmentName: string;
-  employeeStatus: string;
-  genre?: string;
-  birthDate?: string;
-  civilStatus?: string;
-  address?: string;
-  personalPhone?: number;
-  personalMail?: string;
-  corporateMail?: string;
-  corporatePhone?: number;
-  favorite?: boolean;
-  comment?: string;
-}
-
-export interface WorkeraEmployeeResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraEmployee[];
-}
-
-export type AttendanceType = 0 | 1 | 2 | 3 | 4 | 5;
-export type AttendanceStatus = 'ACTIVO' | 'INACTIVO' | 'MODIFICADO';
-export type OriginCode = 'RELOJ' | 'MOVIL' | 'SISTEMA' | 'PORTAL' | 'DESKTOP';
-
-export interface WorkeraEmployeeMini {
-  code: number;
-  deviceCode: number;
-  identification: string;
-  name: string;
-  lastName: string;
+  id: number;
+  completeName: string;
+  rut: string;
+  position: string;
   branchOffice: string;
   department: string;
-  employeeStatus: string;
-  companyIdentification: string;
-  companyName: string;
+  costCenter: string;
+  status: string;
+  contractStatus: string;
+  email?: string;
 }
 
-export interface WorkeraAttendanceRecord {
-  employee: WorkeraEmployeeMini;
-  attendanceDate: string;
-  attendanceType: AttendanceType;
-  attendanceStatus: AttendanceStatus;
-  origin: string;
-  originCode: OriginCode;
-  address?: string;
-  deviceName?: string;
-  checksum?: string;
-  isMobile: boolean;
-  coordinatesMobile?: string;
-  precision?: number;
-}
-
-export interface WorkeraAttendanceResponse {
+export interface WorkeraEmployeeFilterResponse {
+  data: WorkeraEmployee[];
+  total: number;
   page: number;
+  perPage: number;
   totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraAttendanceRecord[];
-}
-
-export interface WorkeraWorkshiftAssign {
-  id: number;
-  employee: WorkeraEmployeeMini;
-  start: string;
-  end: string;
-  workshiftCode: string;
-  workshiftName: string;
-  flexible: boolean;
-  period: string;
-  extension: number;
-}
-
-export interface WorkeraWorkshiftAssignResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraWorkshiftAssign[];
-}
-
-export interface WorkeraSchedule {
-  workshiftCode: string;
-  date: string;
-  workshiftName: string;
-  workshiftStart: string;
-  workshiftEnd: string;
-  scheduleName: string;
-  start: string;
-  end: string;
-}
-
-export interface WorkeraEmployeeSchedule {
-  employee: WorkeraEmployeeMini;
-  schedules: WorkeraSchedule[];
-}
-
-export interface WorkeraSchedulesResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraEmployeeSchedule[];
-}
-
-export type PermissionType = 'TRABAJADOR' | 'TRABAJADO_EN_HORARIO' | 'NO_TRABAJADO' | 'LICENCIA_MEDICA' | 'VACACIONES' | 'PRENATAL' | 'POSTNATAL';
-
-export interface WorkeraPermission {
-  id: number;
-  employee: WorkeraEmployeeMini;
-  start: string;
-  end: string;
-  permissionCode: string;
-  permissionName: string;
-  permissionType: PermissionType;
-  comment?: string;
-}
-
-export interface WorkeraPermissionResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraPermission[];
-}
-
-export interface WorkeraPermissionType {
-  code: string;
-  name: string;
-  description?: string;
-}
-
-export interface WorkeraOvertimeAuth {
-  employee: WorkeraEmployeeMini;
-  authDate: string;
-  scheduleInAuthTime: number;
-  scheduleOutAuthTime: number;
-  withoutScheduleAuthTime: number;
-  holidayExtraAuthTime: number;
-  comment?: string;
-  assigned: boolean;
-}
-
-export interface WorkeraOvertimeResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraOvertimeAuth[];
 }
 
 export interface WorkeraBranchOffice {
   id: number;
   name: string;
-  code: string;
-  description?: string;
-  address?: string;
-  timezoneId?: number;
-  timezoneName?: string;
-  status: string;
-  defaultBranchoffice: boolean;
-  employeesCount: number;
 }
 
-export interface WorkeraBranchResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraBranchOffice[];
-}
-
-export interface WorkeraDepartment {
+export interface WorkeraAttendanceRecord {
   id: number;
-  name: string;
-  code: string;
-  description?: string;
+  employeeId: number;
+  employeeName: string;
+  date: string;
+  checkIn?: string;
+  checkOut?: string;
   status: string;
-  defaultDepartment: boolean;
-  employeesCount: number;
+  [key: string]: any;
 }
 
-export interface WorkeraDepartmentResponse {
-  page: number;
-  totalPages: number;
-  pageResult: number;
-  totalResult: number;
-  requestInfo: WorkeraRequestInfo;
-  data: WorkeraDepartment[];
+export interface WorkeraConnectionStatus {
+  connected: boolean;
+  mode: string;
+  location?: string;
+  authClient?: string;
+  hasRoles?: boolean;
+  roles?: string[];
+  error?: string;
 }
 
-export const ATTENDANCE_TYPE_LABELS: Record<number, string> = {
-  0: 'Entrada',
-  1: 'Salida',
-  2: 'Salida Extraordinaria',
-  3: 'Entrada Extraordinaria',
-  4: 'Inicio Descanso',
-  5: 'Termino Descanso',
-};
+let lastStatusCheck: { time: number; result: WorkeraConnectionStatus } | null = null;
 
-export const ORIGIN_LABELS: Record<string, string> = {
-  RELOJ: 'Reloj Biometrico',
-  MOVIL: 'App Movil',
-  SISTEMA: 'Sistema',
-  PORTAL: 'Portal Trabajador',
-  DESKTOP: 'App Escritorio',
-};
-
-// ============================================================
-// ESTADO DE CONEXIÓN
-// ============================================================
-
-export type ConnectionMode = 'cloudflare' | 'proxy' | 'direct';
-
-let _connectionMode: ConnectionMode = 'direct';
-let _apiUser = '';
-let _apiKey = '';
-
-// URL del Worker de Cloudflare (proxy para evadir CORS + geo-block)
-// Se usa la variable de entorno si está configurada, sino la URL por defecto del Worker deployado
-const CLOUDFLARE_WORKER_URL = process.env.NEXT_PUBLIC_WORKERA_PROXY_URL || 'https://workera-proxy.asesoriasintegralescyj.workers.dev';
-
-export function setConnectionMode(mode: ConnectionMode, apiUser?: string, apiKey?: string) {
-  _connectionMode = mode;
-  if (apiUser) _apiUser = apiUser;
-  if (apiKey) _apiKey = apiKey;
-}
-
-export function getConnectionMode(): ConnectionMode {
-  return _connectionMode;
-}
-
-export function hasCloudflareWorker(): boolean {
-  return !!CLOUDFLARE_WORKER_URL;
-}
-
-// ============================================================
-// FETCH POR MODO
-// ============================================================
-
-const WORKERA_BASE_URL = 'https://api.workera.com/apiClient/v1';
-
-function buildUrl(endpoint: string, params?: Record<string, string | undefined>): string {
-  const url = new URL(`${WORKERA_BASE_URL}/${endpoint}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        url.searchParams.append(k, v);
-      }
-    });
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = CLIENT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    return resp;
+  } finally {
+    clearTimeout(timer);
   }
-  return url.toString();
 }
 
-function buildParamsUrl(baseUrl: string, endpoint: string, params?: Record<string, string | undefined>): string {
-  // Si es URL relativa, resolver contra el origin del navegador
-  const fullBase = baseUrl.startsWith('http') ? baseUrl : `${window.location.origin}${baseUrl}`;
-  const url = new URL(fullBase);
-  url.searchParams.set('endpoint', endpoint);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        url.searchParams.set(k, v);
-      }
-    });
+export async function testConnection(): Promise<WorkeraConnectionStatus> {
+  if (lastStatusCheck && Date.now() - lastStatusCheck.time < STATUS_COOLDOWN_MS) {
+    return lastStatusCheck.result;
   }
-  return url.toString();
-}
-
-/**
- * Modo Cloudflare Worker: fallback cuando el modo directo falla
- * NOTA: Cloudflare Workers NO evaden geo-block. Solo funcionan
- * si el usuario está en Chile (PoP chileno).
- */
-async function workeraFetchCloudflare(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
-  if (!CLOUDFLARE_WORKER_URL) {
-    throw new Error('Cloudflare Worker no configurado');
-  }
-
-  const url = buildParamsUrl(CLOUDFLARE_WORKER_URL, endpoint, params);
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    const status = data.status || response.status;
-    const geoBlocked = data.geoBlocked ? ' [GEO-BLOCKED]' : '';
-    const debugInfo = data.debug ? ` [${JSON.stringify(data.debug)}]` : '';
-    const bodySnippet = data.workeraBody ? ` | Body: ${data.workeraBody.substring(0, 200)}` : '';
-    const err = `Workera API ${status}${geoBlocked}${bodySnippet}${debugInfo}`;
-    const error: any = new Error(err);
-    error.geoBlocked = data.geoBlocked === true;
-    error.status = status;
-    error.debug = data.debug;
-    throw error;
-  }
-
-  return data;
-}
-
-/**
- * Modo 2: Proxy Servidor (Edge Function en Vercel)
- */
-async function workeraFetchProxy(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
-  const url = buildParamsUrl('/api/workera/proxy', endpoint, params);
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    const err = data.error || `Error proxy ${response.status}`;
-    const error: any = new Error(err);
-    error.geoBlocked = data.geoBlocked === true;
-    throw error;
-  }
-
-  return data;
-}
-
-/**
- * Modo Directo: Fetch desde el navegador del usuario (en Chile)
- * Workera tiene CORS habilitado (access-control-allow-origin: *)
- * La IP del usuario en Chile evita el geo-block.
- * Obtiene credenciales automáticamente del proxy si no están seteadas.
- */
-let _credsLoaded = false;
-
-async function ensureCredentials(): Promise<void> {
-  if (_apiUser && _apiKey) return; // Ya tiene credenciales
-  if (_credsLoaded) return; // Ya intentó cargarlas y falló
 
   try {
-    _credsLoaded = true;
-    const resp = await fetch('/api/workera/proxy?action=creds');
-    if (resp.ok) {
-      const { apiUser, apiKey } = await resp.json();
-      if (apiUser && apiKey) {
-        _apiUser = apiUser;
-        _apiKey = apiKey;
-      }
+    const resp = await fetchWithTimeout(`${API_URL}?action=diag`);
+
+    if (!resp.ok) {
+      const status: WorkeraConnectionStatus = {
+        connected: false,
+        mode: 'vercel-edge',
+        error: `HTTP ${resp.status} - El servidor del proxy no responde`,
+      };
+      lastStatusCheck = { time: Date.now(), result: status };
+      return status;
     }
-  } catch {
-    // Si falla, el modo directo no funcionará
+
+    const data = await resp.json();
+
+    if (data.success === false && data.error) {
+      const status: WorkeraConnectionStatus = {
+        connected: false,
+        mode: 'vercel-edge',
+        error: `Auth fallo: ${data.error}`,
+      };
+      lastStatusCheck = { time: Date.now(), result: status };
+      return status;
+    }
+
+    const status: WorkeraConnectionStatus = {
+      connected: data.success || false,
+      mode: 'vercel-edge',
+      location: data.location || 'CL',
+      authClient: data.authClient || 'none',
+      hasRoles: data.hasRoles || false,
+      roles: data.roles || [],
+      error: data.error,
+    };
+    lastStatusCheck = { time: Date.now(), result: status };
+    return status;
+  } catch (error: any) {
+    const msg = error.name === 'AbortError'
+      ? 'Timeout: el proxy no responde en 20s. Posible geo-bloque.'
+      : `Error de red: ${error.message}`;
+    const status: WorkeraConnectionStatus = {
+      connected: false,
+      mode: 'vercel-edge',
+      error: msg,
+    };
+    lastStatusCheck = { time: Date.now(), result: status };
+    return status;
   }
 }
 
-async function workeraFetchDirect(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
-  await ensureCredentials();
+async function workeraFetch(
+  url: string,
+  options: RequestInit,
+  retries: number = MAX_RETRIES,
+): Promise<Response> {
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      const resp = await fetchWithTimeout(url, options);
 
-  if (!_apiUser || !_apiKey) {
-    throw new Error('No se pudieron obtener credenciales para modo directo');
+      if (!resp.ok && (resp.status >= 500 || resp.status === 502 || resp.status === 408)) {
+        if (attempt <= retries) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+          lastStatusCheck = null;
+          continue;
+        }
+      }
+
+      return resp;
+    } catch (error: any) {
+      if (error.name === 'AbortError' && attempt <= retries) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+        lastStatusCheck = null;
+        continue;
+      }
+      throw error;
+    }
   }
 
-  const workeraUrl = buildUrl(endpoint, params);
+  throw new Error('Maximos reintentos alcanzados');
+}
 
-  const response = await fetch(workeraUrl, {
-    method: 'GET',
-    headers: {
-      'API_USER': _apiUser,
-      'API_KEY': _apiKey,
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'Accept-Language': 'es-CL,es;q=0.9',
-      // Header ip_client: intenta bypass de geo-block enviando IP del cliente chileno
-      'ip_client': '181.43.202.93',
+export async function fetchEmployees(
+  page: number = 1,
+  perPage: number = 20,
+  search: string = '',
+  filters?: {
+    branchOfficeId?: number;
+    departmentId?: number;
+    costCenterId?: number;
+    statuses?: string[];
+    employeeContractStatus?: string[];
+  },
+): Promise<WorkeraEmployeeFilterResponse> {
+  const body = {
+    filters: {
+      search,
+      positionId: 0,
+      branchOfficeId: filters?.branchOfficeId || 0,
+      departmentId: filters?.departmentId || 0,
+      costCenterId: filters?.costCenterId || 0,
+      statuses: filters?.statuses || ['ACTIVO'],
+      employeeContractStatus: filters?.employeeContractStatus || ['CON_CONTRATO', 'CONTRATO_EN_PROCESO', 'SIN_CONTRATO'],
     },
+    sort: { field: 'completeName', type: 'ASC' },
+    page,
+    perPage,
+  };
+
+  const resp = await workeraFetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: 'employee-filter', body }),
   });
 
-  // Geo-block: Workera retorna 406 con HTML
-  if (response.status === 406) {
-    const error: any = new Error('Workera bloqueo la peticion por geo-restriccion (406)');
-    error.geoBlocked = true;
-    throw error;
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+    throw new Error(err.error || `Error ${resp.status}`);
   }
 
-  // Otros errores HTTP
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    let errorData: any = {};
-    try { errorData = JSON.parse(text); } catch {}
-    const error: any = new Error(`Workera API ${response.status}: ${errorData.message || text.substring(0, 200)}`);
-    error.status = response.status;
-    error.geoBlocked = response.status === 406;
-    throw error;
-  }
-
-  return response.json();
+  return resp.json();
 }
 
-/**
- * Fetch principal: intenta cada modo en cascada
- */
-async function workeraFetch(endpoint: string, params?: Record<string, string | undefined>): Promise<any> {
-  switch (_connectionMode) {
-    case 'cloudflare':
-      return workeraFetchCloudflare(endpoint, params);
-    case 'proxy':
-      return workeraFetchProxy(endpoint, params);
-    case 'direct':
-      return workeraFetchDirect(endpoint, params);
-    default:
-      return workeraFetchProxy(endpoint, params);
-  }
-}
+export async function fetchBranchOffices(): Promise<WorkeraBranchOffice[]> {
+  const resp = await workeraFetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: 'branchOffice', body: {}, method: 'GET' }),
+  });
 
-/**
- * Obtiene todas las páginas de un endpoint paginado
- */
-async function fetchAllPages<T>(endpoint: string, params?: Record<string, string | undefined>): Promise<T[]> {
-  const firstPage = await workeraFetch(endpoint, { ...params, page: '1' });
-  const totalPages = firstPage.totalPages || 1;
-
-  if (totalPages <= 1) return firstPage.data || [];
-
-  const allData: T[] = [...(firstPage.data || [])];
-  const pages: number[] = [];
-  for (let i = 2; i <= totalPages; i++) pages.push(i);
-
-  for (let i = 0; i < pages.length; i += 5) {
-    const batch = pages.slice(i, i + 5);
-    const results = await Promise.all(
-      batch.map(p => workeraFetch(endpoint, { ...params, page: String(p) }))
-    );
-    for (const result of results) {
-      if (result.data) allData.push(...result.data);
-    }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+    throw new Error(err.error || `Error ${resp.status}`);
   }
 
-  return allData;
+  const data = await resp.json();
+  return data.data || data || [];
 }
 
-// ============================================================
-// API PÚBLICA
-// ============================================================
+export async function fetchAttendance(
+  employeeId: number,
+  dateFrom: string,
+  dateTo: string,
+): Promise<WorkeraAttendanceRecord[]> {
+  const resp = await workeraFetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint: 'attendanceData', body: { employeeId, dateFrom, dateTo } }),
+  });
 
-export const workeraApi = {
-  async getEmployees(params?: {
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-    page?: number;
-  }): Promise<WorkeraEmployeeResponse> {
-    return workeraFetch('employee', {
-      branchOffice: params?.branchOffice,
-      department: params?.department,
-      employees: params?.employees,
-      page: params?.page ? String(params.page) : '1',
-    });
-  },
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+    throw new Error(err.error || `Error ${resp.status}`);
+  }
 
-  async getAllEmployees(): Promise<WorkeraEmployee[]> {
-    return fetchAllPages<WorkeraEmployee>('employee');
-  },
+  const data = await resp.json();
+  return data.data || [];
+}
 
-  async getAttendance(params: {
-    start: string;
-    end: string;
-    page?: number;
-    employeeCode?: string;
-    branchOfficeCode?: string;
-    departmentCode?: string;
-    attTypes?: string;
-    originCode?: string;
-  }): Promise<WorkeraAttendanceResponse> {
-    return workeraFetch('attendanceData', {
-      start: params.start,
-      end: params.end,
-      page: String(params.page || 1),
-      employeeCode: params.employeeCode,
-      branchOfficeCode: params.branchOfficeCode,
-      departmentCode: params.departmentCode,
-      attTypes: params.attTypes,
-      originCode: params.originCode,
-    });
-  },
+export async function workeraRequest<T = any>(
+  endpoint: string,
+  body: Record<string, any>,
+  method: string = 'POST',
+): Promise<T> {
+  const resp = await workeraFetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, body, method }),
+  });
 
-  async getAllAttendance(params: {
-    start: string;
-    end: string;
-    employeeCode?: string;
-    branchOfficeCode?: string;
-    departmentCode?: string;
-    attTypes?: string;
-    originCode?: string;
-  }): Promise<WorkeraAttendanceRecord[]> {
-    return fetchAllPages<WorkeraAttendanceRecord>('attendanceData', params);
-  },
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+    throw new Error(err.error || `Error ${resp.status}`);
+  }
 
-  async getWorkshiftAssigns(params: {
-    start: string;
-    end: string;
-    page?: number;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraWorkshiftAssignResponse> {
-    return workeraFetch('workshift/assign', {
-      start: params.start,
-      end: params.end,
-      page: String(params.page || 1),
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
-  },
-
-  async getSchedules(params: {
-    start: string;
-    end: string;
-    page?: number;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraSchedulesResponse> {
-    return workeraFetch('workshift/schedules', {
-      start: params.start,
-      end: params.end,
-      page: String(params.page || 1),
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
-  },
-
-  async getAllSchedules(params: {
-    start: string;
-    end: string;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraEmployeeSchedule[]> {
-    return fetchAllPages<WorkeraEmployeeSchedule>('workshift/schedules', params);
-  },
-
-  async getPermissions(params: {
-    start: string;
-    end: string;
-    page?: number;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraPermissionResponse> {
-    return workeraFetch('permission', {
-      start: params.start,
-      end: params.end,
-      page: String(params.page || 1),
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
-  },
-
-  async getAllPermissions(params: {
-    start: string;
-    end: string;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraPermission[]> {
-    return fetchAllPages<WorkeraPermission>('permission', params);
-  },
-
-  async getPermissionTypes(): Promise<WorkeraPermissionType[]> {
-    return workeraFetch('permissionTypes');
-  },
-
-  async getOvertimeAuthorizations(params: {
-    start: string;
-    end: string;
-    page?: number;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraOvertimeResponse> {
-    return workeraFetch('overtimeAuthorization', {
-      start: params.start,
-      end: params.end,
-      page: String(params.page || 1),
-      branchOffice: params.branchOffice,
-      department: params.department,
-      employees: params.employees,
-    });
-  },
-
-  async getAllOvertimeAuthorizations(params: {
-    start: string;
-    end: string;
-    branchOffice?: string;
-    department?: string;
-    employees?: string;
-  }): Promise<WorkeraOvertimeAuth[]> {
-    return fetchAllPages<WorkeraOvertimeAuth>('overtimeAuthorization', params);
-  },
-
-  async getBranchOffices(page?: number): Promise<WorkeraBranchResponse> {
-    return workeraFetch('branchOffice', { page: String(page || 1) });
-  },
-
-  async getAllBranchOffices(): Promise<WorkeraBranchOffice[]> {
-    return fetchAllPages<WorkeraBranchOffice>('branchOffice');
-  },
-
-  async getDepartments(page?: number): Promise<WorkeraDepartmentResponse> {
-    return workeraFetch('department', { page: String(page || 1) });
-  },
-
-  async getAllDepartments(): Promise<WorkeraDepartment[]> {
-    return fetchAllPages<WorkeraDepartment>('department');
-  },
-};
-// v2.1: modo proxy como principal (Edge Function Vercel con credenciales embebidas)
+  return resp.json();
+}
