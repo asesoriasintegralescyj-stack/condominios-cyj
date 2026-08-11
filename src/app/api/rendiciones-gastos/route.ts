@@ -40,12 +40,29 @@ export async function GET(req: NextRequest) {
       where.responsableId = session.user.id
     }
 
+    // OPTIMIZADO: Excluir comprobante/documento (base64) del listado.
+    // Esos campos pueden ser 100KB-2MB cada uno, y con 100 rendiciones
+    // con 3 boletas c/u = hasta 600MB innecesarios por request.
+    // Se entregan solo en el endpoint de detalle GET /api/rendiciones-gastos/[id].
     const rendiciones = await withRetry(() =>
       db.rendicionGasto.findMany({
         where,
         include: {
           responsable: { select: { id: true, nombre: true, cargo: true } },
-          boletas: { include: { centroCosto: { select: { id: true, nombre: true, codigo: true } }, categoria: { select: { id: true, nombre: true, color: true } } } },
+          boletas: {
+            select: {
+              id: true,
+              descripcion: true,
+              monto: true,
+              fecha: true,
+              nDocumento: true,
+              proveedor: true,
+              notas: true,
+              // comprobante y documento INTENCIONALMENTE excluidos del listado
+              centroCosto: { select: { id: true, nombre: true, codigo: true } },
+              categoria: { select: { id: true, nombre: true, color: true } },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 100,

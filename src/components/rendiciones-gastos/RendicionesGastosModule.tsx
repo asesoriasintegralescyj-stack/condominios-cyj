@@ -326,15 +326,22 @@ export function RendicionesGastosModule() {
     setSubmitting(false)
   }
 
-  const openEdit = (r: Rendicion) => {
-    setEditingRendicion(r)
-    setFormPeriodo(r.periodo)
-    setFormConcepto(r.concepto)
-    setFormDescripcion(r.descripcion || '')
-    setFormResponsableId(r.responsableId || '')
-    setFormResponsableNombre(r.responsableNombre || '')
-    setFormObservaciones(r.observaciones || '')
-    setFormBoletas(r.boletas.length > 0 ? r.boletas.map((b) => ({ ...b })) : [emptyBoleta()])
+  const openEdit = async (r: Rendicion) => {
+    // OPTIMIZACIÓN: Al editar, fetch el detalle completo (con base64) individual.
+    // El listado excluye comprobante/documento para reducir payload.
+    const res = await apiFetch<Rendicion>(`/api/rendiciones-gastos/${r.id}`)
+    if (res && res.id) {
+      setEditingRendicion(res)
+      setFormPeriodo(res.periodo)
+      setFormConcepto(res.concepto)
+      setFormDescripcion(res.descripcion || '')
+      setFormResponsableId(res.responsableId || '')
+      setFormResponsableNombre(res.responsableNombre || '')
+      setFormObservaciones(res.observaciones || '')
+      setFormBoletas(res.boletas.length > 0 ? res.boletas.map((b) => ({ ...b })) : [emptyBoleta()])
+    } else {
+      toast.error('Error al cargar detalle de la rendición')
+    }
     setShowCreate(true)
   }
 
