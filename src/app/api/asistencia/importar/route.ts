@@ -195,10 +195,10 @@ export async function POST(request: NextRequest) {
     // Ejecutar análisis
     const resultado = analizarAsistencia(horarios, registros, fechaDesde, fechaHasta)
 
-    // Guardar inasistencias detectadas
-    for (const inas of resultado.inasistencias) {
-      await db.inasistenciaAtraso.create({
-        data: {
+    // Guardar inasistencias detectadas con createMany (1 sola query)
+    if (resultado.inasistencias.length > 0) {
+      await db.inasistenciaAtraso.createMany({
+        data: resultado.inasistencias.map((inas) => ({
           nombreTrabajador: inas.nombreTrabajador,
           rut: inas.rut,
           departamento: inas.departamento,
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
           minutosAtraso: inas.minutosAtraso,
           tipoTurno: inas.tipoTurno,
           estado: 'pendiente',
-        },
+        })),
       })
     }
 
