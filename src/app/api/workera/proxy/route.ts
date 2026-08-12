@@ -234,6 +234,17 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Credenciales check: ?action=creds
+  if (action === 'creds') {
+    return NextResponse.json({
+      apiBase: WORKERA_API_BASE,
+      keycloakUrl: KEYCLOAK_TOKEN_URL,
+      company: DEFAULT_COMPANY,
+      user: WORKERA_USER.replace(/(.{3})(.*)(@.*)/, '$1***$3'),
+      hasPassword: !!WORKERA_PASSWORD,
+    });
+  }
+
   // Limpiar cache: ?action=clearcache
   if (action === 'clearcache') {
     tokenCache = null;
