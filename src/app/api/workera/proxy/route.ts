@@ -131,8 +131,16 @@ async function cfWorkerFallback(
   requestBody: string | null,
 ): Promise<{ ok: boolean; status: number; contentType: string; text: string; fromCf: boolean }> {
   try {
-    const separator = queryParams ? '?' : '?';
-    const workerUrl = `${CF_WORKER_URL}/${endpoint}${separator}${queryParams}`;
+    // CF Worker uses query params format: /?endpoint=branchOffice&page=1
+    const workerParams = new URLSearchParams();
+    workerParams.set('endpoint', endpoint);
+    if (queryParams) {
+      queryParams.split('&').forEach(pair => {
+        const [k, v] = pair.split('=');
+        if (k && v) workerParams.set(k, decodeURIComponent(v));
+      });
+    }
+    const workerUrl = `${CF_WORKER_URL}/?${workerParams.toString()}`;
 
     const resp = await fetchWithTimeout(workerUrl, {
       method: httpMethod,
