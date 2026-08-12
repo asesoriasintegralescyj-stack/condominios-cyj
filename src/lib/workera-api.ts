@@ -1,260 +1,224 @@
 /**
- * Workera API Client v6.0 (Desktop)
+ * Workera API Client v7.0 (Desktop)
  * ==================================
- * Cliente para comunicarse con el proxy Edge de Workera.
+ * Cliente para WorkeraTab del escritorio.
+ * Todas las peticiones pasan por el Edge Proxy (/api/workera/proxy)
+ * que se ejecuta desde Chile para evitar el geo-block de Workera.
  *
- * Workera tiene geo-bloqueo: solo acepta peticiones desde Chile.
- * El proxy Edge Function se ejecuta desde el PoP mas cercano al usuario.
- *
- * - Timeout de 20s en requests al proxy
- * - Retry con exponential backoff (2 intentos) solo para errores 5xx/timeout
- * - Cache de conexion status (5s cooldown)
+ * Exporta:
+ * - workeraApi (objeto con metodos getBranchOffices, getEmployees, getAttendance)
+ * - setConnectionMode / getConnectionMode
+ * - ConnectionMode type
+ * - WorkeraEmployee, WorkeraAttendanceRecord, WorkeraBranchOffice types
+ * - ATTENDANCE_TYPE_LABELS, ORIGIN_LABELS
  */
 
-const API_URL = '/api/workera/proxy';
-const CLIENT_TIMEOUT_MS = 20000;
+const PROXY_URL = '/api/workera/proxy';
+const TIMEOUT_MS = 20000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1500;
-const STATUS_COOLDOWN_MS = 5000;
 
-export interface WorkeraEmployee {
-  id: number;
-  completeName: string;
-  rut: string;
-  position: string;
-  branchOffice: string;
-  department: string;
-  costCenter: string;
-  status: string;
-  contractStatus: string;
-  email?: string;
+// ── Connection mode ──
+export type ConnectionMode = 'proxy' | 'direct';
+
+let currentMode: ConnectionMode = 'proxy';
+
+export function setConnectionMode(mode: ConnectionMode): void {
+  currentMode = mode;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('workera_mode', mode);
+  }
 }
 
-export interface WorkeraEmployeeFilterResponse {
-  data: WorkeraEmployee[];
-  total: number;
-  page: number;
-  perPage: number;
-  totalPages: number;
+export function getConnectionMode(): ConnectionMode {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem('workera_mode');
+    if (stored === 'proxy' || stored === 'direct') return stored;
+  }
+  return currentMode;
+}
+
+// ── Types ──
+export interface WorkeraEmployee {
+  code: string;
+  name: string;
+  lastName: string;
+  identification: string;
+  corporateMail?: string;
+  branchOfficeName?: string;
+  branchOfficeCode?: string;
+  employeeStatus: string;
+  positionName?: string;
+  departmentName?: string;
+  costCenterName?: string;
+  contractType?: string;
+  [key: string]: any;
 }
 
 export interface WorkeraBranchOffice {
-  id: number;
+  code: string;
   name: string;
+  [key: string]: any;
 }
 
 export interface WorkeraAttendanceRecord {
   id: number;
-  employeeId: number;
-  employeeName: string;
-  date: string;
+  attendanceDate: string;
+  attendanceType: number;
+  attendanceStatus: string;
+  origin: string;
+  originCode?: string;
+  employee: {
+    code: string;
+    name: string;
+    lastName: string;
+    identification?: string;
+  } | null;
+  branchOffice?: {
+    code: string;
+    name: string;
+  } | null;
   checkIn?: string;
   checkOut?: string;
-  status: string;
   [key: string]: any;
 }
 
-export interface WorkeraConnectionStatus {
-  connected: boolean;
-  mode: string;
-  location?: string;
-  authClient?: string;
-  hasRoles?: boolean;
-  roles?: string[];
-  error?: string;
+export interface PaginatedResponse<T> {
+  data: T[];
+  page: number;
+  totalPages: number;
+  totalResult: number;
+  [key: string]: any;
 }
 
-let lastStatusCheck: { time: number; result: WorkeraConnectionStatus } | null = null;
+// ── Labels ──
+export const ATTENDANCE_TYPE_LABELS: Record<number, string> = {
+  0: 'Normal',
+  1: 'Atraso',
+  2: 'Salida temprana',
+  3: 'Ausencia',
+  4: 'Falta justificada',
+  5: 'Permiso',
+  6: 'Vacaciones',
+  7: 'Feriado',
+  8: 'Colación',
+  9: 'Horas extra',
+};
 
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number = CLIENT_TIMEOUT_MS): Promise<Response> {
+export const ORIGIN_LABELS: Record<string, string> = {
+  MANUAL: 'Manual',
+  QR: 'QR',
+  BIOMETRIC: 'Biométrico',
+  RFID: 'RFID',
+  WEB: 'Web',
+  MOBILE: 'App Móvil',
+};
+
+// ── Fetch helper ──
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const resp = await fetch(url, { ...options, signal: controller.signal });
-    return resp;
+    return await fetch(url, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function testConnection(): Promise<WorkeraConnectionStatus> {
-  if (lastStatusCheck && Date.now() - lastStatusCheck.time < STATUS_COOLDOWN_MS) {
-    return lastStatusCheck.result;
-  }
-
-  try {
-    const resp = await fetchWithTimeout(`${API_URL}?action=diag`);
-
-    if (!resp.ok) {
-      const status: WorkeraConnectionStatus = {
-        connected: false,
-        mode: 'vercel-edge',
-        error: `HTTP ${resp.status} - El servidor del proxy no responde`,
-      };
-      lastStatusCheck = { time: Date.now(), result: status };
-      return status;
-    }
-
-    const data = await resp.json();
-
-    if (data.success === false && data.error) {
-      const status: WorkeraConnectionStatus = {
-        connected: false,
-        mode: 'vercel-edge',
-        error: `Auth fallo: ${data.error}`,
-      };
-      lastStatusCheck = { time: Date.now(), result: status };
-      return status;
-    }
-
-    const status: WorkeraConnectionStatus = {
-      connected: data.success || false,
-      mode: 'vercel-edge',
-      location: data.location || 'CL',
-      authClient: data.authClient || 'none',
-      hasRoles: data.hasRoles || false,
-      roles: data.roles || [],
-      error: data.error,
-    };
-    lastStatusCheck = { time: Date.now(), result: status };
-    return status;
-  } catch (error: any) {
-    const msg = error.name === 'AbortError'
-      ? 'Timeout: el proxy no responde en 20s. Posible geo-bloque.'
-      : `Error de red: ${error.message}`;
-    const status: WorkeraConnectionStatus = {
-      connected: false,
-      mode: 'vercel-edge',
-      error: msg,
-    };
-    lastStatusCheck = { time: Date.now(), result: status };
-    return status;
-  }
-}
-
-async function workeraFetch(
-  url: string,
-  options: RequestInit,
-  retries: number = MAX_RETRIES,
-): Promise<Response> {
-  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+async function proxyFetch(url: string, options: RequestInit): Promise<Response> {
+  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     try {
       const resp = await fetchWithTimeout(url, options);
-
       if (!resp.ok && (resp.status >= 500 || resp.status === 502 || resp.status === 408)) {
-        if (attempt <= retries) {
+        if (attempt <= MAX_RETRIES) {
           await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
-          lastStatusCheck = null;
           continue;
         }
       }
-
       return resp;
     } catch (error: any) {
-      if (error.name === 'AbortError' && attempt <= retries) {
+      if (error.name === 'AbortError' && attempt <= MAX_RETRIES) {
         await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
-        lastStatusCheck = null;
         continue;
       }
       throw error;
     }
   }
-
   throw new Error('Maximos reintentos alcanzados');
 }
 
-export async function fetchEmployees(
-  page: number = 1,
-  perPage: number = 20,
-  search: string = '',
-  filters?: {
-    branchOfficeId?: number;
-    departmentId?: number;
-    costCenterId?: number;
-    statuses?: string[];
-    employeeContractStatus?: string[];
+// ── API Object ──
+export const workeraApi = {
+  /**
+   * Obtener sucursales (branch offices)
+   * GET /api/workera/proxy?endpoint=branchOffice&page=1
+   */
+  async getBranchOffices(page: number = 1): Promise<{ data: WorkeraBranchOffice[]; page: number; totalPages: number; totalResult: number }> {
+    const resp = await proxyFetch(`${PROXY_URL}?endpoint=branchOffice&page=${page}`, {
+      method: 'GET',
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(err.error || `Error ${resp.status}`);
+    }
+
+    return resp.json();
   },
-): Promise<WorkeraEmployeeFilterResponse> {
-  const body = {
-    filters: {
-      search,
-      positionId: 0,
-      branchOfficeId: filters?.branchOfficeId || 0,
-      departmentId: filters?.departmentId || 0,
-      costCenterId: filters?.costCenterId || 0,
-      statuses: filters?.statuses || ['ACTIVO'],
-      employeeContractStatus: filters?.employeeContractStatus || ['CON_CONTRATO', 'CONTRATO_EN_PROCESO', 'SIN_CONTRATO'],
-    },
-    sort: { field: 'completeName', type: 'ASC' },
-    page,
-    perPage,
-  };
 
-  const resp = await workeraFetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'employee-filter', body }),
-  });
+  /**
+   * Obtener empleados con filtros
+   * GET /api/workera/proxy?endpoint=employee&page=1&employees=searchTerm&branchOffice=code
+   */
+  async getEmployees(params: {
+    page?: number;
+    employees?: string;
+    branchOffice?: string;
+  } = {}): Promise<PaginatedResponse<WorkeraEmployee>> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('page', String(params.page || 1));
+    if (params.employees) queryParams.set('employees', params.employees);
+    if (params.branchOffice) queryParams.set('branchOffice', params.branchOffice);
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(err.error || `Error ${resp.status}`);
-  }
+    const resp = await proxyFetch(`${PROXY_URL}?endpoint=employee&${queryParams.toString()}`, {
+      method: 'GET',
+    });
 
-  return resp.json();
-}
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(err.error || `Error ${resp.status}`);
+    }
 
-export async function fetchBranchOffices(): Promise<WorkeraBranchOffice[]> {
-  const resp = await workeraFetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'branchOffice', body: {}, method: 'GET' }),
-  });
+    return resp.json();
+  },
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(err.error || `Error ${resp.status}`);
-  }
+  /**
+   * Obtener registros de asistencia
+   * GET /api/workera/proxy?endpoint=attendance&page=1&start=dateFrom&end=dateTo&employeeCode=code
+   */
+  async getAttendance(params: {
+    page?: number;
+    start?: string;
+    end?: string;
+    employeeCode?: string;
+    branchOfficeCode?: string;
+  } = {}): Promise<PaginatedResponse<WorkeraAttendanceRecord>> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('page', String(params.page || 1));
+    if (params.start) queryParams.set('start', params.start);
+    if (params.end) queryParams.set('end', params.end);
+    if (params.employeeCode) queryParams.set('employeeCode', params.employeeCode);
+    if (params.branchOfficeCode) queryParams.set('branchOfficeCode', params.branchOfficeCode);
 
-  const data = await resp.json();
-  return data.data || data || [];
-}
+    const resp = await proxyFetch(`${PROXY_URL}?endpoint=attendance&${queryParams.toString()}`, {
+      method: 'GET',
+    });
 
-export async function fetchAttendance(
-  employeeId: number,
-  dateFrom: string,
-  dateTo: string,
-): Promise<WorkeraAttendanceRecord[]> {
-  const resp = await workeraFetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint: 'attendanceData', body: { employeeId, dateFrom, dateTo } }),
-  });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
+      throw new Error(err.error || `Error ${resp.status}`);
+    }
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(err.error || `Error ${resp.status}`);
-  }
-
-  const data = await resp.json();
-  return data.data || [];
-}
-
-export async function workeraRequest<T = any>(
-  endpoint: string,
-  body: Record<string, any>,
-  method: string = 'POST',
-): Promise<T> {
-  const resp = await workeraFetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, body, method }),
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: 'Error desconocido' }));
-    throw new Error(err.error || `Error ${resp.status}`);
-  }
-
-  return resp.json();
-}
+    return resp.json();
+  },
+};
