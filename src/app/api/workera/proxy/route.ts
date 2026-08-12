@@ -89,20 +89,9 @@ async function proxyToWorkera(
     'API_USER': creds.user,
     'API_KEY': creds.key,
     'Accept': 'application/json',
+    'Content-Type': 'application/json',
     'company': DEFAULT_COMPANY,
-    'Origin': 'https://workera.com',
-    'Referer': 'https://workera.com/',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept-Language': 'es-CL,es;q=0.9',
   };
-
-  if (DEFAULT_IP) {
-    headers['ip_client'] = DEFAULT_IP;
-  }
-
-  if (requestBody) {
-    headers['Content-Type'] = 'application/json';
-  }
 
   const fetchOptions: RequestInit = { method: httpMethod, headers };
   if (requestBody && (httpMethod === 'POST' || httpMethod === 'PUT' || httpMethod === 'PATCH')) {
@@ -177,19 +166,21 @@ export async function GET(request: NextRequest) {
   // Diagnostic: ?action=diag
   if (action === 'diag') {
     const creds = getCreds();
-    const result = await proxyToWorkera('branchOffice', 'page=1', 'GET', null);
+    // Test multiple endpoints to find which ones work
+    const endpoints = ['branchOffice', 'employee', 'attendanceData', 'department', 'timezone'];
+    const results: Record<string, { ok: boolean; status: number; geoBlocked: boolean; body: string }> = {};
+    for (const ep of endpoints) {
+      const r = await proxyToWorkera(ep, 'page=1', 'GET', null);
+      results[ep] = { ok: r.ok, status: r.status, geoBlocked: !!r.geoBlocked, body: r.text.substring(0, 200) };
+    }
     return NextResponse.json({
       mode: 'vercel-edge-v7',
       apiBase: WORKERA_API_BASE,
       hasCreds: !!creds,
       credUser: creds ? creds.user.substring(0, 4) + '***' : 'NONE',
       company: DEFAULT_COMPANY,
-      testResult: {
-        ok: result.ok,
-        status: result.status,
-        geoBlocked: result.geoBlocked,
-        bodyPreview: result.text.substring(0, 200),
-      },
+      constructedUrl: `${WORKERA_API_BASE}/branchOffice?page=1`,
+      endpointsTest: results,
     });
   }
 
