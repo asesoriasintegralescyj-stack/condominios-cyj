@@ -230,7 +230,71 @@ export async function GET(request: NextRequest) {
         apiBase: WORKERA_API_BASE,
       });
     } catch (err: any) {
-      return NextResponse.json({ success: false, mode: 'vercel-edge', error: err.message }, { status: 500 });
+      // Diagnostic detallado: probar cada client individualmente
+      const clientResults: { client: string; status: number; body: string; isHtml: boolean }[] = [];
+      for (const cid of ['employed-portal-client', 'workera-frontend', 'admin-cli']) {
+        try {
+          const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: new URLSearchParams({
+              grant_type: 'password',
+              client_id: cid,
+              username: WORKERA_USER,
+              password: WORKERA_PASSWORD,
+              scope: 'openid email profile',
+            }).toString(),
+          });
+          const text = await resp.text();
+          const ct = resp.headers.get('content-type') || '';
+          clientResults.push({
+            client: cid,
+            status: resp.status,
+            body: text.substring(0, 300),
+            isHtml: isHtmlResponse(ct, text),
+          });
+        } catch (e: any) {
+          clientResults.push({ client: cid, status: 0, body: e.message, isHtml: false });
+        }
+      }
+      return NextResponse.json({
+        success: false,
+        mode: 'vercel-edge',
+        error: err.message,
+        debugAuth: {
+          keycloakUrl: KEYCLOAK_TOKEN_URL,
+          user: WORKERA_USER,
+          ip: DEFAULT_IP,
+          clients: clientResults,
+        },
+      }, { status: 500 });
+    }
+  }
+
+  // Test geo: ?action=testgeo
+  if (action === 'testgeo') {
+    try {
+      const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body: new URLSearchParams({
+          grant_type: 'password',
+          client_id: 'employed-portal-client',
+          username: WORKERA_USER,
+          password: WORKERA_PASSWORD,
+        }).toString(),
+      });
+      const text = await resp.text();
+      const ct = resp.headers.get('content-type') || '';
+      return NextResponse.json({
+        geoBlocked: isHtmlResponse(ct, text),
+        status: resp.status,
+        contentType: ct,
+        bodyPreview: text.substring(0, 500),
+        headers: Object.fromEntries(resp.headers.entries()),
+      });
+    } catch (e: any) {
+      return NextResponse.json({ error: e.message }, { status: 500 });
     }
   }
 
