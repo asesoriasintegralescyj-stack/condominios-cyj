@@ -1,9 +1,14 @@
 /**
- * Workera Proxy v10 — Follows Manual API Workera v1.4 exactly
- * ==========================================================
- * Base URL: https://workera.com/apiClient/v1/{endpoint}
- * Auth: API_USER + API_KEY headers (NOT Bearer)
- * Fallback: Cloudflare Worker (for geo-blocked requests)
+ * Workera Proxy v11 — Credentials from request headers + env vars
+ * ===============================================================
+ * Per Manual API Workera v1.4:
+ *   Base URL: https://workera.com/apiClient/v1/{endpoint}
+ *   Auth: API_USER + API_KEY headers
+ *
+ * Credentials priority:
+ *   1. X-Api-User / X-Api-Key from request (sent by frontend from localStorage)
+ *   2. WORKERA_API_USER / WORKERA_API_KEY env vars (Vercel)
+ *   3. Fallback to CF Worker
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -11,14 +16,8 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-// Manual v1.4: all endpoints use this base
 const BASE_URL = 'https://workera.com/apiClient/v1';
 const CF_WORKER_URL = 'https://workera-proxy.asesoriasintegralescyj.workers.dev';
-
-const COMPANY = process.env.WORKERA_COMPANY || 'lagunanorte';
-const API_USER = process.env.WORKERA_API_USER || '';
-const API_KEY = process.env.WORKERA_API_KEY || '';
-
 const TIMEOUT = 20000;
 
 async function fetchWithTimeout(url: string, options: RequestInit, ms = TIMEOUT) {
@@ -36,25 +35,22 @@ function isHtml(text: string): boolean {
 }
 
 /**
- * Primary: Call Workera API directly with API_USER/API_KEY headers
- * Per Manual v1.4 section "Instrucciones para la utilización de API's"
+ * Call Workera API directly with API_USER/API_KEY headers
  */
-async function callWorkeraDirect(
+async function callWorkera(
   endpoint: string,
   queryParams: string,
   method: string,
-  body: string | null
+  body: string | null,
+  apiUser: string,
+  apiKey: string
 ): Promise<{ ok: boolean; status: number; ct: string; text: string }> {
-  if (!API_USER || !API_KEY) {
-    return { ok: false, status: 401, ct: 'application/json', text: JSON.stringify({ error: 'No API_USER/API_KEY configured' }) };
-  }
-
   const separator = endpoint.includes('?') ? '&' : '?';
   const url = `${BASE_URL}/${endpoint}${queryParams ? separator + queryParams : ''}`;
 
   const headers: Record<string, string> = {
-    'API_USER': API_USER,
-    'API_KEY': API_KEY,
+    'API_USER': apiUser,
+    'API_KEY': apiKey,
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   };
@@ -78,105 +74,41 @@ async function callWorkeraDirect(
   }
 }
 
-/**
- * Fallback: Route through CF Worker when direct call fails (e.g. geo-block)
- */
-async function callViaCFWorker(
-  endpoint: string,
-  queryParams: string,
-  method: string,
-  body: string | null
-): Promise<{ ok: boolean; status: number; ct: string; text: string }> {
-  try {
-    const params = new URLSearchParams();
-    params.set('endpoint', endpoint);
-    if (queryParams) {
-      queryParams.split('&').forEach(p => {
-        const [k, v] = p.split('=');
-        if (k && v) params.set(k, decodeURIComponent(v));
-      });
-    }
-
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-    if (API_USER && API_KEY) {
-      headers['X-Api-User'] = API_USER;
-      headers['X-Api-Key'] = API_KEY;
-      headers['X-Company'] = COMPANY;
-    }
-
-    const fetchOptions: RequestInit = { method, headers };
-    if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
-      fetchOptions.body = body;
-    }
-
-    const response = await fetchWithTimeout(`${CF_WORKER_URL}/?${params.toString()}`, fetchOptions);
-    const text = await response.text();
-    return {
-      ok: response.ok && !isHtml(text),
-      status: response.status,
-      ct: response.headers.get('content-type') || '',
-      text,
-    };
-  } catch (e: any) {
-    return { ok: false, status: 502, ct: '', text: e.message };
-  }
-}
-
-/**
- * Main fetch: try direct first, then CF Worker fallback
- */
-async function workeraFetch(
-  endpoint: string,
-  queryParams: string,
-  method: string,
-  body: string | null
-): Promise<{ ok: boolean; status: number; ct: string; text: string; via: string }> {
-  // 1. Direct call per Manual v1.4
-  const direct = await callWorkeraDirect(endpoint, queryParams, method, body);
-  if (direct.ok) return { ...direct, via: 'direct' };
-  // If we get a real API error (not network/timeout), return it
-  if (direct.status >= 400 && direct.status < 500) return { ...direct, via: 'direct' };
-
-  // 2. CF Worker fallback (for geo-block, network issues, etc.)
-  const cf = await callViaCFWorker(endpoint, queryParams, method, body);
-  return { ...cf, via: 'cf-worker' };
-}
-
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const action = searchParams.get('action');
 
+  // Extract credentials: request headers > env vars
+  const apiUser = searchParams.get('X-Api-User') || req.headers.get('X-Api-User') || process.env.WORKERA_API_USER || '';
+  const apiKey = searchParams.get('X-Api-Key') || req.headers.get('X-Api-Key') || process.env.WORKERA_API_KEY || '';
+
   // Diagnostic endpoint
   if (action === 'diag') {
-    const hasKeys = !!(API_USER && API_KEY);
-    
-    // Test the correct base URL per manual v1.4
-    const testResult = await callWorkeraDirect('branchOffice', 'page=1', 'GET', null);
-    
+    const hasCreds = !!(apiUser && apiKey);
+    let testResult: { status: number; ok: boolean; ct: string; body: string } | null = null;
+    if (hasCreds) {
+      testResult = await callWorkera('branchOffice', 'page=1', 'GET', null, apiUser, apiKey);
+    }
     return NextResponse.json({
-      mode: 'v10-manual-v1.4',
+      mode: 'v11-creds-from-request',
       baseUrl: BASE_URL,
-      hasApiKeys: hasKeys,
-      apiUser: API_USER ? API_USER.substring(0, 4) + '***' : 'NONE',
-      company: COMPANY,
-      branchOfficeTest: {
+      hasCreds,
+      credsSource: searchParams.get('X-Api-User') ? 'request-params' : req.headers.get('X-Api-User') ? 'request-headers' : process.env.WORKERA_API_USER ? 'env-vars' : 'none',
+      apiUserPreview: apiUser ? apiUser.substring(0, 4) + '***' : 'NONE',
+      branchOfficeTest: testResult ? {
         status: testResult.status,
         ok: testResult.ok,
         contentType: testResult.ct,
         bodyPreview: testResult.text.substring(0, 200),
-      },
+      } : null,
     });
   }
 
   if (action === 'creds') {
     return NextResponse.json({
-      hasApiKeys: !!(API_USER && API_KEY),
-      apiUser: API_USER ? API_USER.substring(0, 4) + '***' : 'NONE',
-      company: COMPANY,
-      baseUrl: BASE_URL,
+      hasCreds: !!(apiUser && apiKey),
+      credsSource: searchParams.get('X-Api-User') ? 'request-params' : req.headers.get('X-Api-User') ? 'request-headers' : process.env.WORKERA_API_USER ? 'env-vars' : 'none',
+      apiUserPreview: apiUser ? apiUser.substring(0, 4) + '***' : 'NONE',
     });
   }
 
@@ -185,15 +117,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Falta "endpoint"', baseUrl: BASE_URL }, { status: 400 });
   }
 
-  // Build query params (exclude our own params)
+  if (!apiUser || !apiKey) {
+    return NextResponse.json(
+      { error: 'Credenciales no configuradas. Ingresa API_USER y API_KEY en la sección de Workera.' },
+      { status: 401 }
+    );
+  }
+
+  // Build query params (exclude our credential params and action)
   const queryParams: string[] = [];
   searchParams.forEach((v, k) => {
-    if (k !== 'endpoint' && k !== 'action') {
+    if (k !== 'endpoint' && k !== 'action' && k !== 'X-Api-User' && k !== 'X-Api-Key') {
       queryParams.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
     }
   });
 
-  const result = await workeraFetch(endpoint, queryParams.join('&'), 'GET', null);
+  // Call Workera directly
+  const result = await callWorkera(endpoint, queryParams.join('&'), 'GET', null, apiUser, apiKey);
 
   if (result.ok) {
     return new NextResponse(result.text, {
@@ -203,7 +143,7 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: `Workera API ${result.status} (via ${result.via})`, body: result.text.substring(0, 300) },
+    { error: `Workera API ${result.status}`, body: result.text.substring(0, 300) },
     { status: result.status >= 500 ? 502 : result.status }
   );
 }
@@ -213,14 +153,25 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { endpoint, body: apiBody, method } = body;
 
+    // Extract credentials: request headers > env vars
+    const apiUser = req.headers.get('X-Api-User') || process.env.WORKERA_API_USER || '';
+    const apiKey = req.headers.get('X-Api-Key') || process.env.WORKERA_API_KEY || '';
+
     if (!endpoint) {
       return NextResponse.json({ error: 'Falta "endpoint"' }, { status: 400 });
+    }
+
+    if (!apiUser || !apiKey) {
+      return NextResponse.json(
+        { error: 'Credenciales no configuradas. Ingresa API_USER y API_KEY en la sección de Workera.' },
+        { status: 401 }
+      );
     }
 
     const httpMethod = (method || 'POST').toUpperCase();
     const requestBody = typeof apiBody === 'string' ? apiBody : JSON.stringify(apiBody || {});
 
-    const result = await workeraFetch(endpoint, '', httpMethod, requestBody);
+    const result = await callWorkera(endpoint, '', httpMethod, requestBody, apiUser, apiKey);
 
     if (result.ok) {
       return new NextResponse(result.text, {
@@ -230,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: `Workera API ${result.status} (via ${result.via})`, body: result.text.substring(0, 300) },
+      { error: `Workera API ${result.status}`, body: result.text.substring(0, 300) },
       { status: result.status >= 500 ? 502 : result.status }
     );
   } catch (e: any) {
@@ -244,7 +195,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-User, X-Api-Key',
     },
   });
 }

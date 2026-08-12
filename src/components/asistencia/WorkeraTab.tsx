@@ -27,6 +27,9 @@ import {
   workeraApi,
   setConnectionMode,
   getConnectionMode,
+  getCredentials,
+  setCredentials,
+  hasCredentials as checkHasCredentials,
   type ConnectionMode,
   type WorkeraEmployee,
   type WorkeraAttendanceRecord,
@@ -108,7 +111,7 @@ export default function WorkeraTab() {
           status: 'ok',
           runtime: connectionMode,
           timestamp: new Date().toISOString(),
-          apiBase: 'https://api.workera.com/apiClient/v1',
+          apiBase: 'https://workera.com/apiClient/v1',
           credentials: 'embedded',
           cacheSize: 0,
           edgeLocation: { country: 'CL (browser)', city: 'user-location' },
@@ -286,28 +289,47 @@ export default function WorkeraTab() {
             </Select>
           </div>
 
-          {/* Config */}
+          {/* Credenciales */}
           <Collapsible open={configOpen} onOpenChange={setConfigOpen}>
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
               {configOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              Información de configuración
+              Configuración de credenciales Workera
             </CollapsibleTrigger>
-            <CollapsibleContent className="mt-2">
-              <div className="bg-muted rounded-md p-3 text-xs space-y-1 font-mono">
-                <div className="flex items-center gap-2">
-                  <Database className="h-3 w-3" />
-                  <span>API: api.workera.com/apiClient/v1</span>
+            <CollapsibleContent className="mt-2 space-y-3">
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Ingresa tus credenciales de API desde tu perfil de Workera (workera.com/app → Perfil → API Key).
+                </p>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">API_USER</label>
+                    <Input
+                      placeholder="Ej: ADMI0001"
+                      defaultValue={getCredentials()?.apiUser || ''}
+                      onChange={(e) => setCredentials({ apiKey: getCredentials()?.apiKey || '', apiUser: e.target.value })}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-muted-foreground uppercase">API_KEY</label>
+                    <Input
+                      type="password"
+                      placeholder="Tu API Key de Workera"
+                      defaultValue={getCredentials()?.apiKey || ''}
+                      onChange={(e) => setCredentials({ apiUser: getCredentials()?.apiUser || '', apiKey: e.target.value })}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Database className="h-3 w-3" />
-                  <span>User: administracionlagunanorte@gmail.com</span>
+                <div className="flex items-center gap-2 text-xs">
+                  {checkHasCredentials() ? (
+                    <span className="flex items-center gap-1 text-emerald-600"><CheckCircle className="h-3 w-3" /> Credenciales configuradas</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-orange-500"><AlertTriangle className="h-3 w-3" /> Sin credenciales</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Database className="h-3 w-3" />
-                  <span>Key: 2aa45c...08e3</span>
-                </div>
-                <p className="text-muted-foreground mt-2">
-                  Credenciales embebidas en Edge Function. Para mayor seguridad, configura WORKERA_API_USER y WORKERA_API_KEY como Environment Variables en Vercel.
+                <p className="text-[10px] text-muted-foreground">
+                  Las credenciales se guardan localmente en tu navegador. No se envían a terceros.
                 </p>
               </div>
             </CollapsibleContent>
