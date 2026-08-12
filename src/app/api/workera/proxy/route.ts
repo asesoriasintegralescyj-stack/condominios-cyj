@@ -1,43 +1,44 @@
 /**
- * Vercel Edge Function - Workera Proxy v5.0
+ * Vercel Edge Function - Workera Proxy v7.0
  * =========================================
- * Se ejecuta en el edge de Vercel mas cercano al usuario (Chile=SCL).
- * Autentica con Keycloak (workera.com/auth/realms/UBootProjekt/)
- * y reenvia peticiones a api.workera.com/apiClient/v1/
+ * Usa API_USER + API_KEY headers para autenticar con Workera API
+ * (no Keycloak password grant, que requiere geo-bloque para Keycloak).
  *
- * v5.0: API base actualizada a api.workera.com/apiClient/v1/
- *       Token Bearer en Authorization header.
- *       Soporta GET y POST forwarding.
- *       Credenciales desde environment variables con fallback.
- *       Retry con exponential backoff (3 intentos).
- *       Timeout de 15s.
+ * La API de Workera (api.workera.com/apiClient/v1/) acepta API_USER y API_KEY
+ * headers directamente, sin necesidad de token Bearer.
+ *
+ * Flujo: Browser -> /api/workera/proxy -> api.workera.com/apiClient/v1/
+ *
+ * IMPORTANTE: Esta funcion corre como Edge en Vercel. Para usuarios chilenos,
+ * se ejecuta desde SCL (Santiago). Para otros, puede ser geo-bloqueado.
+ * Si es geo-bloqueado, el Cloudflare Worker (workers.dev) actua como fallback.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
-// ── Configuracion desde env vars (con fallback) ──
 const WORKERA_API_BASE = process.env.WORKERA_API_BASE || 'https://api.workera.com/apiClient/v1';
-const KEYCLOAK_TOKEN_URL = process.env.WORKERA_KEYCLOAK_URL || 'https://workera.com/auth/realms/UBootProjekt/protocol/openid-connect/token';
+
+// API credentials (requeridas)
+const API_USER = process.env.WORKERA_API_USER || '';
+const API_KEY = process.env.WORKERA_API_KEY || '';
+
+// Fallback credentials (deben configurarse en Vercel env vars)
+const FALLBACK_API_USER = process.env.WORKERA_FALLBACK_USER || '';
+const FALLBACK_API_KEY = process.env.WORKERA_FALLBACK_KEY || '';
+
+// Cloudflare Worker fallback URL
+const CF_WORKER_URL = process.env.WORKERA_WORKER_URL || 'https://workera-proxy.asesoriasintegralescyj.workers.dev';
+
+// Company and IP headers
 const DEFAULT_COMPANY = process.env.WORKERA_COMPANY || 'lagunanorte';
 const DEFAULT_IP = process.env.WORKERA_IP || '181.43.202.93';
-const WORKERA_USER = process.env.WORKERA_USER || 'administracionlagunanorte@gmail.com';
-const WORKERA_PASSWORD = process.env.WORKERA_PASSWORD || 'Jai.1985';
 
-const MAX_RETRIES = 3;
-const BASE_RETRY_DELAY_MS = 1000;
-const FETCH_TIMEOUT_MS = 15000;
+const FETCH_TIMEOUT_MS = 20000;
 
-// Cache de tokens en memoria (Edge runtime)
-let tokenCache: {
-  accessToken: string;
-  refreshToken: string;
-  clientId: string;
-  expires: number;
-} | null = null;
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
 
-// ============================================================
-// HELPERS
-// ============================================================
+// ── Helpers ──
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -56,118 +57,48 @@ function isHtmlResponse(contentType: string, text: string): boolean {
   return contentType.includes('html') || text.trim().startsWith('<') || text.trim().startsWith('<!DOCTYPE');
 }
 
-// ============================================================
-// KEYCLOAK AUTH: Multi-client password grant con retry
-// ============================================================
-async function authenticateWithRetry(): Promise<{
-  accessToken: string;
-  refreshToken: string;
-  clientId: string;
-  expires: number;
-}> {
-  if (tokenCache && tokenCache.expires > Date.now() + 60000) return tokenCache;
-
-  // Try refresh first
-  if (tokenCache?.refreshToken) {
-    try {
-      const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          client_id: tokenCache.clientId,
-          refresh_token: tokenCache.refreshToken,
-        }).toString(),
-      });
-      const text = await resp.text();
-      if (!isHtmlResponse(resp.headers.get('content-type') || '', text)) {
-        const data = JSON.parse(text);
-        if (data.access_token) {
-          tokenCache = {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token || tokenCache.refreshToken,
-            clientId: tokenCache.clientId,
-            expires: Date.now() + ((data.expires_in || 300) * 1000) - 60000,
-          };
-          return tokenCache;
-        }
-      }
-    } catch {
-      tokenCache = null;
-    }
-  }
-
-  const clients = ['employed-portal-client', 'workera-frontend', 'admin-cli'];
-
-  for (const clientId of clients) {
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-          body: new URLSearchParams({
-            grant_type: 'password',
-            client_id: clientId,
-            username: WORKERA_USER,
-            password: WORKERA_PASSWORD,
-            scope: 'openid email profile',
-          }).toString(),
-        });
-
-        const contentType = resp.headers.get('content-type') || '';
-        const text = await resp.text();
-
-        if (isHtmlResponse(contentType, text)) {
-          if (attempt < MAX_RETRIES) { await delay(BASE_RETRY_DELAY_MS * attempt); continue; }
-          break;
-        }
-
-        const data = JSON.parse(text);
-        if (data.access_token) {
-          tokenCache = {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token || '',
-            clientId,
-            expires: Date.now() + ((data.expires_in || 300) * 1000) - 60000,
-          };
-          return tokenCache;
-        }
-
-        if (data.error === 'invalid_grant' || data.error === 'unauthorized_client') break;
-        if (attempt < MAX_RETRIES) await delay(BASE_RETRY_DELAY_MS * attempt);
-      } catch (err: any) {
-        if (err.name === 'AbortError' && attempt < MAX_RETRIES) { await delay(BASE_RETRY_DELAY_MS * attempt); continue; }
-        break;
-      }
-    }
-  }
-
-  throw new Error('Autenticacion con Keycloak fallo para todos los clientes');
+function getCreds(): { user: string; key: string } | null {
+  if (API_USER && API_KEY) return { user: API_USER, key: API_KEY };
+  if (FALLBACK_API_USER && FALLBACK_API_KEY) return { user: FALLBACK_API_USER, key: FALLBACK_API_KEY };
+  return null;
 }
 
 // ============================================================
-// PROXY: Forward request a Workera API con retry
+// PROXY: Forward request a Workera API
 // ============================================================
 async function proxyToWorkera(
   endpoint: string,
   queryParams: string,
   httpMethod: string,
   requestBody: string | null,
-  accessToken: string,
-): Promise<{ ok: boolean; status: number; contentType: string; text: string }> {
+): Promise<{ ok: boolean; status: number; contentType: string; text: string; geoBlocked?: boolean }> {
+  const creds = getCreds();
+  if (!creds) {
+    return {
+      ok: false,
+      status: 500,
+      contentType: 'application/json',
+      text: JSON.stringify({ error: 'Credenciales WORKERA_API_USER/WORKERA_API_KEY no configuradas en Vercel' }),
+    };
+  }
+
   const separator = endpoint.includes('?') ? '&' : '?';
   const workeraUrl = `${WORKERA_API_BASE}/${endpoint}${queryParams ? separator + queryParams : ''}`;
 
   const headers: Record<string, string> = {
+    'API_USER': creds.user,
+    'API_KEY': creds.key,
     'Accept': 'application/json',
-    'Authorization': `Bearer ${accessToken}`,
+    'company': DEFAULT_COMPANY,
     'Origin': 'https://workera.com',
     'Referer': 'https://workera.com/',
-    'ip_client': DEFAULT_IP,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     'Accept-Language': 'es-CL,es;q=0.9',
-    'company': DEFAULT_COMPANY,
   };
+
+  if (DEFAULT_IP) {
+    headers['ip_client'] = DEFAULT_IP;
+  }
 
   if (requestBody) {
     headers['Content-Type'] = 'application/json';
@@ -178,177 +109,148 @@ async function proxyToWorkera(
     fetchOptions.body = requestBody;
   }
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const resp = await fetchWithTimeout(workeraUrl, fetchOptions);
-      const responseText = await resp.text();
-      const responseContentType = resp.headers.get('content-type') || '';
+  try {
+    const resp = await fetchWithTimeout(workeraUrl, fetchOptions);
+    const responseText = await resp.text();
+    const responseContentType = resp.headers.get('content-type') || '';
 
-      if (isHtmlResponse(responseContentType, responseText)) {
-        if (attempt < MAX_RETRIES) {
-          tokenCache = null;
-          try {
-            const newTokens = await authenticateWithRetry();
-            return proxyToWorkera(endpoint, queryParams, httpMethod, requestBody, newTokens.accessToken);
-          } catch {
-            await delay(BASE_RETRY_DELAY_MS * attempt);
-            continue;
-          }
-        }
-        return { ok: false, status: 502, contentType: 'text/html', text: responseText };
-      }
-
-      return { ok: resp.ok, status: resp.status, contentType: responseContentType, text: responseText };
-    } catch (err: any) {
-      if (err.name === 'AbortError' && attempt < MAX_RETRIES) { await delay(BASE_RETRY_DELAY_MS * attempt); continue; }
-      throw err;
-    }
+    const geoBlocked = isHtmlResponse(responseContentType, responseText);
+    return { ok: resp.ok && !geoBlocked, status: resp.status, contentType: responseContentType, text: responseText, geoBlocked };
+  } catch (err: any) {
+    return { ok: false, status: 0, contentType: 'text/plain', text: err.message };
   }
-
-  throw new Error('Todos los reintentos fallaron');
 }
 
 // ============================================================
-// EDGE RUNTIME
+// FALLBACK: Try Cloudflare Worker
 // ============================================================
-export const runtime = 'edge';
+async function cfWorkerFallback(
+  endpoint: string,
+  queryParams: string,
+  httpMethod: string,
+  requestBody: string | null,
+): Promise<{ ok: boolean; status: number; contentType: string; text: string; fromCf: boolean }> {
+  try {
+    const separator = queryParams ? '?' : '?';
+    const workerUrl = `${CF_WORKER_URL}/${endpoint}${separator}${queryParams}`;
 
+    const resp = await fetchWithTimeout(workerUrl, {
+      method: httpMethod,
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: requestBody,
+    });
+    const text = await resp.text();
+    const ct = resp.headers.get('content-type') || 'application/json';
+    return { ok: resp.ok, status: resp.status, contentType: ct, text, fromCf: true };
+  } catch (err: any) {
+    return { ok: false, status: 502, contentType: 'application/json', text: JSON.stringify({ error: `CF Worker fallback fallo: ${err.message}` }), fromCf: true };
+  }
+}
+
+// ============================================================
+// GET
+// ============================================================
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get('action');
 
-  // Diagnostico: ?action=diag
+  // Diagnostic: ?action=diag
   if (action === 'diag') {
-    try {
-      const tokens = await authenticateWithRetry();
-      return NextResponse.json({
-        success: true,
-        mode: 'vercel-edge',
-        authClient: tokens.clientId,
-        expiresAt: new Date(tokens.expires).toISOString(),
-        cacheExpiresIn: Math.round((tokens.expires - Date.now()) / 1000),
-        apiBase: WORKERA_API_BASE,
-      });
-    } catch (err: any) {
-      // Diagnostic detallado: probar cada client individualmente
-      const clientResults: { client: string; status: number; body: string; isHtml: boolean }[] = [];
-      for (const cid of ['employed-portal-client', 'workera-frontend', 'admin-cli']) {
-        try {
-          const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-            body: new URLSearchParams({
-              grant_type: 'password',
-              client_id: cid,
-              username: WORKERA_USER,
-              password: WORKERA_PASSWORD,
-              scope: 'openid email profile',
-            }).toString(),
-          });
-          const text = await resp.text();
-          const ct = resp.headers.get('content-type') || '';
-          clientResults.push({
-            client: cid,
-            status: resp.status,
-            body: text.substring(0, 300),
-            isHtml: isHtmlResponse(ct, text),
-          });
-        } catch (e: any) {
-          clientResults.push({ client: cid, status: 0, body: e.message, isHtml: false });
-        }
-      }
-      return NextResponse.json({
-        success: false,
-        mode: 'vercel-edge',
-        error: err.message,
-        debugAuth: {
-          keycloakUrl: KEYCLOAK_TOKEN_URL,
-          user: WORKERA_USER,
-          ip: DEFAULT_IP,
-          clients: clientResults,
-        },
-      }, { status: 500 });
-    }
+    const creds = getCreds();
+    const result = await proxyToWorkera('branchOffice', 'page=1', 'GET', null);
+    return NextResponse.json({
+      mode: 'vercel-edge-v7',
+      apiBase: WORKERA_API_BASE,
+      hasCreds: !!creds,
+      credUser: creds ? creds.user.substring(0, 4) + '***' : 'NONE',
+      company: DEFAULT_COMPANY,
+      testResult: {
+        ok: result.ok,
+        status: result.status,
+        geoBlocked: result.geoBlocked,
+        bodyPreview: result.text.substring(0, 200),
+      },
+    });
   }
 
   // Test geo: ?action=testgeo
   if (action === 'testgeo') {
-    try {
-      const resp = await fetchWithTimeout(KEYCLOAK_TOKEN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
-        body: new URLSearchParams({
-          grant_type: 'password',
-          client_id: 'employed-portal-client',
-          username: WORKERA_USER,
-          password: WORKERA_PASSWORD,
-        }).toString(),
-      });
-      const text = await resp.text();
-      const ct = resp.headers.get('content-type') || '';
-      return NextResponse.json({
-        geoBlocked: isHtmlResponse(ct, text),
-        status: resp.status,
-        contentType: ct,
-        bodyPreview: text.substring(0, 500),
-        headers: Object.fromEntries(resp.headers.entries()),
-      });
-    } catch (e: any) {
-      return NextResponse.json({ error: e.message }, { status: 500 });
-    }
-  }
-
-  // Credenciales check: ?action=creds
-  if (action === 'creds') {
+    const result = await proxyToWorkera('branchOffice', 'page=1', 'GET', null);
     return NextResponse.json({
-      apiBase: WORKERA_API_BASE,
-      keycloakUrl: KEYCLOAK_TOKEN_URL,
-      company: DEFAULT_COMPANY,
-      user: WORKERA_USER.replace(/(.{3})(.*)(@.*)/, '$1***$3'),
-      hasPassword: !!WORKERA_PASSWORD,
+      geoBlocked: result.geoBlocked,
+      status: result.status,
+      bodyPreview: result.text.substring(0, 500),
     });
   }
 
-  // Limpiar cache: ?action=clearcache
-  if (action === 'clearcache') {
-    tokenCache = null;
-    return NextResponse.json({ message: 'Cache limpiado' });
+  // Creds: ?action=creds
+  if (action === 'creds') {
+    const creds = getCreds();
+    return NextResponse.json({
+      apiBase: WORKERA_API_BASE,
+      hasCreds: !!creds,
+      credUser: creds ? creds.user.substring(0, 4) + '***' : 'NONE',
+      company: DEFAULT_COMPANY,
+      cfWorkerUrl: CF_WORKER_URL,
+    });
   }
 
-  // Forward GET a Workera API
+  // Clear cache: ?action=clearcache
+  if (action === 'clearcache') {
+    return NextResponse.json({ message: 'No hay cache en v7 (sin tokens)' });
+  }
+
+  // Forward GET to Workera API
   const endpoint = searchParams.get('endpoint') || '';
   if (!endpoint) {
     return NextResponse.json({ error: 'Falta "endpoint"' }, { status: 400 });
   }
 
-  try {
-    const tokens = await authenticateWithRetry();
-    // Pasar todos los query params excepto "endpoint" y "action"
-    const forwardParams: string[] = [];
-    searchParams.forEach((value, key) => {
-      if (key !== 'endpoint' && key !== 'action') {
-        forwardParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-      }
+  // Build forward params
+  const forwardParams: string[] = [];
+  searchParams.forEach((value, key) => {
+    if (key !== 'endpoint' && key !== 'action') {
+      forwardParams.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    }
+  });
+  const qp = forwardParams.join('&');
+
+  // Try direct first
+  const result = await proxyToWorkera(endpoint, qp, 'GET', null);
+
+  if (result.ok) {
+    return new NextResponse(result.text, {
+      status: 200,
+      headers: { 'Content-Type': result.contentType || 'application/json' },
     });
+  }
 
-    const result = await proxyToWorkera(endpoint, forwardParams.join('&'), 'GET', null, tokens.accessToken);
-
-    if (result.ok) {
-      return new NextResponse(result.text, {
+  // If geo-blocked, try CF Worker fallback
+  if (result.geoBlocked) {
+    const cfResult = await cfWorkerFallback(endpoint, qp, 'GET', null);
+    if (cfResult.ok) {
+      return new NextResponse(cfResult.text, {
         status: 200,
-        headers: { 'Content-Type': result.contentType || 'application/json' },
+        headers: { 'Content-Type': cfResult.contentType || 'application/json' },
       });
     }
-
     return NextResponse.json({
-      error: `Workera API ${result.status}`,
-      body: result.text.substring(0, 500),
-    }, { status: result.status >= 500 ? 502 : result.status });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+      error: `Geo-bloqueado en Vercel Edge y CF Worker fallback fallo`,
+      vercelStatus: result.status,
+      cfStatus: cfResult.status,
+      cfError: cfResult.text.substring(0, 200),
+    }, { status: 502 });
   }
+
+  return NextResponse.json({
+    error: `Workera API ${result.status}`,
+    body: result.text.substring(0, 500),
+  }, { status: result.status >= 500 ? 502 : result.status });
 }
 
+// ============================================================
+// POST
+// ============================================================
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -358,11 +260,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Falta "endpoint"' }, { status: 400 });
     }
 
-    const tokens = await authenticateWithRetry();
     const httpMethod = (method || 'POST').toUpperCase();
     const requestBody = typeof apiBody === 'string' ? apiBody : JSON.stringify(apiBody || {});
 
-    const result = await proxyToWorkera(endpoint, '', httpMethod, requestBody, tokens.accessToken);
+    // Try direct
+    const result = await proxyToWorkera(endpoint, '', httpMethod, requestBody);
 
     if (result.ok) {
       return new NextResponse(result.text, {
@@ -371,10 +273,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (isHtmlResponse(result.contentType, result.text)) {
+    // If geo-blocked, try CF Worker fallback
+    if (result.geoBlocked) {
+      const cfResult = await cfWorkerFallback(endpoint, '', httpMethod, requestBody);
+      if (cfResult.ok) {
+        return new NextResponse(cfResult.text, {
+          status: 200,
+          headers: { 'Content-Type': cfResult.contentType || 'application/json' },
+        });
+      }
       return NextResponse.json({
-        error: 'Workera devolvio HTML (posible geo-bloque)',
-        status: result.status,
+        error: `Geo-bloqueado y CF Worker fallback fallo`,
+        cfError: cfResult.text.substring(0, 200),
       }, { status: 502 });
     }
 
@@ -385,4 +295,19 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
+}
+
+// ============================================================
+// OPTIONS: CORS preflight
+// ============================================================
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
