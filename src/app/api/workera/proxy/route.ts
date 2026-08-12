@@ -142,9 +142,21 @@ async function cfWorkerFallback(
     }
     const workerUrl = `${CF_WORKER_URL}/?${workerParams.toString()}`;
 
+    // Pass credentials to CF Worker via headers (server-to-server, secure)
+    const creds = getCreds();
+    const workerHeaders: Record<string, string> = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
+    if (creds) {
+      workerHeaders['X-Api-User'] = creds.user;
+      workerHeaders['X-Api-Key'] = creds.key;
+      workerHeaders['X-Company'] = DEFAULT_COMPANY;
+    }
+
     const resp = await fetchWithTimeout(workerUrl, {
       method: httpMethod,
-      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      headers: workerHeaders,
       body: requestBody,
     });
     const text = await resp.text();
