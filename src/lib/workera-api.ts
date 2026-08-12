@@ -194,23 +194,26 @@ export const workeraApi = {
 
   /**
    * Obtener registros de asistencia
-   * GET /api/workera/proxy?endpoint=attendance&page=1&start=dateFrom&end=dateTo&employeeCode=code
+   * GET /api/workera/proxy?endpoint=attendanceData&page=1&start=dateFrom&end=dateTo&employees=code
+   * Per Manual v1.4: start/end required, employee filter is 'employees' param
    */
   async getAttendance(params: {
     page?: number;
     start?: string;
     end?: string;
-    employeeCode?: string;
-    branchOfficeCode?: string;
+    employees?: string;
+    branchOffice?: string;
+    department?: string;
   } = {}): Promise<PaginatedResponse<WorkeraAttendanceRecord>> {
     const queryParams = new URLSearchParams();
     queryParams.set('page', String(params.page || 1));
     if (params.start) queryParams.set('start', params.start);
     if (params.end) queryParams.set('end', params.end);
-    if (params.employeeCode) queryParams.set('employeeCode', params.employeeCode);
-    if (params.branchOfficeCode) queryParams.set('branchOfficeCode', params.branchOfficeCode);
+    if (params.employees) queryParams.set('employees', params.employees);
+    if (params.branchOffice) queryParams.set('branchOffice', params.branchOffice);
+    if (params.department) queryParams.set('department', params.department);
 
-    const resp = await proxyFetch(`${PROXY_URL}?endpoint=attendance&${queryParams.toString()}`, {
+    const resp = await proxyFetch(`${PROXY_URL}?endpoint=attendanceData&${queryParams.toString()}`, {
       method: 'GET',
     });
 

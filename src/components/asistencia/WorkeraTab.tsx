@@ -170,8 +170,8 @@ export default function WorkeraTab() {
         start: dateFrom,
         end: dateTo,
         page,
-        employeeCode: selectedEmployeeCode || undefined,
-        branchOfficeCode: selectedBranch || undefined,
+        employees: selectedEmployeeCode || undefined,
+        branchOffice: selectedBranch || undefined,
       })
       setAttendance(result.data || [])
       setAttendancePage(result.page)
