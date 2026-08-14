@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
         fechaInicioReal: true, fechaFinReal: true, costoEstimado: true,
         costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
         tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
+        creadoPorNombre: true,
         propiedad: { select: { id: true, nombre: true } },
         asignado: { select: { id: true, nombre: true, cargo: true } },
         centroCosto: { select: { id: true, codigo: true, nombre: true } },

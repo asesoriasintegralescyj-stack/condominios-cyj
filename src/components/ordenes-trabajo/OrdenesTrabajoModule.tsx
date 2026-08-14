@@ -36,7 +36,7 @@ import {
   Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
   Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
-  AlertTriangle, CheckCircle, FileText, Eye
+  AlertTriangle, CheckCircle, FileText, Eye, UserCircle
 } from 'lucide-react'
 
 // Interfaces
@@ -111,6 +111,7 @@ interface OrdenTrabajo {
   propiedad: { id: string; nombre: string } | null
   fotosAntes?: string[]
   fotosDespues?: string[]
+  creadoPorNombre?: string | null
 }
 
 interface Personal {
@@ -1078,6 +1079,7 @@ export function OrdenesTrabajoModule() {
                 <tr className="border-b bg-slate-50">
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">N° OT</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Título</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Creado por</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tipo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
@@ -1090,9 +1092,9 @@ export function OrdenesTrabajoModule() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Cargando...</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Cargando...</td></tr>
                 ) : ordenes.length === 0 ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
                 ) : (
                   ordenes.map((ot) => (
                     <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
@@ -1101,6 +1103,9 @@ export function OrdenesTrabajoModule() {
                         {ot.esRecurrente && <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />}
                       </td>
                       <td className="p-3 font-semibold">{ot.titulo}</td>
+                      <td className="p-3 text-xs text-slate-600" title={ot.creadoPorNombre || undefined}>
+                        {ot.creadoPorNombre ? <span className="flex items-center gap-1"><UserCircle className="w-3 h-3 shrink-0" />{ot.creadoPorNombre.length > 15 ? ot.creadoPorNombre.slice(0, 15) + '…' : ot.creadoPorNombre}</span> : <span className="text-slate-400">–</span>}
+                      </td>
                       <td className="p-3">
                         <Badge className={tipoColors[ot.tipo] || 'bg-slate-100'}>{ot.tipo}</Badge>
                       </td>
@@ -2152,6 +2157,14 @@ export function OrdenesTrabajoModule() {
               </DialogHeader>
               
               <div className="space-y-4">
+                {/* Creador */}
+                {selectedOT.creadoPorNombre && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
+                    <UserCircle className="w-4 h-4" />
+                    <span className="text-xs text-slate-500">Creado por:</span>
+                    <span className="font-medium">{selectedOT.creadoPorNombre}</span>
+                  </div>
+                )}
                 {/* General info */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                   <div className="min-w-0"><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
