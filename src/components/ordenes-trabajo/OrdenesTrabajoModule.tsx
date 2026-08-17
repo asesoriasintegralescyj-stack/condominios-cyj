@@ -457,16 +457,25 @@ export function OrdenesTrabajoModule() {
   }
 
   const openDetailDialog = async (ot: OrdenTrabajo) => {
-    // Cargar detalle completo (con relaciones) para mostrar en el dialog
+    // Cargar detalle completo (con relaciones y fotos) para mostrar en el dialog
     try {
-      const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
+      const res = await fetch(`/api/ordenes-trabajo/${ot.id}?fotos=true`)
       if (res.ok) {
         setSelectedOT(await res.json())
       } else {
-        setSelectedOT(ot)
+        // Fallback: asegurar que todas las relaciones tengan arrays vacíos
+        setSelectedOT({
+          ...ot,
+          materiales: [], herramientas: [], tareas: [], personalOT: [],
+          fotosAntes: [], fotosDespues: [],
+        })
       }
     } catch (e) {
-      setSelectedOT(ot)
+      setSelectedOT({
+        ...ot,
+        materiales: [], herramientas: [], tareas: [], personalOT: [],
+        fotosAntes: [], fotosDespues: [],
+      })
     }
     setDetailDialogOpen(true)
   }
@@ -2209,7 +2218,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Materials */}
-                {selectedOT.materiales.length > 0 && (
+                {(selectedOT.materiales?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Package className="w-4 h-4" /> Materiales ({selectedOT.materiales.length})
@@ -2248,7 +2257,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tools */}
-                {selectedOT.herramientas.length > 0 && (
+                {(selectedOT.herramientas?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Wrench className="w-4 h-4" /> Herramientas ({selectedOT.herramientas.length})
@@ -2262,7 +2271,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tasks */}
-                {selectedOT.tareas.length > 0 && (
+                {(selectedOT.tareas?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <CheckSquare className="w-4 h-4" /> Tareas ({selectedOT.tareas.length})
@@ -2311,7 +2320,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Personnel */}
-                {selectedOT.personalOT.length > 0 && (
+                {(selectedOT.personalOT?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Users className="w-4 h-4" /> Personal ({selectedOT.personalOT.length})
@@ -2393,8 +2402,8 @@ export function OrdenesTrabajoModule() {
                   <span className="text-lg font-bold">TOTAL OT: </span>
                   <span className="text-xl font-bold text-red-600">
                     {formatCLP(selectedOT.costoReal || 
-                      selectedOT.materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
-                      selectedOT.personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+                      (selectedOT.materiales || []).reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
+                      (selectedOT.personalOT || []).reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
                     )}
                   </span>
                 </div>

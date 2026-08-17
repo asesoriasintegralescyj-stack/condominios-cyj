@@ -1004,10 +1004,17 @@ export function ProyectosModule() {
       if (res.ok) {
         setSelectedProy(await res.json())
       } else {
-        setSelectedProy(proy)
+        // Fallback: asegurar que todas las relaciones tengan arrays vacíos
+        setSelectedProy({
+          ...proy,
+          materiales: [], herramientas: [], tareas: [], personal: [], documentos: [],
+        })
       }
     } catch (e) {
-      setSelectedProy(proy)
+      setSelectedProy({
+        ...proy,
+        materiales: [], herramientas: [], tareas: [], personal: [], documentos: [],
+      })
     }
     setDetailDialogOpen(true)
   }
