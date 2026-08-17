@@ -217,7 +217,7 @@ const estadoColors: Record<string, string> = {
 }
 
 export function OrdenesTrabajoModule() {
-  const { isPersonal, canEditProgress } = useSession()
+  const { isPersonal, canEditProgress, hasPermission, isReadOnly } = useSession()
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([])
   const [personal, setPersonal] = useState<Personal[]>([])
   // Personal filtrado para asignación de OT: excluye conserjes, guardias y encargados de cámaras
@@ -1051,9 +1051,11 @@ export function OrdenesTrabajoModule() {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualizar OTs
         </Button>
-        <Button onClick={() => openDialog()}>
-          <Plus className="w-4 h-4 mr-1" /> Nueva OT
-        </Button>
+        {hasPermission('ots.crear') && (
+          <Button onClick={() => openDialog()}>
+            <Plus className="w-4 h-4 mr-1" /> Nueva OT
+          </Button>
+        )}
       </div>
 
       {/* Catalog status */}
@@ -1149,7 +1151,7 @@ export function OrdenesTrabajoModule() {
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
-                          {isPersonal() ? (
+                          {hasPermission('ots.progreso') && (
                             <Button 
                               size="icon" 
                               variant="ghost" 
@@ -1160,15 +1162,16 @@ export function OrdenesTrabajoModule() {
                             >
                               <CheckSquare className="w-3.5 h-3.5" />
                             </Button>
-                          ) : (
-                            <>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </>
+                          )}
+                          {hasPermission('ots.editar') && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {hasPermission('ots.eliminar') && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -2409,9 +2412,11 @@ export function OrdenesTrabajoModule() {
                 <Button variant="outline" onClick={() => imprimirChecklist(selectedOT)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir Checklist
                 </Button>
-                <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
-                  <Pencil className="w-4 h-4 mr-1" /> Editar
-                </Button>
+                {hasPermission('ots.editar') && (
+                  <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
+                    <Pencil className="w-4 h-4 mr-1" /> Editar
+                  </Button>
+                )}
               </DialogFooter>
             </>
           )}

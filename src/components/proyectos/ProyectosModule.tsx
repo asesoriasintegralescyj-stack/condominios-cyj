@@ -31,6 +31,7 @@ import {
   ShoppingCart, Link2, FolderKanban, HardHat, CheckCircle, XCircle,
   BarChart3,
 } from 'lucide-react'
+import { useSession } from '@/hooks/use-session'
 import { toast } from 'sonner'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { verDocumentoEnVentana } from '@/lib/utils'
@@ -341,6 +342,7 @@ const documentoTipoColors: Record<string, string> = {
 // Component
 // ============================================
 export function ProyectosModule() {
+  const { hasPermission } = useSession()
   const [proyectos, setProyectos] = useState<Proyecto[]>([])
   const [personalList, setPersonalList] = useState<PersonalItem[]>([])
   const [catalogoMateriales, setCatalogoMateriales] = useState<CatalogoMaterial[]>([])
@@ -2168,9 +2170,11 @@ export function ProyectosModule() {
         <Button variant="outline" onClick={exportToExcel} title="Exportar a Excel">
           <FileSpreadsheet className="w-4 h-4 mr-1" /> Exportar Excel
         </Button>
-        <Button onClick={() => openDialog()}>
-          <Plus className="w-4 h-4 mr-1" /> Nuevo Proyecto
-        </Button>
+        {hasPermission('proyectos.crear') && (
+          <Button onClick={() => openDialog()}>
+            <Plus className="w-4 h-4 mr-1" /> Nuevo Proyecto
+          </Button>
+        )}
       </div>
 
       {/* ===== DIAGRAMA GANTT ===== */}
@@ -2471,12 +2475,16 @@ export function ProyectosModule() {
                             <Button size="icon" variant="ghost" className="h-7 w-7" title="Exportar proyecto a PDF" aria-label="PDF" onClick={() => void exportProyectoToPdf(proy)}>
                               <FileDown className="w-3.5 h-3.5" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" aria-label="Editar" onClick={() => openDialog(proy)}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" title="Eliminar" aria-label="Eliminar" onClick={() => handleDelete(proy.id)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            {hasPermission('proyectos.editar') && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7" title="Editar" aria-label="Editar" onClick={() => openDialog(proy)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                            {hasPermission('proyectos.eliminar') && (
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" title="Eliminar" aria-label="Eliminar" onClick={() => handleDelete(proy.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -2671,9 +2679,11 @@ export function ProyectosModule() {
                 {enviandoSolicitud ? 'Enviando...' : 'Enviar a Solicitud de Compra'}
               </Button>
             )}
-            <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedProy!) }}>
-              <Pencil className="w-4 h-4 mr-1" /> Editar
-            </Button>
+            {hasPermission('proyectos.editar') && (
+              <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedProy!) }}>
+                <Pencil className="w-4 h-4 mr-1" /> Editar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
