@@ -928,6 +928,20 @@ export function UsuariosModule() {
           <div className="space-y-4 py-4">
             {dialogMode === 'password' ? (
               <>
+                {/* Info del usuario seleccionado */}
+                {selectedUser && (
+                  <div className="bg-slate-50 border rounded-lg p-3 flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-[#0A1172] text-white text-sm">
+                        {selectedUser.nombre?.[0] || '?'}{selectedUser.apellido?.[0] || ''}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm truncate">{selectedUser.nombre} {selectedUser.apellido || ''}</div>
+                      <div className="text-xs text-slate-500 font-mono truncate">{selectedUser.email}</div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Nueva Contraseña</Label>
                   <Input
