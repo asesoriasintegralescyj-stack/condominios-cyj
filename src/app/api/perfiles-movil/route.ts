@@ -92,7 +92,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ...perfil, personal }, { status: 201 })
+    // Lookup usuario vinculado
+    let user = null
+    if (perfil.userId) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, nombre, apellido, email, rol, activo FROM "User" WHERE id = $1`,
+        perfil.userId
+      ) as any[]
+      user = users[0] || null
+    }
+
+    return NextResponse.json({ ...perfil, personal, user }, { status: 201 })
   } catch (error) {
     console.error('Error creating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al crear perfil' }, { status: 500 })

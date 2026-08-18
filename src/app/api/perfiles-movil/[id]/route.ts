@@ -47,7 +47,10 @@ export async function PUT(
   try {
     const { id } = await params
     const data = await request.json()
-    const { personal, ...updateData } = data
+    const { personal, user, ...updateData } = data
+    // Convertir strings vacías a null para campos opcionales de Prisma
+    if (updateData.personalId === '') updateData.personalId = null
+    if (updateData.userId === '') updateData.userId = null
     const perfil = await db.movilProfile.update({
       where: { id },
       data: updateData,

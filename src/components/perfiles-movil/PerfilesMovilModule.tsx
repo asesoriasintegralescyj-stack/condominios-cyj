@@ -30,6 +30,15 @@ interface PersonalItem {
   estado: string
 }
 
+interface UserItem {
+  id: string
+  nombre: string
+  apellido: string | null
+  email: string
+  rol: string
+  activo: boolean
+}
+
 interface PerfilMovil {
   id: string
   name: string
@@ -40,7 +49,9 @@ interface PerfilMovil {
   workAreaIds: string[]
   permissions: string[]
   personalId: string | null
+  userId: string | null
   personal: PersonalItem | null
+  user?: UserItem | null
   createdAt: string
   updatedAt: string
 }
@@ -53,6 +64,7 @@ interface FormData {
   icon: string
   permissions: string[]
   personalId: string
+  userId: string
 }
 
 const EMPTY_FORM: FormData = {
@@ -63,6 +75,7 @@ const EMPTY_FORM: FormData = {
   icon: 'User',
   permissions: ['view'],
   personalId: '',
+  userId: '',
 }
 
 const COLOR_OPTIONS = [
@@ -136,7 +149,9 @@ export function PerfilesMovilModule() {
   const { user } = useSession()
   const [perfiles, setPerfiles] = useState<PerfilMovil[]>([])
   const [personal, setPersonal] = useState<PersonalItem[]>([])
+  const [usuarios, setUsuarios] = useState<UserItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
   const [search, setSearch] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create')
@@ -169,9 +184,20 @@ export function PerfilesMovilModule() {
     }
   }
 
+  // Fetch usuarios de escritorio para vincular
+  const fetchUsuarios = async () => {
+    try {
+      const data = await apiFetch<UserItem[]>('/api/usuarios', [])
+      setUsuarios(Array.isArray(data) ? data : [])
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     fetchPerfiles()
     fetchPersonal()
+    fetchUsuarios()
   }, [])
 
   // Refresh
@@ -280,6 +306,7 @@ export function PerfilesMovilModule() {
       icon: perfil.icon,
       permissions: perfil.permissions || [],
       personalId: perfil.personalId || '',
+      userId: perfil.userId || '',
     })
     setDialogMode('edit')
     setSelected(perfil)
@@ -299,14 +326,16 @@ export function PerfilesMovilModule() {
 
     setSaving(true)
     try {
+      const payload = {
+        ...form,
+        personalId: form.personalId || null,
+        userId: form.userId || null,
+      }
       if (dialogMode === 'create') {
         const res = await fetch('/api/perfiles-movil', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...form,
-            personalId: form.personalId || null,
-          }),
+          body: JSON.stringify(payload),
         })
         const data = await res.json()
         if (res.ok) {
@@ -320,10 +349,7 @@ export function PerfilesMovilModule() {
         const res = await fetch(`/api/perfiles-movil/${selected!.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...form,
-            personalId: form.personalId || null,
-          }),
+          body: JSON.stringify(payload),
         })
         const data = await res.json()
         if (res.ok) {
@@ -379,10 +405,30 @@ export function PerfilesMovilModule() {
     )
   }, [perfiles, search])
 
+  // Auto-sincronizar: vincular perfiles con usuarios por email
+  const handleAutoSync = async () => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/perfiles-movil/sync', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(data.message || `Sincronización completada: ${data.linked || 0} perfiles vinculados`)
+        fetchPerfiles()
+      } else {
+        toast.error(data.error || 'Error al sincronizar')
+      }
+    } catch {
+      toast.error('Error de conexión al sincronizar')
+    }
+    setSyncing(false)
+  }
+
   // Stats
   const stats = useMemo(() => ({
     total: Array.isArray(perfiles) ? perfiles.length : 0,
     conPersonal: perfiles.filter(p => p.personalId).length,
+    conUsuario: perfiles.filter(p => p.userId).length,
+    sinSincronizar: perfiles.filter(p => !p.userId && p.personalId).length,
     supervisor: perfiles.filter(p => Array.isArray(p.permissions) && (p.permissions.includes('supervisor') || p.permissions.includes('admin'))).length,
     guardia: perfiles.filter(p => Array.isArray(p.permissions) && p.permissions.includes('guardia')).length,
   }), [perfiles])
@@ -411,8 +457,10 @@ export function PerfilesMovilModule() {
         cards={[
           { titulo: 'Total Perfiles', numero: stats.total, icon: <Users className="w-5 h-5" />, color: 'primary' },
           { titulo: 'Vinculados a Personal', numero: stats.conPersonal, icon: <CheckCircle className="w-5 h-5" />, color: 'verde' },
-          { titulo: 'Supervisores/Admin', numero: stats.supervisor, icon: <Star className="w-5 h-5" />, color: 'azul' },
-          { titulo: 'Guardias', numero: stats.guardia, icon: <Shield className="w-5 h-5" />, color: 'purpura' },
+          { titulo: 'Sincronizados', numero: stats.conUsuario, icon: <CheckCircle className="w-5 h-5" />, color: 'azul' },
+          { titulo: 'Sin Sincronizar', numero: stats.sinSincronizar, icon: <XCircle className="w-5 h-5" />, color: 'rojo' },
+          { titulo: 'Supervisores/Admin', numero: stats.supervisor, icon: <Star className="w-5 h-5" />, color: 'purpura' },
+          { titulo: 'Guardias', numero: stats.guardia, icon: <Shield className="w-5 h-5" />, color: 'amarillo' },
         ]}
       />
 
@@ -430,6 +478,10 @@ export function PerfilesMovilModule() {
         <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
           <Download className="w-4 h-4" /> Exportar PDF
         </Button>
+        <Button onClick={handleAutoSync} variant="outline" disabled={syncing} className="flex items-center gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+          {syncing ? 'Sincronizando...' : 'Auto-Sincronizar'}
+        </Button>
         <Button onClick={handleOpenCreate}>
           <Plus className="w-4 h-4 mr-1" /> Nuevo Perfil
         </Button>
@@ -446,6 +498,7 @@ export function PerfilesMovilModule() {
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Código Acceso</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Contraseña</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Personal</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Usuario Escritorio</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Permisos</th>
                   <th className="text-center p-3 text-xs font-bold text-slate-500 uppercase">Acciones</th>
                 </tr>
@@ -453,14 +506,14 @@ export function PerfilesMovilModule() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
                       Cargando perfiles...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-8 text-center text-slate-400">
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
                       No se encontraron perfiles
                     </td>
                   </tr>
@@ -497,6 +550,22 @@ export function PerfilesMovilModule() {
                           </div>
                         ) : (
                           <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {perfil.user ? (
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                            <div>
+                              <p className="font-medium text-sm">{perfil.user.nombre} {perfil.user.apellido || ''}</p>
+                              <p className="text-xs text-slate-400 font-mono">{perfil.user.email}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <XCircle className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                            <span className="text-xs text-slate-400">No sincronizado</span>
+                          </div>
                         )}
                       </td>
                       <td className="p-3">
@@ -612,6 +681,34 @@ export function PerfilesMovilModule() {
                     ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Usuario de escritorio (sincronización) */}
+            <div className="space-y-2">
+              <Label htmlFor="perfil-user">
+                Usuario escritorio (sincronización)
+              </Label>
+              <Select
+                value={form.userId}
+                onValueChange={v => setForm(prev => ({ ...prev, userId: v }))}
+              >
+                <SelectTrigger id="perfil-user">
+                  <SelectValue placeholder="Sin sincronizar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin sincronizar</SelectItem>
+                  {usuarios
+                    .filter(u => u.activo)
+                    .map(u => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.nombre} {u.apellido || ''} — {u.email}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-400">
+                Vincula este perfil móvil con un usuario del sistema escritorio para que las OTs se asocien correctamente.
+              </p>
             </div>
 
             {/* Icono y Color en fila */}
