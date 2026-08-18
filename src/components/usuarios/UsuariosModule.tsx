@@ -522,8 +522,8 @@ export function UsuariosModule() {
   };
 
   const handleSave = async () => {
-    // Validaciones
-    if (!formData.nombre || !formData.email) {
+    // Validaciones (no aplican cuando solo se cambia contraseña)
+    if (dialogMode !== 'password' && (!formData.nombre || !formData.email)) {
       toast.error('Nombre y email son requeridos');
       return;
     }
