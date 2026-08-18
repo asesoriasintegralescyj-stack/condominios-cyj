@@ -464,9 +464,15 @@ export function UsuariosModule() {
       return;
     }
     setFormData({
-      ...formData,
+      nombre: '',
+      apellido: '',
+      email: '',
+      rut: '',
+      rol: 'usuario',
+      activo: true,
       password: '',
       confirmPassword: '',
+      permisos: getDefaultPermisos(),
     });
     setSelectedUser(usuario);
     setDialogMode('password');
@@ -647,8 +653,12 @@ export function UsuariosModule() {
           }
           fetchUsuarios();
         } else {
-          const data = await response.json();
-          toast.error(data.error || 'Error al actualizar contraseña');
+          try {
+            const data = await response.json();
+            toast.error(data.error || 'Error al actualizar contraseña');
+          } catch {
+            toast.error(`Error del servidor (${response.status})`);
+          }
         }
       }
     } catch (error) {

@@ -588,6 +588,8 @@ export async function updateUser(
     password: string;
     passwordChangeMotivo?: string;
     clearPasswordTemp?: boolean;
+    cambiarPasswordProximoLogin?: boolean;
+    passwordTemp?: string | null;
   }>,
   updatedBy?: string
 ) {
@@ -608,8 +610,14 @@ export async function updateUser(
     updateData.password = await hashPassword(data.password);
     updateData.lastPasswordChange = new Date();
     updateData.lastPasswordChangeMotivo = data.passwordChangeMotivo || 'cambio_voluntario';
-    updateData.cambiarPasswordProximoLogin = false;
-    updateData.passwordTemp = null; // limpiar la temp
+    // Solo sobreescribir cambiarPasswordProximoLogin y passwordTemp si el caller
+    // no los pasó explícitamente (ej: admin forzando reset de contraseña)
+    if (data.cambiarPasswordProximoLogin === undefined) {
+      updateData.cambiarPasswordProximoLogin = false;
+    }
+    if (data.passwordTemp === undefined) {
+      updateData.passwordTemp = null; // limpiar la temp
+    }
   }
   
   // Limpiar explícitamente la contraseña temporal si se solicita

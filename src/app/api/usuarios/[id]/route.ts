@@ -146,15 +146,9 @@ export async function PUT(
       if (!isOwnProfile && isAdmin) {
         updateData.passwordChangeMotivo = 'cambio_forzado';
         updateData.cambiarPasswordProximoLogin = true;
-        // Volver a encriptar el password temporal para mostrarlo al admin
-        if (password) {
-          const { encrypt } = await import('@/lib/auth');
-          updateData.passwordTemp = encrypt(password);
-        }
+        updateData.passwordTemp = encrypt(password);
       } else {
-          updateData.passwordChangeMotivo = 'cambio_voluntario';
-        // Incluso cambio voluntario: guardar passwordTemp para admin
-        const { encrypt } = await import('@/lib/auth');
+        updateData.passwordChangeMotivo = 'cambio_voluntario';
         updateData.passwordTemp = encrypt(password);
       }
     }
