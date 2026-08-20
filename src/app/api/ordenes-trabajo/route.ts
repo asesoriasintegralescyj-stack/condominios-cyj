@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
+    const proyectoId = searchParams.get('proyectoId') || ''
 
     // Para rol personal, buscar el registro de Personal por email y filtrar OT
     let personalFilter: any = undefined
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
         { titulo: { contains: search } },
         { estado: { contains: search } },
       ]
+    }
+    if (proyectoId) {
+      where.proyectoId = proyectoId
     }
     if (personalFilter) {
       if (search) {

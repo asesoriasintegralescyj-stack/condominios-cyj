@@ -25,6 +25,11 @@ export async function GET(request: NextRequest) {
     const estado = searchParams.get('estado') || ''
     const prioridad = searchParams.get('prioridad') || ''
     const origenTipo = searchParams.get('origenTipo') || ''
+    const proyectoId = searchParams.get('proyectoId') || ''
+    const otId = searchParams.get('otId') || ''
+    const centroCostoId = searchParams.get('centroCostoId') || ''
+    const fechaDesde = searchParams.get('fechaDesde') || ''
+    const fechaHasta = searchParams.get('fechaHasta') || ''
 
     const where: any = {
       condominioId: CONDOMINIO_LAGUNA_NORTE,
@@ -40,6 +45,16 @@ export async function GET(request: NextRequest) {
     if (estado) where.estado = estado
     if (prioridad) where.prioridad = prioridad
     if (origenTipo) where.origenTipo = origenTipo
+    if (proyectoId) where.proyectoId = proyectoId
+    if (otId) where.otId = otId
+    if (centroCostoId) where.centroCostoId = centroCostoId
+
+    // Filtro por rango de fechas
+    if (fechaDesde || fechaHasta) {
+      where.fechaSolicitud = {}
+      if (fechaDesde) where.fechaSolicitud.gte = new Date(fechaDesde)
+      if (fechaHasta) where.fechaSolicitud.lte = new Date(fechaHasta + 'T23:59:59.999Z')
+    }
 
     if (search) {
       where.OR = [
@@ -47,6 +62,8 @@ export async function GET(request: NextRequest) {
         { titulo: { contains: search, mode: 'insensitive' } },
         { descripcion: { contains: search, mode: 'insensitive' } },
         { solicitadoPor: { contains: search, mode: 'insensitive' } },
+        { proyectoNombre: { contains: search, mode: 'insensitive' } },
+        { otCodigo: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -103,15 +120,29 @@ export async function POST(request: NextRequest) {
         ? `${session.user.nombre}${session.user.apellido ? ' ' + session.user.apellido : ''}`.trim()
         : null)
 
+    // Si viene de OT/Proyecto con origenTipo, se crea directo en "Solicitado" (comportamiento original).
+    // Si es creación manual sin origen, se crea en "Borrador".
+    const isFromOrigen = body.origenTipo && body.origenId
+    const initialEstado = isFromOrigen ? 'Solicitado' : (body.estado || 'Borrador')
+
     const data = {
       codigo,
       titulo: String(body.titulo || '').trim(),
       descripcion: body.descripcion ? String(body.descripcion) : null,
-      estado: 'Solicitado',
+      estado: initialEstado,
       prioridad: body.prioridad || 'Media',
+      moneda: body.moneda || 'CLP',
       origenTipo: body.origenTipo || null,
       origenId: body.origenId || null,
       origenCodigo: body.origenCodigo || null,
+      // Asociación a Proyecto/OT
+      proyectoId: body.proyectoId || null,
+      proyectoNombre: body.proyectoNombre || null,
+      otId: body.otId || null,
+      otCodigo: body.otCodigo || null,
+      // Centro de costos
+      centroCostoId: body.centroCostoId || null,
+      // Materiales
       materiales: materialesRaw.length > 0 ? JSON.stringify(materialesRaw) : null,
       totalEstimado,
       solicitadoPor,
@@ -124,10 +155,33 @@ export async function POST(request: NextRequest) {
         : null,
       emailEnviado: false,
       condominioId: CONDOMINIO_LAGUNA_NORTE,
+      // Si viene de origen, ya se envió a revisión
+      submittedAt: isFromOrigen ? new Date() : null,
+      // Si viene de origen, arrancar en etapa de aprobación
+      etapaAprobacion: isFromOrigen ? 'Pendiente Supervisor' : 'Sin etapa',
     }
 
     if (!data.titulo) {
       return apiError('El título es obligatorio', 400)
+    }
+
+    // Si no es de origen y el estado es Solicitado (envío a revisión), validar valorización
+    if (!isFromOrigen && initialEstado === 'Solicitado') {
+      const cleanItems = materialesRaw.filter((m) => m.nombre && m.nombre.trim() !== '')
+      if (cleanItems.length === 0) {
+        return apiError('Debe agregar al menos un material con nombre para enviar a revisión', 400)
+      }
+      for (const item of cleanItems) {
+        if (!item.cantidad || item.cantidad <= 0) {
+          return apiError(`Cantidad inválida en ítem "${item.nombre}". Debe ser mayor a 0.`, 400)
+        }
+        if (!item.precioEstimado || item.precioEstimado <= 0) {
+          return apiError(`Precio unitario inválido en ítem "${item.nombre}". Debe ser mayor a 0.`, 400)
+        }
+      }
+      if (!totalEstimado || totalEstimado <= 0) {
+        return apiError('La valorización total debe ser mayor a 0', 400)
+      }
     }
 
     const solicitud = await db.solicitudCompra.create({ data })

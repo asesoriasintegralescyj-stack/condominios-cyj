@@ -6,6 +6,7 @@ import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
 
 // Transiciones válidas de estado
 const ESTADO_TRANSITIONS: Record<string, string[]> = {
+  Borrador: ['Solicitado', 'Anulada'],
   Solicitado: ['En Proceso', 'Rechazado', 'Anulada'],
   'En Proceso': ['Comprado', 'Anulada'],
   Comprado: ['Anulada'],
@@ -86,12 +87,32 @@ export async function PUT(request: NextRequest, { params }: Context) {
       return apiError('Sin permisos para editar esta solicitud', 403)
     }
 
-    // Bloquear edición si la solicitud está en flujo de aprobación (no es DRAFT/Solicitado)
-    // Solo admin puede editar en cualquier estado
+    // BLOQUEO DE EDICIÓN POST-ENVÍO: Solo se puede editar en estado Borrador.
+    // El admin puede hacer edición de emergencia en cualquier estado.
     if (session.user.rol !== 'admin') {
-      const etapa = existing.etapaAprobacion
-      if (etapa === 'Aprobada Supervisor' || etapa === 'Aprobada Admin' || existing.estado === 'Rechazada' || existing.estado === 'Comprado') {
-        return apiError('No se puede editar una solicitud en esta etapa. Solo el administrador puede hacerlo.', 403)
+      if (existing.estado !== 'Borrador') {
+        // Notificar al admin sobre el intento de edición post-envío
+        try {
+          // Notificar a todos los admins sobre el intento de edición post-envío
+          const admins = await db.user.findMany({ where: { rol: 'admin' } })
+          for (const admin of admins) {
+            await db.notificacion.create({
+              data: {
+                titulo: 'Intento de edición post-envío bloqueado',
+                mensaje: `El usuario ${session.user.nombre} (${session.user.email}) intentó editar la solicitud ${existing.codigo} en estado "${existing.estado}". Solo el administrador puede editar solicitudes enviadas.`,
+                tipo: 'Alerta',
+                categoria: 'General',
+                destino: 'Usuario específico',
+                destinoId: admin.id,
+                leido: false,
+                condominioId: existing.condominioId,
+              },
+            })
+          }
+        } catch (notifErr) {
+          console.error('Error al notificar intento de edición:', notifErr)
+        }
+        return apiError(`No se puede editar una solicitud en estado "${existing.estado}". Solo el administrador puede realizar ediciones de emergencia.`, 403)
       }
     }
 
@@ -150,6 +171,12 @@ export async function PUT(request: NextRequest, { params }: Context) {
     }
     if (totalEstimado !== undefined) data.totalEstimado = totalEstimado
     if (body.etapaAprobacion !== undefined) data.etapaAprobacion = body.etapaAprobacion || null
+    if (body.moneda !== undefined) data.moneda = String(body.moneda)
+    if (body.proyectoId !== undefined) data.proyectoId = body.proyectoId || null
+    if (body.proyectoNombre !== undefined) data.proyectoNombre = body.proyectoNombre || null
+    if (body.otId !== undefined) data.otId = body.otId || null
+    if (body.otCodigo !== undefined) data.otCodigo = body.otCodigo || null
+    if (body.centroCostoId !== undefined) data.centroCostoId = body.centroCostoId || null
 
     const updated = await db.solicitudCompra.update({ where: { id }, data })
 

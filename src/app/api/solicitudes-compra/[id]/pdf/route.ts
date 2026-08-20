@@ -11,9 +11,13 @@ interface Context {
   params: Promise<{ id: string }>
 }
 
-function safeParseMateriales(raw: string | null) {
+function safeParseMateriales(raw: string | null): any[] {
   if (!raw) return []
-  try { return JSON.parse(raw) } catch { return [] }
+  try {
+    return JSON.parse(raw)
+  } catch (e) {
+    return []
+  }
 }
 
 function safeParseLinks(raw: string | null): string[] {
@@ -21,7 +25,8 @@ function safeParseLinks(raw: string | null): string[] {
   try {
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
-  } catch { return [] }
+  } catch (e) {
+    return []
   }
 }
 
