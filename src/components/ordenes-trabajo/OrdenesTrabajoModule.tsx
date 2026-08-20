@@ -39,6 +39,52 @@ import {
   AlertTriangle, CheckCircle, FileText, Eye, UserCircle
 } from 'lucide-react'
 
+// ─── Utilidad: comprimir imagen antes de enviar al servidor ───
+const MAX_PHOTO_DIMENSION = 1280
+const MAX_PHOTO_SIZE_BYTES = 300_000 // ~300 KB por foto
+
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+
+        // Reducir dimensiones si exceden el máximo
+        if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
+          if (width > height) {
+            height = Math.round((height * MAX_PHOTO_DIMENSION) / width)
+            width = MAX_PHOTO_DIMENSION
+          } else {
+            width = Math.round((width * MAX_PHOTO_DIMENSION) / height)
+            height = MAX_PHOTO_DIMENSION
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+
+        // Comprimir con calidad decreciente hasta que quede bajo el límite
+        let quality = 0.7
+        let dataUrl = canvas.toDataURL('image/jpeg', quality)
+        while (dataUrl.length > MAX_PHOTO_SIZE_BYTES * 1.37 && quality > 0.2) {
+          quality -= 0.1
+          dataUrl = canvas.toDataURL('image/jpeg', quality)
+        }
+        resolve(dataUrl)
+      }
+      img.onerror = reject
+      img.src = reader.result as string
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
 // Interfaces
 interface OTMaterial {
   id: string
@@ -576,6 +622,16 @@ export function OrdenesTrabajoModule() {
       fotosDespues,
     }
 
+    // Verificar tamaño del payload antes de enviar (Vercel Hobby límite ~4.5 MB)
+    const payloadSize = new Blob([JSON.stringify(dataToSend)]).size
+    const MAX_PAYLOAD = 4 * 1024 * 1024 // 4 MB con margen
+    if (payloadSize > MAX_PAYLOAD) {
+      const mb = (payloadSize / 1024 / 1024).toFixed(1)
+      toast.error(`Las fotos son muy grandes (${mb} MB). Reduce la cantidad o usa imágenes más pequeñas.`)
+      setSavingOT(false)
+      return
+    }
+
     try {
       if (editingOT) {
         const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
@@ -584,7 +640,10 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify(dataToSend),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
+          const err = await res.json().catch(() => {
+            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
+            return {}
+          })
           throw new Error(err.details || err.error || 'Error al guardar OT')
         }
       } else {
@@ -594,7 +653,10 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify({ ...dataToSend, _clientIdempotency: idempotencyToken }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
+          const err = await res.json().catch(() => {
+            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
+            return {}
+          })
           throw new Error(err.details || err.error || 'Error al crear OT')
         }
         const result = await res.json()
@@ -1914,11 +1976,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              const reader = new FileReader()
-                              reader.onloadend = () => {
-                                setFotosAntes(prev => [...prev, reader.result as string])
-                              }
-                              reader.readAsDataURL(file)
+                              compressImage(file).then(compressed => {
+                                setFotosAntes(prev => [...prev, compressed])
+                              }).catch(() => {
+                                toast.error('Error al comprimir imagen')
+                              })
                             })
                           }
                           e.target.value = ''
@@ -1990,11 +2052,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              const reader = new FileReader()
-                              reader.onloadend = () => {
-                                setFotosDespues(prev => [...prev, reader.result as string])
-                              }
-                              reader.readAsDataURL(file)
+                              compressImage(file).then(compressed => {
+                                setFotosDespues(prev => [...prev, compressed])
+                              }).catch(() => {
+                                toast.error('Error al comprimir imagen')
+                              })
                             })
                           }
                           e.target.value = ''
