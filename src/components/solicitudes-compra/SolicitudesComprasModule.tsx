@@ -43,6 +43,9 @@ import {
   Clock,
   AlertTriangle,
   DollarSign,
+  FileText,
+  RotateCcw,
+  History,
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
@@ -172,11 +175,30 @@ export function SolicitudesComprasModule() {
   // Diálogo de aprobación/rechazo
   const [aprobDialogOpen, setAprobDialogOpen] = useState(false)
   const [aprobTarget, setAprobTarget] = useState<SolicitudCompra | null>(null)
-  const [aprobAccion, setAprobAccion] = useState<'aprobar_supervisor' | 'rechazar_supervisor' | 'aprobar_admin' | 'rechazar_admin' | null>(null)
+  const [aprobAccion, setAprobAccion] = useState<'aprobar_supervisor' | 'rechazar_supervisor' | 'devolver_supervisor' | 'aprobar_admin' | 'rechazar_admin' | 'devolver_admin' | null>(null)
   const [aprobObservaciones, setAprobObservaciones] = useState('')
   const [aprobLoading, setAprobLoading] = useState(false)
 
-  const openAprobDialog = (s: SolicitudCompra, accion: 'aprobar_supervisor' | 'rechazar_supervisor' | 'aprobar_admin' | 'rechazar_admin') => {
+  const [historial, setHistorial] = useState<any[] | null>(null)
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
+
+  const fetchHistorial = async (scId: string) => {
+    setLoadingHistorial(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${scId}/historial`)
+      if (res.ok) setHistorial(await res.json())
+    } catch (e) { console.error(e) }
+    finally { setLoadingHistorial(false) }
+  }
+
+  const openDetail = (s: SolicitudCompra) => {
+    setDetail(s)
+    setHistorial(null)
+    setDetailOpen(true)
+    void fetchHistorial(s.id)
+  }
+
+  const openAprobDialog = (s: SolicitudCompra, accion: 'aprobar_supervisor' | 'rechazar_supervisor' | 'devolver_supervisor' | 'aprobar_admin' | 'rechazar_admin' | 'devolver_admin') => {
     setAprobTarget(s)
     setAprobAccion(accion)
     setAprobObservaciones('')
@@ -185,9 +207,9 @@ export function SolicitudesComprasModule() {
 
   const handleAprobSubmit = async () => {
     if (!aprobTarget || !aprobAccion) return
-    // Para rechazos, las observaciones son obligatorias
-    if (aprobAccion.includes('rechazar') && !aprobObservaciones.trim()) {
-      toast.error('Debe ingresar el motivo del rechazo')
+    // Para rechazos y devoluciones, las observaciones son obligatorias
+    if ((aprobAccion.includes('rechazar') || aprobAccion.includes('devolver')) && !aprobObservaciones.trim()) {
+      toast.error(aprobAccion.includes('rechazar') ? 'Debe ingresar el motivo del rechazo' : 'Debe indicar las correcciones necesarias')
       return
     }
     setAprobLoading(true)
@@ -294,10 +316,7 @@ export function SolicitudesComprasModule() {
     setDialogOpen(true)
   }
 
-  const openDetail = (s: SolicitudCompra) => {
-    setDetail(s)
-    setDetailOpen(true)
-  }
+// (replaced above)
 
   const addMaterial = () => {
     setMateriales([
@@ -672,6 +691,15 @@ export function SolicitudesComprasModule() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                title="Devolver para correcciones"
+                                onClick={() => openAprobDialog(s, 'devolver_supervisor')}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Devolver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
                                 title="Rechazar (Supervisor)"
                                 onClick={() => openAprobDialog(s, 'rechazar_supervisor')}
@@ -693,6 +721,15 @@ export function SolicitudesComprasModule() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                title="Devolver al supervisor con correcciones"
+                                onClick={() => openAprobDialog(s, 'devolver_admin')}
+                              >
+                                <RotateCcw className="w-3 h-3 mr-1" /> Devolver
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
                                 title="Rechazar (Admin)"
                                 onClick={() => openAprobDialog(s, 'rechazar_admin')}
@@ -706,6 +743,12 @@ export function SolicitudesComprasModule() {
                           )}
                           {s.etapaAprobacion === 'Aprobada Admin' && (
                             <span className="text-[10px] text-green-700 italic">Aprobada</span>
+                          )}
+                          {/* Alerta de fecha esperada vencida */}
+                          {s.fechaEspera && new Date(s.fechaEspera) < new Date() && s.estado !== 'Comprado' && s.estado !== 'Rechazada' && s.estado !== 'Anulada' && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-red-600 font-medium" title="Fecha esperada vencida">
+                              <AlertTriangle className="w-3 h-3" /> Vencida
+                            </span>
                           )}
                           {/* Acciones estándar */}
                           <Button
@@ -1316,6 +1359,76 @@ export function SolicitudesComprasModule() {
                   </div>
                 )}
 
+                {/* Información de aprobación */}
+                {detail.etapaAprobacion && (
+                  <div className="space-y-2">
+                    <Label className="text-xs flex items-center gap-1"><History className="w-3 h-3" /> Estado de Aprobación</Label>
+                    <div className="bg-slate-50 border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-md border ${etapaColors[detail.etapaAprobacion || ''] || etapaColors['Sin etapa']}`}>{detail.etapaAprobacion}</span>
+                      </div>
+                      {detail.supervisorAprobadorNombre && (
+                        <div className="text-xs">
+                          <span className="text-slate-500">Supervisor:</span>{' '}
+                          <span className="font-medium">{detail.supervisorAprobadorNombre}</span>
+                          {detail.supervisorFechaAprobacion && (
+                            <span className="text-slate-400 ml-2">{new Date(detail.supervisorFechaAprobacion).toLocaleString('es-CL')}</span>
+                          )}
+                        </div>
+                      )}
+                      {detail.supervisorObservaciones && (
+                        <div className="text-xs text-slate-600 bg-amber-50 p-2 rounded">{detail.supervisorObservaciones}</div>
+                      )}
+                      {detail.adminAprobadorNombre && (
+                        <div className="text-xs">
+                          <span className="text-slate-500">Administrador:</span>{' '}
+                          <span className="font-medium">{detail.adminAprobadorNombre}</span>
+                          {detail.adminFechaAprobacion && (
+                            <span className="text-slate-400 ml-2">{new Date(detail.adminFechaAprobacion).toLocaleString('es-CL')}</span>
+                          )}
+                        </div>
+                      )}
+                      {detail.adminObservaciones && (
+                        <div className="text-xs text-slate-600 bg-amber-50 p-2 rounded">{detail.adminObservaciones}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Historial de aprobación */
+                {loadingHistorial && <p className="text-xs text-slate-400">Cargando historial...</p>}
+                {historial && historial.length > 0 && (
+                  <div>
+                    <Label className="text-xs flex items-center gap-1"><History className="w-3 h-3" /> Historial de Aprobación</Label>
+                    <div className="border rounded-lg overflow-hidden mt-1">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            <th className="text-left p-2">Fecha</th>
+                            <th className="text-left p-2">Acción</th>
+                            <th className="text-left p-2">Aprobador</th>
+                            <th className="text-left p-2">Observaciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historial.map((h: any, i: number) => (
+                            <tr key={i} className="border-t">
+                              <td className="p-2 text-slate-500 whitespace-nowrap">{new Date(h.fechaAccion).toLocaleString('es-CL')}</td>
+                              <td className="p-2">
+                                <Badge className={h.accion.includes('aprobar') ? 'bg-green-100 text-green-700' : h.accion.includes('devolver') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}>
+                                  {h.accion.replace(/_/g, ' ')}
+                                </Badge>
+                              </td>
+                              <td className="p-2 font-medium">{h.aprobadorNombre || '—'}</td>
+                              <td className="p-2 text-slate-600 max-w-[200px] truncate" title={h.observaciones || ''}>{h.observaciones || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
                 {detail.emailEnviado && detail.emailFechaEnvio && (
                   <div className="text-xs text-slate-500">
                     Último email enviado a{' '}
@@ -1326,6 +1439,12 @@ export function SolicitudesComprasModule() {
               </div>
 
               <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(`/api/solicitudes-compra/${detail.id}/pdf`, '_blank')}
+                >
+                  <FileText className="w-4 h-4 mr-1" /> Descargar PDF
+                </Button>
                 <Button
                   variant="outline"
                   onClick={() => void handleResendEmail(detail)}
@@ -1364,13 +1483,17 @@ export function SolicitudesComprasModule() {
             <DialogTitle className="flex items-center gap-2">
               {aprobAccion && aprobAccion.includes('aprobar') ? (
                 <CheckCircle className="w-5 h-5 text-green-600" />
+              ) : aprobAccion && aprobAccion.includes('devolver') ? (
+                <RotateCcw className="w-5 h-5 text-amber-600" />
               ) : (
                 <XCircle className="w-5 h-5 text-red-600" />
               )}
               {aprobAccion === 'aprobar_supervisor' && 'Aprobar Solicitud (Supervisor)'}
               {aprobAccion === 'rechazar_supervisor' && 'Rechazar Solicitud (Supervisor)'}
+              {aprobAccion === 'devolver_supervisor' && 'Devolver Solicitud (Supervisor)'}
               {aprobAccion === 'aprobar_admin' && 'Aprobar y Gestionar Compra (Admin)'}
               {aprobAccion === 'rechazar_admin' && 'Rechazar Solicitud (Admin)'}
+              {aprobAccion === 'devolver_admin' && 'Devolver Solicitud (Admin)'}
             </DialogTitle>
             <DialogDescription>
               {aprobTarget && (
@@ -1393,6 +1516,11 @@ export function SolicitudesComprasModule() {
                 )}
               </div>
             )}
+            {aprobAccion && aprobAccion.includes('devolver') && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                Al devolver, la solicitud vuelve a estado <strong>"Solicitado"</strong> para que el solicitante corrija y reenvíe.
+              </div>
+            )}
             {aprobAccion && aprobAccion.includes('rechazar') && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800">
                 Al rechazar, la solicitud pasará a estado <strong>"Rechazada"</strong> y no se podrá continuar con el flujo.
@@ -1401,16 +1529,20 @@ export function SolicitudesComprasModule() {
 
             <div className="space-y-2">
               <Label className="text-xs">
-                {aprobAccion && aprobAccion.includes('rechazar')
-                  ? 'Motivo del rechazo *'
-                  : 'Observaciones (opcional)'}
+                {aprobAccion && aprobAccion.includes('devolver')
+                  ? 'Correcciones necesarias *'
+                  : aprobAccion && aprobAccion.includes('rechazar')
+                    ? 'Motivo del rechazo *'
+                    : 'Observaciones (opcional)'}
               </Label>
               <Textarea
                 value={aprobObservaciones}
                 onChange={(e) => setAprobObservaciones(e.target.value)}
-                placeholder={aprobAccion && aprobAccion.includes('rechazar')
-                  ? 'Indica el motivo del rechazo...'
-                  : 'Comentarios adicionales para el solicitante...'
+                placeholder={aprobAccion && aprobAccion.includes('devolver')
+                  ? 'Indica las correcciones que debe hacer el solicitante...'
+                  : aprobAccion && aprobAccion.includes('rechazar')
+                    ? 'Indica el motivo del rechazo...'
+                    : 'Comentarios adicionales para el solicitante...'
                 }
                 rows={3}
                 disabled={aprobLoading}
@@ -1424,16 +1556,20 @@ export function SolicitudesComprasModule() {
             </Button>
             <Button
               onClick={handleAprobSubmit}
-              disabled={aprobLoading || (aprobAccion?.includes('rechazar') && !aprobObservaciones.trim())}
+              disabled={aprobLoading || ((aprobAccion?.includes('rechazar') || aprobAccion?.includes('devolver')) && !aprobObservaciones.trim())}
               className={aprobAccion && aprobAccion.includes('aprobar')
                 ? 'bg-green-700 hover:bg-green-800 text-white'
-                : 'bg-red-600 hover:bg-red-700 text-white'
+                : aprobAccion && aprobAccion.includes('devolver')
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-red-600 hover:bg-red-700 text-white'
               }
             >
               {aprobLoading ? (
                 <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Procesando...</>
               ) : aprobAccion && aprobAccion.includes('aprobar') ? (
                 <><CheckCircle className="w-4 h-4 mr-2" /> Confirmar Aprobación</>
+              ) : aprobAccion && aprobAccion.includes('devolver') ? (
+                <><RotateCcw className="w-4 h-4 mr-2" /> Confirmar Devolución</>
               ) : (
                 <><XCircle className="w-4 h-4 mr-2" /> Confirmar Rechazo</>
               )}

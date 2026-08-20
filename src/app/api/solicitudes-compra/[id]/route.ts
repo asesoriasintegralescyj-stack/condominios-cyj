@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentSession } from '@/lib/auth'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
+
+// Transiciones válidas de estado
+const ESTADO_TRANSITIONS: Record<string, string[]> = {
+  Solicitado: ['En Proceso', 'Rechazado', 'Anulada'],
+  'En Proceso': ['Comprado', 'Anulada'],
+  Comprado: ['Anulada'],
+  Rechazado: [],
+  Anulada: [],
+}
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -70,7 +79,23 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const existing = await db.solicitudCompra.findUnique({ where: { id } })
     if (!existing) return apiError('Solicitud no encontrada', 404)
 
-    // Validación de seguridad: solo admin puede cambiar etapaAprobacion
+    // Permiso de edición: solo admin, supervisor o el creador pueden editar
+    const isOwner = existing.solicitadoPorId === session.userId
+    const canEdit = session.user.rol === 'admin' || session.user.rol === 'supervisor' || isOwner
+    if (!canEdit) {
+      return apiError('Sin permisos para editar esta solicitud', 403)
+    }
+
+    // Bloquear edición si la solicitud está en flujo de aprobación (no es DRAFT/Solicitado)
+    // Solo admin puede editar en cualquier estado
+    if (session.user.rol !== 'admin') {
+      const etapa = existing.etapaAprobacion
+      if (etapa === 'Aprobada Supervisor' || etapa === 'Aprobada Admin' || existing.estado === 'Rechazada' || existing.estado === 'Comprado') {
+        return apiError('No se puede editar una solicitud en esta etapa. Solo el administrador puede hacerlo.', 403)
+      }
+    }
+
+    // Validación de cambio de etapa: solo admin puede cambiar etapaAprobacion
     if (body.etapaAprobacion !== undefined && session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
       return apiError('Sin permisos para cambiar etapa', 403)
     }
@@ -98,7 +123,14 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const data: any = {}
     if (body.titulo !== undefined) data.titulo = String(body.titulo).trim()
     if (body.descripcion !== undefined) data.descripcion = body.descripcion ? String(body.descripcion) : null
-    if (body.estado !== undefined) data.estado = String(body.estado)
+    // Validar transición de estado (solo si se intenta cambiar)
+    if (body.estado !== undefined && body.estado !== existing.estado) {
+      const allowed = ESTADO_TRANSITIONS[existing.estado]
+      if (!allowed || !allowed.includes(String(body.estado))) {
+        return apiError(`No se puede cambiar de "${existing.estado}" a "${body.estado}". Transiciones permitidas: ${allowed ? allowed.join(', ') : 'ninguna'}`, 400)
+      }
+      data.estado = String(body.estado)
+    }
     if (body.prioridad !== undefined) data.prioridad = String(body.prioridad)
     if (body.fechaEspera !== undefined) data.fechaEspera = body.fechaEspera ? String(body.fechaEspera) : null
     if (body.proveedorSugerido !== undefined)
@@ -141,6 +173,16 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
     const { id } = await params
     const existing = await db.solicitudCompra.findUnique({ where: { id } })
     if (!existing) return apiError('Solicitud no encontrada', 404)
+
+    // Solo admin puede eliminar solicitudes que no sean propias y estén en flujo
+    const isOwner = existing.solicitadoPorId === session.userId
+    if (session.user.rol !== 'admin' && !isOwner) {
+      return apiError('Sin permisos para eliminar esta solicitud', 403)
+    }
+    // No eliminar si está aprobada o comprada
+    if (existing.estado === 'Comprado' || existing.etapaAprobacion === 'Aprobada Admin') {
+      return apiError('No se puede eliminar una solicitud aprobada o comprada', 400)
+    }
 
     await db.solicitudCompra.delete({ where: { id } })
     return NextResponse.json({ success: true })
