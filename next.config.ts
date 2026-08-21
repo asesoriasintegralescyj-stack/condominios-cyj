@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: false,
   
   experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts', '@tanstack/react-query', 'googleapis'],
+    optimizePackageImports: ['lucide-react', 'recharts', '@tanstack/react-query'],
   },
 };
 

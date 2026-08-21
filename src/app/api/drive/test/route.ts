@@ -3,9 +3,6 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-/**
- * Endpoint de diagnóstico de Google Drive SIN autenticación.
- */
 export async function GET() {
   const results: any = {
     timestamp: new Date().toISOString(),
@@ -45,43 +42,54 @@ export async function GET() {
   }
 
   try {
+    // Escribir clave a archivo temporal y usar keyFile
+    const fs = await import('fs')
+    const os = await import('os')
+    const path = await import('path')
     const { google } = await import('googleapis')
 
-    // Usar fromJSON con el JSON completo, luego asignar scopes
-    const auth = google.auth.fromJSON(parsed) as any
-    auth.scopes = ['https://www.googleapis.com/auth/drive']
+    const tmpFile = path.join(os.tmpdir(), `gdrive-test-${Date.now()}.json`)
+    fs.writeFileSync(tmpFile, JSON.stringify(parsed))
 
-    // Autorizar explícitamente para probar que el token se genera
-    await auth.authorize()
-    results.tokenObtained = true
+    try {
+      const auth = new google.auth.JWT({
+        keyFile: tmpFile,
+        scopes: ['https://www.googleapis.com/auth/drive'],
+      })
 
-    const drive = google.drive({ version: 'v3', auth })
+      await auth.authorize()
+      results.tokenObtained = true
 
-    const folder = await drive.files.get({
-      fileId: parentId,
-      fields: 'id, name, webViewLink',
-    })
+      const drive = google.drive({ version: 'v3', auth })
 
-    results.connection = {
-      ok: true,
-      parentFolder: {
-        id: folder.data.id,
-        name: folder.data.name,
-        url: folder.data.webViewLink,
-      },
+      const folder = await drive.files.get({
+        fileId: parentId,
+        fields: 'id, name, webViewLink',
+      })
+
+      results.connection = {
+        ok: true,
+        parentFolder: {
+          id: folder.data.id,
+          name: folder.data.name,
+          url: folder.data.webViewLink,
+        },
+      }
+
+      const folders = await drive.files.list({
+        q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false`,
+        fields: 'files(id, name)',
+        pageSize: 50,
+        orderBy: 'createdTime desc',
+      })
+
+      results.existingFolders = (folders.data.files || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+      }))
+    } finally {
+      try { fs.unlinkSync(tmpFile) } catch {}
     }
-
-    const folders = await drive.files.list({
-      q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, name)',
-      pageSize: 50,
-      orderBy: 'createdTime desc',
-    })
-
-    results.existingFolders = (folders.data.files || []).map((f: any) => ({
-      id: f.id,
-      name: f.name,
-    }))
 
   } catch (error: any) {
     results.connection = {
