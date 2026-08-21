@@ -47,13 +47,9 @@ export async function GET() {
   try {
     const { google } = await import('googleapis')
 
-    // Usar fromJSON en vez de new JWT - más confiable en serverless
-    const auth = google.auth.fromJSON({
-      type: 'service_account',
-      client_email: parsed.client_email,
-      private_key: parsed.private_key,
-      scopes: ['https://www.googleapis.com/auth/drive'],
-    })
+    // Usar fromJSON con el JSON completo, luego asignar scopes
+    const auth = google.auth.fromJSON(parsed) as any
+    auth.scopes = ['https://www.googleapis.com/auth/drive']
 
     // Autorizar explícitamente para probar que el token se genera
     await auth.authorize()

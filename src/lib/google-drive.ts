@@ -59,13 +59,9 @@ function getDriveClient() {
     throw new Error('GOOGLE_DRIVE_SERVICE_ACCOUNT no es un JSON válido')
   }
 
-  // Usar fromJSON en vez de new JWT - más confiable en entornos serverless (Vercel)
-  const auth = google.auth.fromJSON({
-    type: 'service_account',
-    client_email: parsed.client_email,
-    private_key: parsed.private_key,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  })
+  // Usar fromJSON con el JSON completo, luego asignar scopes
+  const auth = google.auth.fromJSON(parsed) as any
+  auth.scopes = ['https://www.googleapis.com/auth/drive']
 
   cachedAuth = auth
   cachedDrive = google.drive({ version: 'v3', auth })
