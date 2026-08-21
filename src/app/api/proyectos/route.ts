@@ -319,9 +319,54 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Crear carpetas en Google Drive en background (no bloquea la respuesta)
+    void createDriveFoldersForProject(proyecto.id, codigo, proyecto.nombre)
+
     return NextResponse.json(proyecto)
   } catch (error) {
     console.error('Error creating proyecto:', error)
     return handlePrismaError(error)
+  }
+}
+
+/**
+ * Crea carpetas en Google Drive para un proyecto de forma asíncrona.
+ * Se ejecuta en background (fire-and-forget) para no bloquear la creación del proyecto.
+ * Si Drive no está configurado, se ignora silenciosamente.
+ */
+async function createDriveFoldersForProject(
+  proyectoId: string,
+  codigo: string,
+  nombre: string,
+) {
+  try {
+    if (!process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || !process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) {
+      console.log('[Drive] No configurado, saltando creación de carpetas')
+      return
+    }
+
+    const { createProjectFolderStructure } = await import('@/lib/google-drive')
+    const structure = await createProjectFolderStructure(codigo, nombre)
+
+    // Guardar IDs de carpetas en el proyecto
+    await db.proyecto.update({
+      where: { id: proyectoId },
+      data: {
+        driveFolderId: structure.proyectoFolder.id,
+        driveData: JSON.stringify({
+          proyectoFolder: structure.proyectoFolder,
+          solicitudesFolder: structure.solicitudesFolder,
+          documentosFolder: structure.documentosFolder,
+          fotosAntesFolder: structure.fotosAntesFolder,
+          fotosDespuesFolder: structure.fotosDespuesFolder,
+          createdAt: new Date().toISOString(),
+        }),
+      },
+    })
+
+    console.log(`[Drive] Carpetas creadas para ${codigo}: ${structure.proyectoFolder.url}`)
+  } catch (error) {
+    // No fallar la creación del proyecto si Drive falla
+    console.error(`[Drive] Error creando carpetas para proyecto:`, error)
   }
 }

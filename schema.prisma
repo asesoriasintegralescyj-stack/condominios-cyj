@@ -374,7 +374,10 @@ model OrdenTrabajo {
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
   fotosDespues    String?  // JSON array de fotos después del trabajo
-  
+
+  // Google Drive
+  driveFolderId  String?  // ID de la carpeta de la OT en Drive
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -507,6 +510,10 @@ model Proyecto {
   fotosDespues      String?
   cotizaciones      String?
 
+  // Google Drive
+  driveFolderId  String?  // ID de la carpeta raíz del proyecto en Drive
+  driveData      String?  // JSON con IDs de subcarpetas
+
   // Relación con Condominio
   condominioId  String?
   condominio    Condominio? @relation(fields: [condominioId], references: [id])
@@ -522,6 +529,7 @@ model Proyecto {
   documentos    ProyectoDocumento[]
   @@index([condominioId, estado])
   @@index([centroCostoId])
+  @@index([driveFolderId])
 }
 
 model ProyectoMaterial {
