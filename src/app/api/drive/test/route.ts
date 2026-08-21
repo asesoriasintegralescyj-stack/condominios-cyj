@@ -5,18 +5,16 @@ export const maxDuration = 30
 
 /**
  * Endpoint de diagnóstico de Google Drive SIN autenticación.
- * Usar solo para verificar que las variables de entorno y conexión funcionan.
- * Eliminar después de verificar.
  */
 export async function GET() {
   const results: any = {
     timestamp: new Date().toISOString(),
     envVars: {},
     jsonValid: false,
+    privateKeyOk: false,
     connection: null,
   }
 
-  // 1. Verificar variables de entorno
   const parentId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID
   const svcAccount = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT
 
@@ -27,15 +25,14 @@ export async function GET() {
   results.envVars.serviceAccount = {
     set: !!svcAccount,
     length: svcAccount ? svcAccount.length : 0,
-    firstChars: svcAccount ? svcAccount.substring(0, 20) + '...' : 'NO CONFIGURADA',
   }
 
   if (!parentId || !svcAccount) {
-    results.error = 'Faltan variables de entorno. Revisa en Vercel > Settings > Environment Variables'
+    results.error = 'Faltan variables de entorno'
     return NextResponse.json(results, { status: 400 })
   }
 
-  // 2. Validar JSON del service account
+  // Validar JSON
   let parsed: any
   try {
     parsed = JSON.parse(svcAccount)
@@ -45,22 +42,51 @@ export async function GET() {
   } catch (e: any) {
     results.jsonValid = false
     results.jsonError = e.message
-    results.error = 'GOOGLE_DRIVE_SERVICE_ACCOUNT no es un JSON válido'
+    results.error = 'JSON inválido'
     return NextResponse.json(results, { status: 400 })
   }
 
-  // 3. Probar conexión con Google Drive
+  // Verificar private_key
+  const pk = parsed.private_key || ''
+  results.privateKeyCheck = {
+    length: pk.length,
+    startsCorrectly: pk.startsWith('-----BEGIN PRIVATE KEY-----'),
+    endsCorrectly: pk.trimEnd().endsWith('-----END PRIVATE KEY-----'),
+    hasNewlines: pk.includes('\n'),
+    hasLiteralBackslashN: pk.includes('\\n'),
+    // En Vercel, las env vars multilinea pueden llegar con \n literal
+    // en vez de saltos de línea reales
+    middleSample: pk.length > 50 ? pk.substring(44, 54) : null,
+  }
+  results.privateKeyOk = pk.startsWith('-----BEGIN') && pk.includes('\n')
+
+  // Probar conexión
   try {
     const { google } = await import('googleapis')
+
+    // Si el private_key tiene \n literales en vez de saltos de renglón,
+    // reemplazarlos para que el JWT funcione
+    let fixedKey = parsed.private_key
+    if (fixedKey && !fixedKey.includes('\n') && fixedKey.includes('\\n')) {
+      fixedKey = fixedKey.replace(/\\n/g, '\n')
+      results.privateKeyFixed = true
+    }
+
     const auth = new google.auth.JWT(
       parsed.client_email,
       undefined,
-      parsed.private_key,
+      fixedKey,
       ['https://www.googleapis.com/auth/drive'],
     )
+
+    // Probar obtener token primero
+    const token = await auth.authorize()
+    results.tokenObtained = true
+    results.tokenType = token.token_type
+    results.tokenExpires = token.expiry_date
+
     const drive = google.drive({ version: 'v3', auth })
 
-    // Verificar acceso a la carpeta padre
     const folder = await drive.files.get({
       fileId: parentId,
       fields: 'id, name, webViewLink',
@@ -75,7 +101,6 @@ export async function GET() {
       },
     }
 
-    // Listar carpetas existentes
     const folders = await drive.files.list({
       q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false`,
       fields: 'files(id, name), nextPageToken',
@@ -94,6 +119,7 @@ export async function GET() {
       error: error.message,
       details: error?.response?.data?.error?.message || null,
       code: error?.code || null,
+      status: error?.response?.status || null,
     }
   }
 
