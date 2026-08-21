@@ -9,6 +9,44 @@ export const maxDuration = 30
 
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
+/**
+ * Auto-migra la tabla Proyecto agregando columnas faltantes.
+ * Se ejecuta una sola vez (las columnas se verifican antes de agregar).
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'driveFolderId', type: 'TEXT' },
+    { name: 'driveData', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "Proyecto" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada a Proyecto`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+  // Índice
+  try {
+    const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='Proyecto_driveFolderId_idx')`
+    )
+    if (!r[0]?.exists) {
+      await db.$executeRawUnsafe(`CREATE INDEX "Proyecto_driveFolderId_idx" ON "Proyecto"("driveFolderId")`)
+      console.log(`[ensureColumns] Índice Proyecto_driveFolderId_idx creado`)
+    }
+  } catch (e) {
+    console.warn(`[ensureColumns] Error con índice:`, e)
+  }
+}
+
 // Tipo para los recursos relacionados
 type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number; linkCompra?: string }
 type HerramientaInput = { nombre: string; cantidad: number }
@@ -64,6 +102,9 @@ export async function GET(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const detail = searchParams.get('detail') === 'true'
@@ -175,6 +216,9 @@ export async function POST(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const data = await request.json()
 
     // Extract resources from data

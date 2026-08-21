@@ -6,6 +6,31 @@ import { apiError, handlePrismaError } from '@/lib/api-helpers'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+/**
+ * Auto-migra la tabla Proyecto agregando columnas faltantes.
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'driveFolderId', type: 'TEXT' },
+    { name: 'driveData', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "Proyecto" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada a Proyecto`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+}
+
 // Tipos para los recursos relacionados
 type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number; linkCompra?: string }
 type HerramientaInput = { nombre: string; cantidad: number }
@@ -35,6 +60,8 @@ export async function GET(
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
     const proyecto = await db.proyecto.findUnique({
       where: { id },
@@ -70,6 +97,8 @@ export async function PUT(
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
     const data = await request.json()
 
@@ -322,6 +351,8 @@ export async function DELETE(
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
 
     await db.proyectoMaterial.deleteMany({ where: { proyectoId: id } })

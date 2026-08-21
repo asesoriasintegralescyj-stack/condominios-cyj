@@ -6,6 +6,42 @@ import { apiError } from '@/lib/api-helpers'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+/**
+ * Auto-migra la tabla OrdenTrabajo agregando columnas faltantes.
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'driveFolderId', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='OrdenTrabajo' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "OrdenTrabajo" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada a OrdenTrabajo`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+  // Índice
+  try {
+    const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='OrdenTrabajo_driveFolderId_idx')`
+    )
+    if (!r[0]?.exists) {
+      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_driveFolderId_idx" ON "OrdenTrabajo"("driveFolderId")`)
+      console.log(`[ensureColumns] Índice OrdenTrabajo_driveFolderId_idx creado`)
+    }
+  } catch (e) {
+    console.warn(`[ensureColumns] Error con índice:`, e)
+  }
+}
+
 // GET - List all ordenes de trabajo
 // Para rol 'personal': solo devuelve las OT asignadas al trabajador (vía email → Personal.id)
 export async function GET(request: NextRequest) {
@@ -15,6 +51,9 @@ export async function GET(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const proyectoId = searchParams.get('proyectoId') || ''
@@ -101,6 +140,9 @@ export async function POST(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const data = await request.json()
     const clientIdempotency = data._clientIdempotency || null
 
