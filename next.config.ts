@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   
+  // googleapis es muy pesado (~30MB), excluirlo del bundle del server
+  serverExternalPackages: ['googleapis'],
+  
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', '@tanstack/react-query'],
   },
