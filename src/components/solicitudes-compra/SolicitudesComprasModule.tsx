@@ -372,6 +372,12 @@ export function SolicitudesComprasModule() {
     return { total, borradores, solicitadas, enProceso, completadas, montoTotal }
   }, [solicitudes])
 
+  // ===== TOTAL ESTIMADO (debe ir ANTES de validateValuacion para evitar TDZ) =====
+  const totalEstimado = useMemo(
+    () => materiales.reduce((acc, m) => acc + (Number(m.total) || 0), 0),
+    [materiales]
+  )
+
   // ===== VALIDACIÓN DE VALORIZACIÓN =====
   const validateValuacion = useCallback((): string[] => {
     const errors: string[] = []
@@ -447,11 +453,6 @@ export function SolicitudesComprasModule() {
     setLinks(next)
   }
   const removeLink = (index: number) => setLinks(links.filter((_, i) => i !== index))
-
-  const totalEstimado = useMemo(
-    () => materiales.reduce((acc, m) => acc + (Number(m.total) || 0), 0),
-    [materiales]
-  )
 
   const handleSave = async (submitDirectly = false) => {
     if (!formData.titulo.trim()) { toast.error('El título es obligatorio'); return }
