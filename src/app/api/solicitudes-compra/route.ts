@@ -12,6 +12,58 @@ export const maxDuration = 30
 
 const CONDOMINIO_LAGUNA_NORTE = 'cmo9f3x7j0000ktyeb0rzhwt9'
 
+/**
+ * Auto-migra la tabla SolicitudCompra agregando columnas faltantes.
+ * Esto es necesario cuando el Prisma schema se actualiza pero la BD no.
+ * Se ejecuta una sola vez (las columnas se verifican antes de agregar).
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string; default?: string }[] = [
+    { name: 'moneda', type: 'TEXT', default: "'CLP'" },
+    { name: 'proyectoId', type: 'TEXT' },
+    { name: 'proyectoNombre', type: 'TEXT' },
+    { name: 'otId', type: 'TEXT' },
+    { name: 'otCodigo', type: 'TEXT' },
+    { name: 'centroCostoId', type: 'TEXT' },
+    { name: 'submittedAt', type: 'TIMESTAMPTZ' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SolicitudCompra' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        const def = col.default ? ` DEFAULT ${col.default}` : ''
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "SolicitudCompra" ADD COLUMN "${col.name}" ${col.type}${def}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+  // Índices
+  const idxs = [
+    { name: 'SolicitudCompra_proyectoId_idx', on: '"SolicitudCompra"("proyectoId")' },
+    { name: 'SolicitudCompra_otId_idx', on: '"SolicitudCompra"("otId")' },
+    { name: 'SolicitudCompra_centroCostoId_idx', on: '"SolicitudCompra"("centroCostoId")' },
+  ]
+  for (const idx of idxs) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='${idx.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(`CREATE INDEX "${idx.name}" ON ${idx.on}`)
+        console.log(`[ensureColumns] Índice ${idx.name} creado`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con índice ${idx.name}:`, e)
+    }
+  }
+}
+
 // GET - Listar solicitudes de compra con filtros
 // Para roles no-admin: solo ven las que ellos crearon (solicitadoPorId = session.userId)
 // Excepción: supervisor y auditor ven todas (necesitan para aprobar/auditar)
@@ -20,6 +72,9 @@ export async function GET(request: NextRequest) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const estado = searchParams.get('estado') || ''
@@ -92,6 +147,9 @@ export async function POST(request: NextRequest) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const body = await request.json()
 
     // Generar codigo SC-XXXX usando tabla de secuencias

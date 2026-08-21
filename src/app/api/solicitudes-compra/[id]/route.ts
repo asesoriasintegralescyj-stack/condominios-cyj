@@ -4,6 +4,32 @@ import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
 
+/** Auto-migra columnas faltantes en SolicitudCompra (idempotente) */
+async function ensureColumns() {
+  const cols: { name: string; type: string; default?: string }[] = [
+    { name: 'moneda', type: 'TEXT', default: "'CLP'" },
+    { name: 'proyectoId', type: 'TEXT' },
+    { name: 'proyectoNombre', type: 'TEXT' },
+    { name: 'otId', type: 'TEXT' },
+    { name: 'otCodigo', type: 'TEXT' },
+    { name: 'centroCostoId', type: 'TEXT' },
+    { name: 'submittedAt', type: 'TIMESTAMPTZ' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SolicitudCompra' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        const def = col.default ? ` DEFAULT ${col.default}` : ''
+        await db.$executeRawUnsafe(`ALTER TABLE "SolicitudCompra" ADD COLUMN "${col.name}" ${col.type}${def}`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] ${col.name}:`, e)
+    }
+  }
+}
+
 // Transiciones válidas de estado
 const ESTADO_TRANSITIONS: Record<string, string[]> = {
   Borrador: ['Solicitado', 'Anulada'],
@@ -74,6 +100,9 @@ export async function PUT(request: NextRequest, { params }: Context) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const { id } = await params
     const body = await request.json()
 
