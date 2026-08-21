@@ -11,7 +11,6 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     envVars: {},
     jsonValid: false,
-    privateKeyOk: false,
     connection: null,
   }
 
@@ -32,7 +31,6 @@ export async function GET() {
     return NextResponse.json(results, { status: 400 })
   }
 
-  // Validar JSON
   let parsed: any
   try {
     parsed = JSON.parse(svcAccount)
@@ -46,44 +44,20 @@ export async function GET() {
     return NextResponse.json(results, { status: 400 })
   }
 
-  // Verificar private_key
-  const pk = parsed.private_key || ''
-  results.privateKeyCheck = {
-    length: pk.length,
-    startsCorrectly: pk.startsWith('-----BEGIN PRIVATE KEY-----'),
-    endsCorrectly: pk.trimEnd().endsWith('-----END PRIVATE KEY-----'),
-    hasNewlines: pk.includes('\n'),
-    hasLiteralBackslashN: pk.includes('\\n'),
-    // En Vercel, las env vars multilinea pueden llegar con \n literal
-    // en vez de saltos de línea reales
-    middleSample: pk.length > 50 ? pk.substring(44, 54) : null,
-  }
-  results.privateKeyOk = pk.startsWith('-----BEGIN') && pk.includes('\n')
-
-  // Probar conexión
   try {
     const { google } = await import('googleapis')
 
-    // Si el private_key tiene \n literales en vez de saltos de renglón,
-    // reemplazarlos para que el JWT funcione
-    let fixedKey = parsed.private_key
-    if (fixedKey && !fixedKey.includes('\n') && fixedKey.includes('\\n')) {
-      fixedKey = fixedKey.replace(/\\n/g, '\n')
-      results.privateKeyFixed = true
-    }
+    // Usar fromJSON en vez de new JWT - más confiable en serverless
+    const auth = google.auth.fromJSON({
+      type: 'service_account',
+      client_email: parsed.client_email,
+      private_key: parsed.private_key,
+      scopes: ['https://www.googleapis.com/auth/drive'],
+    })
 
-    const auth = new google.auth.JWT(
-      parsed.client_email,
-      undefined,
-      fixedKey,
-      ['https://www.googleapis.com/auth/drive'],
-    )
-
-    // Probar obtener token primero
-    const token = await auth.authorize()
+    // Autorizar explícitamente para probar que el token se genera
+    await auth.authorize()
     results.tokenObtained = true
-    results.tokenType = token.token_type
-    results.tokenExpires = token.expiry_date
 
     const drive = google.drive({ version: 'v3', auth })
 
@@ -103,7 +77,7 @@ export async function GET() {
 
     const folders = await drive.files.list({
       q: `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, name), nextPageToken',
+      fields: 'files(id, name)',
       pageSize: 50,
       orderBy: 'createdTime desc',
     })
