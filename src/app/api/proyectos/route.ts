@@ -366,6 +366,9 @@ export async function POST(request: NextRequest) {
     // Crear carpetas en Google Drive en background (no bloquea la respuesta)
     void createDriveFoldersForProject(proyecto.id, codigo, proyecto.nombre)
 
+    // Respaldo automático de datos del proyecto a Drive
+    void backupProyectoToDrive(proyecto)
+
     return NextResponse.json(proyecto)
   } catch (error) {
     console.error('Error creating proyecto:', error)
@@ -412,5 +415,61 @@ async function createDriveFoldersForProject(
   } catch (error) {
     // No fallar la creación del proyecto si Drive falla
     console.error(`[Drive] Error creando carpetas para proyecto:`, error)
+  }
+}
+
+/**
+ * Respalda datos del proyecto a Google Drive (fire-and-forget).
+ * Espera a que las carpetas estén creadas antes de subir.
+ */
+async function backupProyectoToDrive(proyecto: any) {
+  try {
+    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) return
+
+    // Esperar a que se creen las carpetas (3 segundos)
+    await new Promise(r => setTimeout(r, 3000))
+
+    const { uploadFile } = await import('@/lib/google-drive')
+
+    const updated = await db.proyecto.findUnique({
+      where: { id: proyecto.id },
+      select: { driveData: true },
+    })
+    if (!updated?.driveData) {
+      console.log('[Drive Backup] Proyecto sin carpetas Drive aún, saltando')
+      return
+    }
+
+    const folders = JSON.parse(updated.driveData)
+    const docsFolderId = folders.documentosFolder?.id
+    if (!docsFolderId) return
+
+    const fecha = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
+    const contenido = JSON.stringify({
+      respaldo: `Proyecto ${proyecto.codigo}`,
+      fechaGenerado: fecha,
+      proyecto: {
+        id: proyecto.id,
+        codigo: proyecto.codigo,
+        nombre: proyecto.nombre,
+        categoria: proyecto.categoria,
+        estado: proyecto.estado,
+        ubicacion: proyecto.ubicacion,
+        descripcion: proyecto.descripcion,
+        sector: proyecto.sector,
+        tipoReparacion: proyecto.tipoReparacion,
+        tipoTrabajo: proyecto.tipoTrabajo,
+        prioridad: proyecto.prioridad,
+        responsable: proyecto.responsable,
+        monto: proyecto.monto,
+        createdAt: proyecto.createdAt,
+      },
+    }, null, 2)
+
+    const fileName = `Datos del proyecto - ${proyecto.codigo}.json`
+    await uploadFile(Buffer.from(contenido, 'utf-8'), fileName, docsFolderId, 'application/json')
+    console.log(`[Drive Backup] Proyecto ${proyecto.codigo} respaldado en Drive`)
+  } catch (error) {
+    console.error('[Drive Backup] Error respaldando proyecto:', error)
   }
 }
