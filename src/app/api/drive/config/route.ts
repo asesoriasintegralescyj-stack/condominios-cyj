@@ -1,72 +1,37 @@
 import { NextResponse } from 'next/server'
-import { getCurrentSession } from '@/lib/auth'
-import { verifyDriveConfig, createFolder, listFolders } from '@/lib/google-drive'
+import { verifyDriveConfig, getDriveClient, listFolders } from '@/lib/google-drive'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-// GET - Verificar estado de la conexión con Google Drive
 export async function GET() {
-  const session = await getCurrentSession()
-  if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (session.user.rol !== 'admin') {
-    return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
-  }
-
-  try {
-    const result = await verifyDriveConfig()
-    return NextResponse.json(result)
-  } catch (error: any) {
-    console.error('Error verificando Drive:', error)
+  const configured = verifyDriveConfig()
+  if (!configured) {
     return NextResponse.json({
       ok: false,
-      error: error.message || 'Error al verificar Drive',
-    }, { status: 500 })
-  }
-}
-
-// POST - Probar conexión creando una carpeta de test
-export async function POST() {
-  const session = await getCurrentSession()
-  if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (session.user.rol !== 'admin') {
-    return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
+      error: 'Variables de entorno no encontradas',
+      envCheck: {
+        hasServiceAccount: !!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT,
+        hasParentFolder: !!process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID,
+        hasEmail: !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        hasKey: !!process.env.GOOGLE_PRIVATE_KEY,
+        hasFolderId: !!process.env.GOOGLE_DRIVE_FOLDER_ID,
+      }
+    })
   }
 
   try {
-    const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID
-    if (!parentFolderId) {
-      return NextResponse.json({
-        ok: false,
-        error: 'GOOGLE_DRIVE_PARENT_FOLDER_ID no configurada',
-      }, { status: 400 })
-    }
-
-    // Crear carpeta de prueba
-    const testFolder = await createFolder(
-      `[TEST] Conexión exitosa - ${new Date().toISOString().slice(0, 10)}`,
-      parentFolderId,
-    )
-
-    // Verificar que se creó listando carpetas
-    const folders = await listFolders(parentFolderId)
-
+    const drive = await getDriveClient()
+    const { getParentFolderId } = await import('@/lib/google-drive')
+    const parentId = getParentFolderId()
+    const folders = await listFolders(parentId)
     return NextResponse.json({
       ok: true,
-      message: 'Conexión exitosa con Google Drive',
-      testFolder: {
-        id: testFolder.id,
-        name: testFolder.name,
-        url: testFolder.url,
-      },
-      totalFoldersInParent: folders.length,
+      parentFolderId: parentId,
+      carpetasExistentes: folders.length,
+      primeras5: folders.slice(0, 5).map(f => f.name),
     })
-  } catch (error: any) {
-    console.error('Error en test Drive:', error)
-    return NextResponse.json({
-      ok: false,
-      error: error.message || 'Error al conectar con Drive',
-      details: error?.response?.data?.error?.message || null,
-    }, { status: 500 })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
