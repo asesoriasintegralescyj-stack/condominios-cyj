@@ -363,11 +363,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Crear carpetas en Google Drive en background (no bloquea la respuesta)
-    void createDriveFoldersForProject(proyecto.id, codigo, proyecto.nombre)
-
-    // Respaldo automático de datos del proyecto a Drive
-    void backupProyectoToDrive(proyecto)
+    // Crear carpetas en Google Drive + subir datos y fotos (fire-and-forget)
+    void backupProyectoToDrive(proyecto, fotosAntes, fotosDespues)
 
     return NextResponse.json(proyecto)
   } catch (error) {
@@ -377,99 +374,75 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Crea carpetas en Google Drive para un proyecto de forma asíncrona.
- * Se ejecuta en background (fire-and-forget) para no bloquear la creación del proyecto.
- * Si Drive no está configurado, se ignora silenciosamente.
+ * Crea carpetas en Drive y sube datos+fotos del proyecto (fire-and-forget).
  */
-async function createDriveFoldersForProject(
-  proyectoId: string,
-  codigo: string,
-  nombre: string,
-) {
+async function backupProyectoToDrive(proyecto: any, fotosAntes: string | null, fotosDespues: string | null) {
   try {
-    if (!process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || !process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) {
-      console.log('[Drive] No configurado, saltando creación de carpetas')
-      return
+    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT || !process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID) return
+
+    const { createProjectFolderStructure, uploadFile, uploadBase64Image } = await import('@/lib/google-drive')
+
+    // Crear estructura de carpetas
+    const structure = await createProjectFolderStructure(proyecto.codigo, proyecto.nombre)
+    const folders = {
+      proyectoFolder: structure.proyectoFolder,
+      solicitudesFolder: structure.solicitudesFolder,
+      documentosFolder: structure.documentosFolder,
+      fotosAntesFolder: structure.fotosAntesFolder,
+      fotosDespuesFolder: structure.fotosDespuesFolder,
+      createdAt: new Date().toISOString(),
     }
 
-    const { createProjectFolderStructure } = await import('@/lib/google-drive')
-    const structure = await createProjectFolderStructure(codigo, nombre)
-
-    // Guardar IDs de carpetas en el proyecto
+    // Guardar IDs en la BD
     await db.proyecto.update({
-      where: { id: proyectoId },
-      data: {
-        driveFolderId: structure.proyectoFolder.id,
-        driveData: JSON.stringify({
-          proyectoFolder: structure.proyectoFolder,
-          solicitudesFolder: structure.solicitudesFolder,
-          documentosFolder: structure.documentosFolder,
-          fotosAntesFolder: structure.fotosAntesFolder,
-          fotosDespuesFolder: structure.fotosDespuesFolder,
-          createdAt: new Date().toISOString(),
-        }),
-      },
-    })
-
-    console.log(`[Drive] Carpetas creadas para ${codigo}: ${structure.proyectoFolder.url}`)
-  } catch (error) {
-    // No fallar la creación del proyecto si Drive falla
-    console.error(`[Drive] Error creando carpetas para proyecto:`, error)
-  }
-}
-
-/**
- * Respalda datos del proyecto a Google Drive (fire-and-forget).
- * Espera a que las carpetas estén creadas antes de subir.
- */
-async function backupProyectoToDrive(proyecto: any) {
-  try {
-    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) return
-
-    // Esperar a que se creen las carpetas (3 segundos)
-    await new Promise(r => setTimeout(r, 3000))
-
-    const { uploadFile } = await import('@/lib/google-drive')
-
-    const updated = await db.proyecto.findUnique({
       where: { id: proyecto.id },
-      select: { driveData: true },
+      data: { driveFolderId: structure.proyectoFolder.id, driveData: JSON.stringify(folders) },
     })
-    if (!updated?.driveData) {
-      console.log('[Drive Backup] Proyecto sin carpetas Drive aún, saltando')
-      return
+
+    // Subir JSON con datos del proyecto
+    const datos = {
+      respaldo: `Proyecto ${proyecto.codigo}`,
+      fechaGenerado: new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' }),
+      proyecto: { id: proyecto.id, codigo: proyecto.codigo, nombre: proyecto.nombre, categoria: proyecto.categoria, estado: proyecto.estado, descripcion: proyecto.descripcion, monto: proyecto.monto, createdAt: proyecto.createdAt },
+      materiales: proyecto.materiales || [],
+      herramientas: proyecto.herramientas || [],
+      tareas: proyecto.tareas || [],
+      personal: proyecto.personal || [],
+    }
+    await uploadFile(Buffer.from(JSON.stringify(datos, null, 2), 'utf-8'), `Datos del proyecto - ${proyecto.codigo}.json`, structure.documentosFolder.id, 'application/json')
+
+    // Subir fotos antes
+    if (fotosAntes) {
+      try {
+        const arr = JSON.parse(fotosAntes)
+        if (Array.isArray(arr)) {
+          for (let i = 0; i < arr.length; i++) {
+            if (typeof arr[i] === 'string' && arr[i].startsWith('data:')) {
+              const ext = arr[i].match(/^data:image\/(\w+);base64,/)?.[1] || 'jpg'
+              await uploadBase64Image(arr[i], `Foto Antes ${i + 1}.${ext === 'jpeg' ? 'jpg' : ext}`, structure.fotosAntesFolder.id)
+            }
+          }
+        }
+      } catch {}
     }
 
-    const folders = JSON.parse(updated.driveData)
-    const docsFolderId = folders.documentosFolder?.id
-    if (!docsFolderId) return
+    // Subir fotos después
+    if (fotosDespues) {
+      try {
+        const arr = JSON.parse(fotosDespues)
+        if (Array.isArray(arr)) {
+          for (let i = 0; i < arr.length; i++) {
+            if (typeof arr[i] === 'string' && arr[i].startsWith('data:')) {
+              const ext = arr[i].match(/^data:image\/(\w+);base64,/)?.[1] || 'jpg'
+              await uploadBase64Image(arr[i], `Foto Despues ${i + 1}.${ext === 'jpeg' ? 'jpg' : ext}`, structure.fotosDespuesFolder.id)
+            }
+          }
+        }
+      } catch {}
+    }
 
-    const fecha = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
-    const contenido = JSON.stringify({
-      respaldo: `Proyecto ${proyecto.codigo}`,
-      fechaGenerado: fecha,
-      proyecto: {
-        id: proyecto.id,
-        codigo: proyecto.codigo,
-        nombre: proyecto.nombre,
-        categoria: proyecto.categoria,
-        estado: proyecto.estado,
-        ubicacion: proyecto.ubicacion,
-        descripcion: proyecto.descripcion,
-        sector: proyecto.sector,
-        tipoReparacion: proyecto.tipoReparacion,
-        tipoTrabajo: proyecto.tipoTrabajo,
-        prioridad: proyecto.prioridad,
-        responsable: proyecto.responsable,
-        monto: proyecto.monto,
-        createdAt: proyecto.createdAt,
-      },
-    }, null, 2)
-
-    const fileName = `Datos del proyecto - ${proyecto.codigo}.json`
-    await uploadFile(Buffer.from(contenido, 'utf-8'), fileName, docsFolderId, 'application/json')
-    console.log(`[Drive Backup] Proyecto ${proyecto.codigo} respaldado en Drive`)
+    console.log(`[Drive] Proyecto ${proyecto.codigo} respaldado OK`)
   } catch (error) {
-    console.error('[Drive Backup] Error respaldando proyecto:', error)
+    console.error(`[Drive] Error respaldando proyecto ${proyecto.codigo}:`, error)
   }
 }
