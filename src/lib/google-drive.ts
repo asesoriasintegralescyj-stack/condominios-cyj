@@ -4,13 +4,34 @@ import os from 'os'
 import path from 'path'
 
 // ─── Config ───────────────────────────────────────────────────────────────────
+// Soporta dos conjuntos de nombres de variables:
+//   (A) GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY + GOOGLE_DRIVE_FOLDER_ID
+//   (B) GOOGLE_DRIVE_SERVICE_ACCOUNT (JSON completo) + GOOGLE_DRIVE_PARENT_FOLDER_ID
 
 function getConfig() {
+  // Forma A: variables separadas
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
   const key = process.env.GOOGLE_PRIVATE_KEY
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-  if (!email || !key || !folderId) return null
-  return { email, key, folderId }
+  if (email && key && folderId) return { email, key, folderId }
+
+  // Forma B: JSON del service account
+  const saJson = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT
+  const folderId2 = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID
+  if (saJson && folderId2) {
+    try {
+      const parsed = JSON.parse(saJson)
+      return {
+        email: parsed.client_email,
+        key: parsed.private_key,
+        folderId: folderId2,
+      }
+    } catch {
+      console.error('[Drive] Error parseando GOOGLE_DRIVE_SERVICE_ACCOUNT JSON')
+    }
+  }
+
+  return null
 }
 
 // ─── Auth (keyFile temp file — string private_key fails on Vercel) ────────────
