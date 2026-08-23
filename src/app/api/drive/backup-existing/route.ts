@@ -1,428 +1,405 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import {
+  verifyDriveConfig,
+  getDriveClient,
+  getParentFolderId,
+  listFolders,
+  findOrCreateFolder,
+  uploadFile,
+  uploadBase64Image,
+  parseFotos,
+  findProjectFolder,
+  findSCFolderInProject,
+  findOTFolderInProject,
+} from '@/lib/google-drive'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 300 // 5 minutos para respaldar todo
 
-/**
- * Endpoint para respaldar TODOS los proyectos, OTs y solicitudes de compra
- * existentes a Google Drive con sus archivos reales.
- *
- * - Proyectos: sube JSON de datos + fotos antes/después
- * - OTs: crea subcarpeta dentro del proyecto y sube datos + fotos
- * - Solicitudes de Compra: sube TXT con detalle a la carpeta del proyecto
- */
 export async function GET() {
-  const results: any = {
-    timestamp: new Date().toISOString(),
-    proyectos: { total: 0, carpetasCreadas: 0, archivosSubidos: 0, fotosSubidas: 0, errores: [] as string[] },
-    ots: { total: 0, carpetasCreadas: 0, archivosSubidos: 0, fotosSubidas: 0, errores: [] as string[] },
-    solicitudes: { total: 0, archivosSubidos: 0, errores: [] as string[] },
+  if (!verifyDriveConfig()) {
+    return NextResponse.json({ error: 'Google Drive no configurado. Faltan variables de entorno.' }, { status: 500 })
   }
 
-  if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT || !process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID) {
-    return NextResponse.json({ error: 'Drive no configurado. Faltan variables de entorno.' }, { status: 400 })
-  }
+  const stats = { proyectos: 0, ots: 0, scs: 0, fotos: 0, errores: 0 as number }
+  const log: string[] = []
+  const logIt = (msg: string) => { console.log(`[Backup] ${msg}`); log.push(msg) }
 
   try {
-    const { createProjectFolderStructure, createOTFolderStructure, uploadFile, uploadBase64Image, findFolderByName } = await import('@/lib/google-drive')
+    const parentFolderId = getParentFolderId()
+    logIt(`Carpeta padre: ${parentFolderId}`)
 
-    // ═══════════════════════════════════════════
-    // 1. PROYECTOS
-    // ═══════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
+    // 1. OBTENER TODOS LOS DATOS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Proyectos con relaciones completas
     const proyectos = await db.proyecto.findMany({
-      select: {
-        id: true, codigo: true, nombre: true, estado: true, descripcion: true,
-        sector: true, tipoReparacion: true, tipoTrabajo: true, prioridad: true,
-        responsable: true, monto: true, categoria: true, ubicacion: true,
-        driveFolderId: true, driveData: true, createdAt: true, updatedAt: true,
-        fotosAntes: true, fotosDespues: true,
-        materiales: { select: { descripcion: true, cantidad: true, unidad: true, precioUnit: true, total: true } },
-        herramientas: { select: { nombre: true, cantidad: true } },
-        tareas: { select: { descripcion: true, cantidad: true, estado: true } },
-        personal: { select: { nombre: true, tipo: true, cantidad: true, precioUnit: true, total: true } },
-        documentos: { select: { nombre: true, tipo: true, descripcion: true, fechaDoc: true } },
-      },
+      where: { OR: [{ condominioId: 'cmo9f3x7j0000ktyeb0rzhwt9' }, { condominioId: null }] },
+      include: { materiales: true, herramientas: true, tareas: true, personal: true, documentos: true, centroCosto: { select: { id: true, codigo: true, nombre: true } } },
       orderBy: { createdAt: 'asc' },
     })
+    logIt(`Proyectos encontrados: ${proyectos.length}`)
 
-    results.proyectos.total = proyectos.length
+    // OTs con relaciones
+    const ots = await db.ordenTrabajo.findMany({
+      include: { materiales: true, herramientas: true, tareas: true, personalOT: true, propiedad: { select: { id: true, nombre: true } }, asignado: { select: { id: true, nombre: true, cargo: true } }, centroCosto: { select: { id: true, codigo: true, nombre: true } } },
+      orderBy: { createdAt: 'asc' },
+    })
+    logIt(`OTs encontradas: ${ots.length}`)
 
-    // Mapa de proyectoId -> driveData para usar con OTs y SCs
-    const proyectoDriveMap = new Map<string, any>()
+    // Solicitudes de compra
+    const scs = await db.solicitudCompra.findMany({
+      orderBy: { createdAt: 'asc' },
+    })
+    logIt(`Solicitudes de compra: ${scs.length}`)
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 2. MAPA: SC/OT → Proyecto (para ubicarlas en la carpeta correcta)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // proyectoDriveMap: proyectoId → folderId en Drive
+    const proyectoDriveMap: Record<string, string> = {}
+    // proyectoCodigoMap: proyectoId → codigo
+    const proyectoCodigoMap: Record<string, string> = {}
+    // proyectoScFolderMap: proyectoId → scFolderId
+    const proyectoScFolderMap: Record<string, string | null> = {}
+    // proyectoOtFolderMap: proyectoId → otFolderId
+    const proyectoOtFolderMap: Record<string, string | null> = {}
+
+    // Obtener carpetas existentes en Drive
+    const existingFolders = await listFolders(parentFolderId)
+    logIt(`Carpetas existentes en Drive: ${existingFolders.length}`)
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 3. PROCESAR PROYECTOS: crear carpetas + subir datos + fotos
+    // ══════════════════════════════════════════════════════════════════════════
 
     for (const p of proyectos) {
+      const codigo = p.codigo || `SIN-CODIGO-${p.id.substring(0, 6)}`
+      const folderName = `${codigo} - ${p.nombre}`.substring(0, 200)
+      proyectoCodigoMap[p.id] = codigo
+
       try {
-        let folders: any = null
-
-        // Si ya tiene driveData, usarlo
-        if (p.driveData) {
-          try { folders = JSON.parse(p.driveData) } catch { folders = null }
-        }
-
-        // Si no tiene carpetas válidas, crear
-        if (!folders || !folders.proyectoFolder?.id) {
-          console.log(`[Backup] Creando carpetas para ${p.codigo}...`)
-          const structure = await createProjectFolderStructure(p.codigo, p.nombre)
-          folders = {
-            proyectoFolder: structure.proyectoFolder,
-            solicitudesFolder: structure.solicitudesFolder,
-            documentosFolder: structure.documentosFolder,
-            fotosAntesFolder: structure.fotosAntesFolder,
-            fotosDespuesFolder: structure.fotosDespuesFolder,
-            createdAt: new Date().toISOString(),
+        // Buscar o crear carpeta del proyecto
+        let proyectoFolderId = proyectoDriveMap[p.id]
+        if (!proyectoFolderId) {
+          const existing = existingFolders.find(f => f.name.startsWith(`${codigo} -`) || f.name.startsWith(`${codigo} `))
+          if (existing) {
+            proyectoFolderId = existing.id
+          } else {
+            proyectoFolderId = await findOrCreateFolder(folderName, parentFolderId)
           }
-          await db.proyecto.update({
-            where: { id: p.id },
-            data: { driveFolderId: structure.proyectoFolder.id, driveData: JSON.stringify(folders) },
-          })
-          results.proyectos.carpetasCreadas++
+          if (proyectoFolderId) {
+            proyectoDriveMap[p.id] = proyectoFolderId
+          }
         }
 
-        proyectoDriveMap.set(p.id, folders)
-
-        const docsFolderId = folders.documentosFolder?.id
-        const fotosAntesFolderId = folders.fotosAntesFolder?.id
-        const fotosDespuesFolderId = folders.fotosDespuesFolder?.id
-
-        if (!docsFolderId) {
-          results.proyectos.errores.push(`${p.codigo}: sin carpeta Documentos`)
+        if (!proyectoFolderId) {
+          logIt(`ERROR: No se pudo crear carpeta para ${codigo}`)
+          stats.errores++
           continue
         }
 
-        // ── Subir datos del proyecto como JSON ──
-        const datosProyecto = {
-          respaldo: `Proyecto ${p.codigo}`,
-          fechaGenerado: new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' }),
-          proyecto: {
-            id: p.id, codigo: p.codigo, nombre: p.nombre, categoria: p.categoria,
-            estado: p.estado, ubicacion: p.ubicacion, descripcion: p.descripcion,
-            sector: p.sector, tipoReparacion: p.tipoReparacion, tipoTrabajo: p.tipoTrabajo,
-            prioridad: p.prioridad, responsable: p.responsable, monto: p.monto,
-            createdAt: p.createdAt, updatedAt: p.updatedAt,
-          },
+        // Crear subcarpetas
+        const scFolderId = await findOrCreateFolder('Solicitudes de Compra', proyectoFolderId)
+        const docsFolderId = await findOrCreateFolder('Documentos', proyectoFolderId)
+        const fotosFolderId = await findOrCreateFolder('Fotos', proyectoFolderId)
+        const antesFolderId = fotosFolderId ? await findOrCreateFolder('Antes', fotosFolderId) : null
+        const despuesFolderId = fotosFolderId ? await findOrCreateFolder('Despues', fotosFolderId) : null
+        const otFolderId = await findOrCreateFolder('Ordenes de Trabajo', proyectoFolderId)
+
+        proyectoScFolderMap[p.id] = scFolderId
+        proyectoOtFolderMap[p.id] = otFolderId
+
+        // Subir JSON del proyecto (sobrescribir si existe)
+        const proyectoData = {
+          codigo: p.codigo,
+          nombre: p.nombre,
+          categoria: p.categoria,
+          estado: p.estado,
+          ubicacion: p.ubicacion,
+          fechaInicio: p.fechaInicio,
+          fechaFin: p.fechaFin,
+          presProg: p.presProg,
+          presUsado: p.presUsado,
+          avance: p.avance,
+          descripcion: p.descripcion,
+          notas: p.notas,
+          sector: p.sector,
+          tipoReparacion: p.tipoReparacion,
+          tipoTrabajo: p.tipoTrabajo,
+          prioridad: p.prioridad,
+          estadoAprobacion: p.estadoAprobacion,
+          responsable: p.responsable,
+          responsableExterno: p.responsableExterno,
+          tiempoEstimado: p.tiempoEstimado,
+          monto: p.monto,
+          fechaInicioReal: p.fechaInicioReal,
+          fechaFinReal: p.fechaFinReal,
+          comentarios: p.comentarios,
+          centroCosto: p.centroCosto,
           materiales: p.materiales,
           herramientas: p.herramientas,
           tareas: p.tareas,
           personal: p.personal,
-          documentos: p.documentos,
+          documentosCount: p.documentos?.length || 0,
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
+          _backupDate: new Date().toISOString(),
         }
-
         await uploadFile(
-          Buffer.from(JSON.stringify(datosProyecto, null, 2), 'utf-8'),
-          `Datos del proyecto - ${p.codigo}.json`,
-          docsFolderId,
-          'application/json'
+          `${codigo} - Datos del Proyecto.json`,
+          JSON.stringify(proyectoData, null, 2),
+          'application/json',
+          proyectoFolderId,
+          `${codigo} - Datos del Proyecto.json`
         )
-        results.proyectos.archivosSubidos++
 
-        // ── Subir fotos ANTES ──
-        if (p.fotosAntes && fotosAntesFolderId) {
-          const fotos = parseBase64Array(p.fotosAntes)
-          for (let i = 0; i < fotos.length; i++) {
-            try {
-              const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(fotos[i], `Foto Antes ${i + 1} - ${p.codigo}.${ext}`, fotosAntesFolderId)
-              results.proyectos.fotosSubidas++
-            } catch (e: any) {
-              results.proyectos.errores.push(`${p.codigo} foto-antes-${i + 1}: ${e.message}`)
-            }
+        // Subir fotos antes
+        const fotosAntes = parseFotos(p.fotosAntes)
+        if (antesFolderId && fotosAntes.length > 0) {
+          for (let i = 0; i < fotosAntes.length; i++) {
+            const ok = await uploadBase64Image(fotosAntes[i], `${codigo}_antes_${i + 1}`, antesFolderId)
+            if (ok) stats.fotos++
           }
         }
 
-        // ── Subir fotos DESPUÉS ──
-        if (p.fotosDespues && fotosDespuesFolderId) {
-          const fotos = parseBase64Array(p.fotosDespues)
-          for (let i = 0; i < fotos.length; i++) {
-            try {
-              const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(fotos[i], `Foto Despues ${i + 1} - ${p.codigo}.${ext}`, fotosDespuesFolderId)
-              results.proyectos.fotosSubidas++
-            } catch (e: any) {
-              results.proyectos.errores.push(`${p.codigo} foto-despues-${i + 1}: ${e.message}`)
-            }
+        // Subir fotos después
+        const fotosDespues = parseFotos(p.fotosDespues)
+        if (despuesFolderId && fotosDespues.length > 0) {
+          for (let i = 0; i < fotosDespues.length; i++) {
+            const ok = await uploadBase64Image(fotosDespues[i], `${codigo}_despues_${i + 1}`, despuesFolderId)
+            if (ok) stats.fotos++
           }
         }
 
-        console.log(`[Backup] Proyecto ${p.codigo} OK`)
+        stats.proyectos++
+        logIt(`Proyecto ${codigo} OK (fotos: ${fotosAntes.length} antes, ${fotosDespues.length} despues)`)
       } catch (e: any) {
-        results.proyectos.errores.push(`${p.codigo}: ${e.message}`)
-        console.error(`[Backup] Error proyecto ${p.codigo}:`, e)
+        logIt(`ERROR proyecto ${codigo}: ${e.message}`)
+        stats.errores++
       }
     }
 
-    // ═══════════════════════════════════════════
-    // 2. ÓRDENES DE TRABAJO
-    // ═══════════════════════════════════════════
-    const allOTs = await db.ordenTrabajo.findMany({
-      select: {
-        id: true, otNum: true, titulo: true, tipo: true, prioridad: true,
-        estado: true, descripcion: true, proyectoId: true, driveFolderId: true,
-        fechaInicio: true, fechaLimite: true, fechaInicioReal: true, fechaFinReal: true,
-        costoEstimado: true, costoReal: true, progreso: true, ubicacion: true,
-        creadoPorNombre: true, notas: true, createdAt: true,
-        fotosAntes: true, fotosDespues: true,
-        materiales: { select: { descripcion: true, cantidad: true, unidad: true, precioUnit: true, total: true } },
-        herramientas: { select: { nombre: true, cantidad: true } },
-        tareas: { select: { descripcion: true, cantidad: true, estado: true } },
-        personalOT: { select: { nombre: true, tipo: true, cantidad: true, horasTrabajadas: true, total: true } },
-      },
-      orderBy: { createdAt: 'asc' },
-    })
+    // ══════════════════════════════════════════════════════════════════════════
+    // 4. PROCESAR OTs: ubicar en carpeta del proyecto o en raíz
+    // ══════════════════════════════════════════════════════════════════════════
 
-    results.ots.total = allOTs.length
-
-    for (const ot of allOTs) {
+    for (const ot of ots) {
       try {
-        // Buscar el proyecto padre y sus carpetas Drive
-        let parentDriveFolderId: string | null = null
-        let proyectoCodigo = ''
+        // Determinar dónde va la OT: si tiene proyectoId, buscar su carpeta
+        let otParentFolderId = parentFolderId // default: raíz
+        // Buscar si esta OT está vinculada a un proyecto
+        // OT NO tiene relación directa a Proyecto, pero puede tener centroCostoId
+        // que coincida con el de un proyecto. Usamos una heurística: buscamos
+        // si hay un proyecto con el mismo centroCosto.
+        // Para simplificar, ponemos las OTs sin proyectoId en la raíz.
+        // Si en el futuro se agrega proyectoId a OT, usarlo directamente.
 
-        if (ot.proyectoId) {
-          const driveInfo = proyectoDriveMap.get(ot.proyectoId)
-          if (driveInfo?.proyectoFolder?.id) {
-            parentDriveFolderId = driveInfo.proyectoFolder.id
-          }
-          if (!proyectoCodigo) {
-            const proy = await db.proyecto.findUnique({ where: { id: ot.proyectoId }, select: { codigo: true } })
-            proyectoCodigo = proy?.codigo || ''
-          }
-        }
-
-        // Si no tiene proyecto con Drive, crear carpeta OT en raíz
-        if (!parentDriveFolderId) {
-          parentDriveFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID!
-        }
-
-        // Verificar si ya tiene carpeta Drive existente
-        let otFolders: any = null
-        if (ot.driveFolderId) {
-          try {
-            const existingOTFolder = await findFolderByName(`${ot.otNum} - ${ot.titulo}`, parentDriveFolderId)
-            if (existingOTFolder) {
-              const [fa, fd, doc, sc] = await Promise.all([
-                findFolderByName('Fotos Antes', existingOTFolder.id).catch(() => null),
-                findFolderByName('Fotos Despues', existingOTFolder.id).catch(() => null),
-                findFolderByName('Documentos', existingOTFolder.id).catch(() => null),
-                findFolderByName('Solicitudes de Compra', existingOTFolder.id).catch(() => null),
-              ])
-              otFolders = { otFolder: existingOTFolder, fotosAntesFolder: fa, fotosDespuesFolder: fd, documentosFolder: doc, solicitudesFolder: sc }
-            }
-          } catch {}
-        }
-
-        // Si no tiene carpetas, crear
-        if (!otFolders || !otFolders.otFolder) {
-          console.log(`[Backup] Creando carpetas para ${ot.otNum}...`)
-          const structure = await createOTFolderStructure(ot.otNum, ot.titulo, parentDriveFolderId)
-          otFolders = {
-            otFolder: structure.otFolder, fotosAntesFolder: structure.fotosAntesFolder,
-            fotosDespuesFolder: structure.fotosDespuesFolder, documentosFolder: structure.documentosFolder,
-            solicitudesFolder: structure.solicitudesFolder,
-          }
-          await db.ordenTrabajo.update({ where: { id: ot.id }, data: { driveFolderId: structure.otFolder.id } })
-          results.ots.carpetasCreadas++
-        }
-
-        // ── Subir datos de la OT ──
-        const otDocsFolderId = otFolders.documentosFolder?.id
-        if (otDocsFolderId) {
-          const datosOT = {
-            respaldo: `Orden de Trabajo ${ot.otNum}`,
-            fechaGenerado: new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' }),
-            ordenTrabajo: {
-              id: ot.id, otNum: ot.otNum, titulo: ot.titulo, tipo: ot.tipo,
-              prioridad: ot.prioridad, estado: ot.estado, descripcion: ot.descripcion,
-              ubicacion: ot.ubicacion, progreso: ot.progreso,
-              fechaInicio: ot.fechaInicio, fechaLimite: ot.fechaLimite,
-              fechaInicioReal: ot.fechaInicioReal, fechaFinReal: ot.fechaFinReal,
-              costoEstimado: ot.costoEstimado, costoReal: ot.costoReal,
-              creadoPor: ot.creadoPorNombre, proyecto: proyectoCodigo || 'Sin proyecto',
-              createdAt: ot.createdAt,
-            },
-            materiales: ot.materiales,
-            herramientas: ot.herramientas,
-            tareas: ot.tareas,
-            personal: ot.personalOT,
-          }
-
-          await uploadFile(
-            Buffer.from(JSON.stringify(datosOT, null, 2), 'utf-8'),
-            `Datos OT - ${ot.otNum}.json`,
-            otDocsFolderId,
-            'application/json'
-          )
-          results.ots.archivosSubidos++
-        }
-
-        // ── Subir fotos ANTES de OT ──
-        if (ot.fotosAntes && otFolders.fotosAntesFolder?.id) {
-          const fotos = parseBase64Array(ot.fotosAntes)
-          for (let i = 0; i < fotos.length; i++) {
-            try {
-              const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(fotos[i], `Foto Antes ${i + 1} - ${ot.otNum}.${ext}`, otFolders.fotosAntesFolder.id)
-              results.ots.fotosSubidas++
-            } catch (e: any) { results.ots.errores.push(`${ot.otNum} foto-antes-${i + 1}: ${e.message}`) }
-          }
-        }
-
-        // ── Subir fotos DESPUÉS de OT ──
-        if (ot.fotosDespues && otFolders.fotosDespuesFolder?.id) {
-          const fotos = parseBase64Array(ot.fotosDespues)
-          for (let i = 0; i < fotos.length; i++) {
-            try {
-              const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(fotos[i], `Foto Despues ${i + 1} - ${ot.otNum}.${ext}`, otFolders.fotosDespuesFolder.id)
-              results.ots.fotosSubidas++
-            } catch (e: any) { results.ots.errores.push(`${ot.otNum} foto-despues-${i + 1}: ${e.message}`) }
-          }
-        }
-
-        console.log(`[Backup] OT ${ot.otNum} OK`)
-      } catch (e: any) {
-        results.ots.errores.push(`${ot.otNum}: ${e.message}`)
-        console.error(`[Backup] Error OT ${ot.otNum}:`, e)
-      }
-    }
-
-    // ═══════════════════════════════════════════
-    // 3. SOLICITUDES DE COMPRA
-    // ═══════════════════════════════════════════
-    const allSCs = await db.solicitudCompra.findMany({
-      select: {
-        id: true, codigo: true, titulo: true, descripcion: true, estado: true,
-        prioridad: true, moneda: true, totalEstimado: true, solicitadoPor: true,
-        fechaSolicitud: true, fechaEspera: true, proveedorSugerido: true,
-        observaciones: true, origenTipo: true, origenId: true, origenCodigo: true,
-        proyectoId: true, proyectoNombre: true, otId: true, otCodigo: true,
-        materiales: true, links: true, createdAt: true,
-      },
-      orderBy: { createdAt: 'asc' },
-    })
-
-    results.solicitudes.total = allSCs.length
-
-    for (const sc of allSCs) {
-      try {
-        let scFolderId: string | null = null
-        let proyCodigo = ''
-
-        // Buscar por proyectoId directo
-        if (sc.proyectoId) {
-          const driveInfo = proyectoDriveMap.get(sc.proyectoId)
-          if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
-          if (!proyCodigo) proyCodigo = sc.proyectoNombre || ''
-        }
-
-        // Buscar por origenId (proyecto)
-        if (!scFolderId && sc.origenTipo === 'Proyecto' && sc.origenId) {
-          const driveInfo = proyectoDriveMap.get(sc.origenId)
-          if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
-          if (!proyCodigo) proyCodigo = sc.origenCodigo || ''
-        }
-
-        // Buscar por otId -> proyecto
-        if (!scFolderId && sc.otId) {
-          const ot = allOTs.find(o => o.id === sc.otId)
-          if (ot?.proyectoId) {
-            const driveInfo = proyectoDriveMap.get(ot.proyectoId)
-            if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
-          }
-        }
-
-        if (!scFolderId) {
-          results.solicitudes.errores.push(`${sc.codigo}: sin carpeta de proyecto (proyId=${sc.proyectoId}, orig=${sc.origenTipo}/${sc.origenId})`)
+        // Verificar si ya existe una carpeta para esta OT
+        // (las OTs vinculadas a proyectos se crean DENTRO de la carpeta del proyecto)
+        const otFolderName = ot.otNum
+        let otFolderId = await findOrCreateFolder(otFolderName, otParentFolderId)
+        if (!otFolderId) {
+          logIt(`ERROR: No se pudo crear carpeta para OT ${ot.otNum}`)
+          stats.errores++
           continue
         }
 
-        // Generar contenido TXT
-        const materiales = parseMateriales(sc.materiales)
-        const links = parseLinks(sc.links)
+        // Crear subcarpetas de fotos
+        const otAntesFolderId = await findOrCreateFolder('Fotos Antes', otFolderId)
+        const otDespuesFolderId = await findOrCreateFolder('Fotos Despues', otFolderId)
 
-        let content = `SOLICITUD DE COMPRA: ${sc.codigo}\n`
-        content += `Fecha generacion: ${new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })}\n`
-        content += `${'='.repeat(60)}\n\n`
-        content += `Titulo: ${sc.titulo}\n`
-        if (sc.descripcion) content += `Descripcion: ${sc.descripcion}\n`
-        content += `Estado: ${sc.estado}\n`
-        content += `Prioridad: ${sc.prioridad}\n`
-        if (sc.solicitadoPor) content += `Solicitado por: ${sc.solicitadoPor}\n`
-        if (sc.fechaSolicitud) content += `Fecha solicitud: ${sc.fechaSolicitud}\n`
-        if (sc.fechaEspera) content += `Fecha esperada: ${sc.fechaEspera}\n`
-        if (sc.proveedorSugerido) content += `Proveedor sugerido: ${sc.proveedorSugerido}\n`
-        if (sc.observaciones) content += `Observaciones: ${sc.observaciones}\n`
-        content += `Moneda: ${sc.moneda}\n`
-        content += `Total estimado: $${Number(sc.totalEstimado || 0).toLocaleString('es-CL')}\n`
-        if (sc.origenCodigo) content += `Origen: ${sc.origenTipo} ${sc.origenCodigo}\n`
-        if (proyCodigo) content += `Proyecto: ${proyCodigo}\n`
-        if (sc.otCodigo) content += `OT: ${sc.otCodigo}\n`
+        // Subir JSON de la OT
+        const otData = {
+          otNum: ot.otNum,
+          titulo: ot.titulo,
+          tipo: ot.tipo,
+          prioridad: ot.prioridad,
+          estado: ot.estado,
+          ubicacion: ot.ubicacion,
+          fechaInicio: ot.fechaInicio,
+          fechaLimite: ot.fechaLimite,
+          fechaInicioReal: ot.fechaInicioReal,
+          fechaFinReal: ot.fechaFinReal,
+          costoEstimado: ot.costoEstimado,
+          costoReal: ot.costoReal,
+          progreso: ot.progreso,
+          descripcion: ot.descripcion,
+          tiempoEst: ot.tiempoEst,
+          tiempoReal: ot.tiempoReal,
+          valorHora: ot.valorHora,
+          estadoAprobacion: ot.estadoAprobacion,
+          formaPago: ot.formaPago,
+          notas: ot.notas?.replace(/\[IDEM:[^\]]+\]\s*/g, ''), // limpiar token de idempotencia
+          propiedad: ot.propiedad,
+          asignado: ot.asignado,
+          centroCosto: ot.centroCosto,
+          materiales: ot.materiales,
+          herramientas: ot.herramientas,
+          tareas: ot.tareas,
+          personalOT: ot.personalOT,
+          creadoPor: ot.creadoPorNombre,
+          createdAt: ot.createdAt,
+          updatedAt: ot.updatedAt,
+          _backupDate: new Date().toISOString(),
+        }
+        await uploadFile(
+          `${ot.otNum} - Datos OT.json`,
+          JSON.stringify(otData, null, 2),
+          'application/json',
+          otFolderId,
+          `${ot.otNum} - Datos OT.json`
+        )
 
-        if (materiales.length > 0) {
-          content += `\n${'-'.repeat(60)}\nMATERIALES (${materiales.length}):\n`
-          for (const m of materiales) {
-            content += `\n  * ${m.nombre || 'Sin nombre'}`
-            content += `\n    Cantidad: ${m.cantidad} ${m.unidad || ''}`
-            if (m.precioEstimado) content += ` | Precio unit: $${Number(m.precioEstimado).toLocaleString('es-CL')}`
-            if (m.total) content += ` | Total: $${Number(m.total).toLocaleString('es-CL')}`
+        // Subir fotos antes de la OT
+        const fotosAntes = parseFotos(ot.fotosAntes)
+        if (otAntesFolderId && fotosAntes.length > 0) {
+          for (let i = 0; i < fotosAntes.length; i++) {
+            const ok = await uploadBase64Image(fotosAntes[i], `${ot.otNum}_antes_${i + 1}`, otAntesFolderId)
+            if (ok) stats.fotos++
           }
-          content += `\n  TOTAL: $${materiales.reduce((s, m) => s + (Number(m.total) || 0), 0).toLocaleString('es-CL')}`
         }
 
-        if (links.length > 0) {
-          content += `\n\n${'-'.repeat(60)}\nLINKS DE REFERENCIA:\n`
-          for (const link of links) content += `  - ${link}\n`
+        // Subir fotos después de la OT
+        const fotosDespues = parseFotos(ot.fotosDespues)
+        if (otDespuesFolderId && fotosDespues.length > 0) {
+          for (let i = 0; i < fotosDespues.length; i++) {
+            const ok = await uploadBase64Image(fotosDespues[i], `${ot.otNum}_despues_${i + 1}`, otDespuesFolderId)
+            if (ok) stats.fotos++
+          }
         }
 
-        content += `\n${'='.repeat(60)}\nRespaldo automatico - Sistema Condominios CYJ\n`
-
-        const safeName = `${sc.codigo} - ${sc.titulo}`.replace(/[/\\?%*:|"<>]/g, '-')
-        await uploadFile(Buffer.from(content, 'utf-8'), `${safeName}.txt`, scFolderId, 'text/plain')
-        results.solicitudes.archivosSubidos++
-        console.log(`[Backup] SC ${sc.codigo} OK`)
+        stats.ots++
+        logIt(`OT ${ot.otNum} OK (fotos: ${fotosAntes.length} antes, ${fotosDespues.length} despues)`)
       } catch (e: any) {
-        results.solicitudes.errores.push(`${sc.codigo}: ${e.message}`)
-        console.error(`[Backup] Error SC ${sc.codigo}:`, e)
+        logIt(`ERROR OT ${ot.otNum}: ${e.message}`)
+        stats.errores++
       }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // 5. PROCESAR SOLICITUDES DE COMPRA: ubicar en carpeta del proyecto
+    // ══════════════════════════════════════════════════════════════════════════
+
+    for (const sc of scs) {
+      try {
+        // Determinar la carpeta de SC: buscar la carpeta del proyecto
+        let scFolderId: string | null = null
+
+        if (sc.origenTipo === 'Proyecto' && sc.origenId && proyectoScFolderMap[sc.origenId]) {
+          scFolderId = proyectoScFolderMap[sc.origenId]
+        } else if (sc.origenTipo === 'OT') {
+          // Las SC de OT van en la raíz o buscar su proyecto
+          // Primero buscar si la OT tiene un proyecto asociado
+          scFolderId = null // Se pondrá en carpeta genérica
+        }
+
+        // Si no se encontró carpeta específica, crear una carpeta genérica de SCs
+        if (!scFolderId) {
+          scFolderId = await findOrCreateFolder('Solicitudes de Compra (Sin Proyecto)', parentFolderId)
+        }
+
+        if (!scFolderId) {
+          logIt(`ERROR: No se pudo encontrar carpeta para SC ${sc.codigo}`)
+          stats.errores++
+          continue
+        }
+
+        // Generar TXT detallado de la SC
+        const materiales = sc.materiales ? (() => { try { return JSON.parse(sc.materiales) } catch { return [] } })() : []
+        const links = sc.links ? (() => { try { return JSON.parse(sc.links) } catch { return [] } })() : []
+
+        let txtContent = `SOLICITUD DE COMPRA: ${sc.codigo}\n`
+        txtContent += `${'='.repeat(60)}\n\n`
+        txtContent += `Titulo: ${sc.titulo}\n`
+        txtContent += `Descripcion: ${sc.descripcion || 'Sin descripcion'}\n\n`
+        txtContent += `--- Estado y Prioridad ---\n`
+        txtContent += `Estado: ${sc.estado}\n`
+        txtContent += `Prioridad: ${sc.prioridad}\n`
+        txtContent += `Etapa de Aprobacion: ${sc.etapaAprobacion}\n\n`
+        txtContent += `--- Origen ---\n`
+        txtContent += `Tipo de Origen: ${sc.origenTipo || 'Manual'}\n`
+        txtContent += `Codigo Origen: ${sc.origenCodigo || 'N/A'}\n\n`
+        txtContent += `--- Solicitante ---\n`
+        txtContent += `Solicitado por: ${sc.solicitadoPor || 'N/A'}\n`
+        txtContent += `Fecha Solicitud: ${sc.fechaSolicitud}\n`
+        txtContent += `Fecha Esperada: ${sc.fechaEspera || 'N/A'}\n`
+        txtContent += `Proveedor Sugerido: ${sc.proveedorSugerido || 'N/A'}\n\n`
+        txtContent += `--- Materiales (${materiales.length}) ---\n`
+        if (materiales.length > 0) {
+          materiales.forEach((m: any, i: number) => {
+            txtContent += `  ${i + 1}. ${m.nombre || m.descripcion || 'Sin nombre'}\n`
+            txtContent += `     Cantidad: ${m.cantidad} ${m.unidad || 'unidad'}\n`
+            txtContent += `     Precio Estimado: $${Number(m.precioEstimado || 0).toLocaleString('es-CL')}\n`
+            txtContent += `     Total: $${Number(m.total || 0).toLocaleString('es-CL')}\n`
+            if (m.mejorPrecio) txtContent += `     Mejor Precio: $${Number(m.mejorPrecio).toLocaleString('es-CL')} (${m.mejorTienda || 'N/A'})\n`
+            if (m.mejorUrl) txtContent += `     Link: ${m.mejorUrl}\n`
+          })
+        } else {
+          txtContent += `  (Sin materiales)\n`
+        }
+        txtContent += `\nTotal Estimado: $${Number(sc.totalEstimado || 0).toLocaleString('es-CL')}\n\n`
+        if (links.length > 0) {
+          txtContent += `--- Links de Compra ---\n`
+          links.forEach((l: string, i: number) => {
+            txtContent += `  ${i + 1}. ${l}\n`
+          })
+          txtContent += '\n'
+        }
+        txtContent += `--- Aprobacion ---\n`
+        if (sc.supervisorAprobadorNombre) {
+          txtContent += `Supervisor: ${sc.supervisorAprobadorNombre} - ${sc.supervisorFechaAprobacion || 'Pendiente'}\n`
+          if (sc.supervisorObservaciones) txtContent += `  Obs: ${sc.supervisorObservaciones}\n`
+        }
+        if (sc.adminAprobadorNombre) {
+          txtContent += `Admin: ${sc.adminAprobadorNombre} - ${sc.adminFechaAprobacion || 'Pendiente'}\n`
+          if (sc.adminObservaciones) txtContent += `  Obs: ${sc.adminObservaciones}\n`
+        }
+        if (!sc.supervisorAprobadorNombre && !sc.adminAprobadorNombre) {
+          txtContent += `  Pendiente de aprobacion\n`
+        }
+        txtContent += `\n--- Observaciones ---\n${sc.observaciones || 'Sin observaciones'}\n`
+        txtContent += `\n--- Metadatos ---\n`
+        txtContent += `Creado: ${sc.createdAt}\n`
+        txtContent += `Actualizado: ${sc.updatedAt}\n`
+        txtContent += `Backup: ${new Date().toISOString()}\n`
+
+        await uploadFile(
+          `${sc.codigo} - ${sc.titulo.replace(/[/\\]/g, '-')}.txt`,
+          txtContent,
+          'text/plain',
+          scFolderId,
+          `${sc.codigo} - *.txt` // sobrescribir cualquier version anterior del mismo SC
+        )
+
+        stats.scs++
+        logIt(`SC ${sc.codigo} OK → carpeta ${scFolderId}`)
+      } catch (e: any) {
+        logIt(`ERROR SC ${sc.codigo}: ${e.message}`)
+        stats.errores++
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 6. RESULTADO
+    // ══════════════════════════════════════════════════════════════════════════
+
+    return NextResponse.json({
+      success: true,
+      message: 'Backup completado',
+      stats,
+      log,
+    })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 })
+    console.error('[Backup] Error general:', error)
+    return NextResponse.json({
+      success: false,
+      error: error.message,
+      stats,
+      log,
+    }, { status: 500 })
   }
-
-  return NextResponse.json(results, { status: 200 })
-}
-
-// ═══════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════
-
-function parseBase64Array(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string' && x.startsWith('data:'))
-  } catch {}
-  return []
-}
-
-function getExtensionFromDataUrl(dataUrl: string): string {
-  const match = dataUrl.match(/^data:image\/(\w+);base64,/)
-  if (match) {
-    const map: Record<string, string> = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif' }
-    return map[match[1]] || 'jpg'
-  }
-  return 'jpg'
-}
-
-function parseMateriales(raw: string | null | undefined): any[] {
-  if (!raw) return []
-  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p } catch {}
-  return []
-}
-
-function parseLinks(raw: string | null | undefined): string[] {
-  if (!raw) return []
-  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p.filter((x): x is string => typeof x === 'string') } catch {}
-  return []
 }
