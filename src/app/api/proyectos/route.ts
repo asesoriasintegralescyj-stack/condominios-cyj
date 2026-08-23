@@ -363,8 +363,8 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Crear carpetas en Google Drive + subir datos y fotos (fire-and-forget)
-    void backupProyectoToDrive(proyecto, fotosAntes, fotosDespues)
+    // --- Backup a Google Drive (fire-and-forget) ---
+    void backupProyectoToDrive(proyecto)
 
     return NextResponse.json(proyecto)
   } catch (error) {
@@ -373,76 +373,39 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Crea carpetas en Drive y sube datos+fotos del proyecto (fire-and-forget).
- */
-async function backupProyectoToDrive(proyecto: any, fotosAntes: string | null, fotosDespues: string | null) {
+// --- Funcion de backup a Google Drive ---
+async function backupProyectoToDrive(proyecto: any) {
+  if (!verifyDriveConfig()) return
   try {
-    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT || !process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID) return
+    const codigo = proyecto.codigo || `SIN-CODIGO`
+    const folders = await createProjectFolderStructure(codigo, proyecto.nombre)
+    if (!folders?.proyecto) return
 
-    const { createProjectFolderStructure, uploadFile, uploadBase64Image } = await import('@/lib/google-drive')
+    const data = {
+      codigo: proyecto.codigo, nombre: proyecto.nombre, categoria: proyecto.categoria,
+      estado: proyecto.estado, ubicacion: proyecto.ubicacion, descripcion: proyecto.descripcion,
+      materiales: proyecto.materiales, herramientas: proyecto.herramientas,
+      tareas: proyecto.tareas, personal: proyecto.personal,
+      createdAt: proyecto.createdAt, updatedAt: proyecto.updatedAt,
+      _backupDate: new Date().toISOString(),
+    }
+    await uploadFile(`${codigo} - Datos del Proyecto.json`, JSON.stringify(data, null, 2), 'application/json', folders.proyecto)
 
-    // Crear estructura de carpetas
-    const structure = await createProjectFolderStructure(proyecto.codigo, proyecto.nombre)
-    const folders = {
-      proyectoFolder: structure.proyectoFolder,
-      solicitudesFolder: structure.solicitudesFolder,
-      documentosFolder: structure.documentosFolder,
-      fotosAntesFolder: structure.fotosAntesFolder,
-      fotosDespuesFolder: structure.fotosDespuesFolder,
-      createdAt: new Date().toISOString(),
+    const fotosAntes = parseFotos(proyecto.fotosAntes)
+    if (folders.fotosAntes) {
+      for (let i = 0; i < fotosAntes.length; i++) {
+        await uploadBase64Image(fotosAntes[i], `${codigo}_antes_${i + 1}`, folders.fotosAntes)
+      }
     }
 
-    // Guardar IDs en la BD
-    await db.proyecto.update({
-      where: { id: proyecto.id },
-      data: { driveFolderId: structure.proyectoFolder.id, driveData: JSON.stringify(folders) },
-    })
-
-    // Subir JSON con datos del proyecto
-    const datos = {
-      respaldo: `Proyecto ${proyecto.codigo}`,
-      fechaGenerado: new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' }),
-      proyecto: { id: proyecto.id, codigo: proyecto.codigo, nombre: proyecto.nombre, categoria: proyecto.categoria, estado: proyecto.estado, descripcion: proyecto.descripcion, monto: proyecto.monto, createdAt: proyecto.createdAt },
-      materiales: proyecto.materiales || [],
-      herramientas: proyecto.herramientas || [],
-      tareas: proyecto.tareas || [],
-      personal: proyecto.personal || [],
+    const fotosDespues = parseFotos(proyecto.fotosDespues)
+    if (folders.fotosDespues) {
+      for (let i = 0; i < fotosDespues.length; i++) {
+        await uploadBase64Image(fotosDespues[i], `${codigo}_despues_${i + 1}`, folders.fotosDespues)
+      }
     }
-    await uploadFile(Buffer.from(JSON.stringify(datos, null, 2), 'utf-8'), `Datos del proyecto - ${proyecto.codigo}.json`, structure.documentosFolder.id, 'application/json')
-
-    // Subir fotos antes
-    if (fotosAntes) {
-      try {
-        const arr = JSON.parse(fotosAntes)
-        if (Array.isArray(arr)) {
-          for (let i = 0; i < arr.length; i++) {
-            if (typeof arr[i] === 'string' && arr[i].startsWith('data:')) {
-              const ext = arr[i].match(/^data:image\/(\w+);base64,/)?.[1] || 'jpg'
-              await uploadBase64Image(arr[i], `Foto Antes ${i + 1}.${ext === 'jpeg' ? 'jpg' : ext}`, structure.fotosAntesFolder.id)
-            }
-          }
-        }
-      } catch {}
-    }
-
-    // Subir fotos después
-    if (fotosDespues) {
-      try {
-        const arr = JSON.parse(fotosDespues)
-        if (Array.isArray(arr)) {
-          for (let i = 0; i < arr.length; i++) {
-            if (typeof arr[i] === 'string' && arr[i].startsWith('data:')) {
-              const ext = arr[i].match(/^data:image\/(\w+);base64,/)?.[1] || 'jpg'
-              await uploadBase64Image(arr[i], `Foto Despues ${i + 1}.${ext === 'jpeg' ? 'jpg' : ext}`, structure.fotosDespuesFolder.id)
-            }
-          }
-        }
-      } catch {}
-    }
-
-    console.log(`[Drive] Proyecto ${proyecto.codigo} respaldado OK`)
-  } catch (error) {
-    console.error(`[Drive] Error respaldando proyecto ${proyecto.codigo}:`, error)
+    console.log(`[Drive] Proyecto ${codigo} respaldado`)
+  } catch (e) {
+    console.error(`[Drive] Error backup proyecto:`, e)
   }
 }

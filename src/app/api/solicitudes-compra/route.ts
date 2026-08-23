@@ -355,65 +355,59 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/**
- * Respalda una solicitud de compra a Google Drive (fire-and-forget).
- */
-async function backupSolicitudToDrive(solicitud: any, materiales: MaterialSolicitud[]) {
+// --- Funcion de backup de SC a Google Drive ---
+async function backupSolicitudToDrive(solicitud: any, materiales: any[]) {
+  if (!verifyDriveConfig()) return
   try {
-    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) return
-
-    // Buscar carpeta de solicitudes del proyecto
+    const parent = getParentFolderId()
     let scFolderId: string | null = null
-    let proyCodigo = ''
 
-    if (solicitud.proyectoId) {
-      const proy = await db.proyecto.findUnique({ where: { id: solicitud.proyectoId }, select: { codigo: true, driveData: true } })
-      if (proy?.driveData) {
-        const folders = JSON.parse(proy.driveData)
-        scFolderId = folders.solicitudesFolder?.id || null
+    if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
+      const proyecto = await db.proyecto.findUnique({
+        where: { id: solicitud.origenId },
+        select: { codigo: true },
+      })
+      if (proyecto?.codigo) {
+        const projectFolderId = await findProjectFolder(proyecto.codigo)
+        if (projectFolderId) {
+          scFolderId = await findOrCreateFolder('Solicitudes de Compra', projectFolderId)
+        }
       }
-      proyCodigo = solicitud.proyectoNombre || proy?.codigo || ''
     }
-    if (!scFolderId && solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
-      const proy = await db.proyecto.findUnique({ where: { id: solicitud.origenId }, select: { codigo: true, driveData: true } })
-      if (proy?.driveData) {
-        const folders = JSON.parse(proy.driveData)
-        scFolderId = folders.solicitudesFolder?.id || null
-      }
-      proyCodigo = solicitud.origenCodigo || proy?.codigo || ''
+    if (!scFolderId) {
+      scFolderId = await findOrCreateFolder('Solicitudes de Compra (Sin Proyecto)', parent)
     }
     if (!scFolderId) return
 
-    const { uploadFile } = await import('@/lib/google-drive')
+    let txt = `SOLICITUD DE COMPRA: ${solicitud.codigo}\n`
+    txt += `${'='.repeat(60)}\n\n`
+    txt += `Titulo: ${solicitud.titulo}\n`
+    txt += `Descripcion: ${solicitud.descripcion || 'Sin descripcion'}\n\n`
+    txt += `Estado: ${solicitud.estado} | Prioridad: ${solicitud.prioridad}\n`
+    txt += `Etapa de Aprobacion: ${solicitud.etapaAprobacion}\n\n`
+    txt += `Origen: ${solicitud.origenTipo || 'Manual'} (${solicitud.origenCodigo || 'N/A'})\n`
+    txt += `Solicitado por: ${solicitud.solicitadoPor || 'N/A'}\n`
+    txt += `Fecha Solicitud: ${solicitud.fechaSolicitud}\n`
+    txt += `Fecha Esperada: ${solicitud.fechaEspera || 'N/A'}\n\n`
+    txt += `--- Materiales (${materiales.length}) ---\n`
+    materiales.forEach((m: any, i: number) => {
+      txt += `  ${i + 1}. ${m.nombre || m.descripcion || 'Sin nombre'}\n`
+      txt += `     Cantidad: ${m.cantidad} ${m.unidad || 'unidad'} | Precio: $${Number(m.precioEstimado || 0).toLocaleString('es-CL')} | Total: $${Number(m.total || 0).toLocaleString('es-CL')}\n`
+      if (m.mejorUrl) txt += `     Link: ${m.mejorUrl}\n`
+    })
+    txt += `\nTotal Estimado: $${Number(solicitud.totalEstimado || 0).toLocaleString('es-CL')}\n`
+    txt += `\nBackup: ${new Date().toISOString()}\n`
 
-    let content = `SOLICITUD DE COMPRA: ${solicitud.codigo}\n`
-    content += `Fecha: ${new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })}\n`
-    content += `${'='.repeat(60)}\n\n`
-    content += `Titulo: ${solicitud.titulo}\n`
-    if (solicitud.descripcion) content += `Descripcion: ${solicitud.descripcion}\n`
-    content += `Estado: ${solicitud.estado}\n`
-    content += `Prioridad: ${solicitud.prioridad}\n`
-    if (solicitud.solicitadoPor) content += `Solicitado por: ${solicitud.solicitadoPor}\n`
-    if (solicitud.fechaEspera) content += `Fecha esperada: ${solicitud.fechaEspera}\n`
-    if (solicitud.proveedorSugerido) content += `Proveedor sugerido: ${solicitud.proveedorSugerido}\n`
-    if (solicitud.observaciones) content += `Observaciones: ${solicitud.observaciones}\n`
-    content += `Total estimado: $${Number(solicitud.totalEstimado || 0).toLocaleString('es-CL')}\n`
-    if (proyCodigo) content += `Proyecto: ${proyCodigo}\n`
-
-    if (materiales.length > 0) {
-      content += `\n${'-'.repeat(60)}\nMATERIALES:\n`
-      for (const m of materiales) {
-        content += `  * ${m.nombre || 'Sin nombre'} - ${m.cantidad} ${m.unidad || ''} - $${Number(m.total || 0).toLocaleString('es-CL')}\n`
-      }
-    }
-
-    content += `\n${'='.repeat(60)}\nRespaldo automatico - Sistema Condominios CYJ\n`
-
-    const safeName = `${solicitud.codigo} - ${solicitud.titulo}`.replace(/[/\\?%*:|"<>]/g, '-')
-    await uploadFile(Buffer.from(content, 'utf-8'), `${safeName}.txt`, scFolderId, 'text/plain')
-    console.log(`[Drive] SC ${solicitud.codigo} respaldada OK`)
-  } catch (error) {
-    console.error(`[Drive] Error respaldando SC ${solicitud.codigo}:`, error)
+    await uploadFile(
+      `${solicitud.codigo} - ${solicitud.titulo.replace(/[\\/]/g, '-')}.txt`,
+      txt,
+      'text/plain',
+      scFolderId,
+      `${solicitud.codigo} - *.txt`
+    )
+    console.log(`[Drive] SC ${solicitud.codigo} respaldada`)
+  } catch (e) {
+    console.error(`[Drive] Error backup SC ${solicitud.codigo}:`, e)
   }
 }
 
