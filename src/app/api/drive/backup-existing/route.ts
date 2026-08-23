@@ -8,7 +8,7 @@ export const maxDuration = 120
  * Endpoint para respaldar TODOS los proyectos, OTs y solicitudes de compra
  * existentes a Google Drive con sus archivos reales.
  *
- * - Proyectos: sube JSON de datos + fotos antes/después a sus carpetas
+ * - Proyectos: sube JSON de datos + fotos antes/después
  * - OTs: crea subcarpeta dentro del proyecto y sube datos + fotos
  * - Solicitudes de Compra: sube TXT con detalle a la carpeta del proyecto
  */
@@ -25,10 +25,7 @@ export async function GET() {
   }
 
   try {
-    const {
-      createProjectFolderStructure, createOTFolderStructure,
-      uploadFile, uploadBase64Image, createFolder, findFolderByName,
-    } = await import('@/lib/google-drive')
+    const { createProjectFolderStructure, createOTFolderStructure, uploadFile, uploadBase64Image, findFolderByName } = await import('@/lib/google-drive')
 
     // ═══════════════════════════════════════════
     // 1. PROYECTOS
@@ -45,7 +42,6 @@ export async function GET() {
         tareas: { select: { descripcion: true, cantidad: true, estado: true } },
         personal: { select: { nombre: true, tipo: true, cantidad: true, precioUnit: true, total: true } },
         documentos: { select: { nombre: true, tipo: true, descripcion: true, fechaDoc: true } },
-        ordenesTrabajo: { select: { id: true, otNum: true, titulo: true } },
       },
       orderBy: { createdAt: 'asc' },
     })
@@ -64,7 +60,7 @@ export async function GET() {
           try { folders = JSON.parse(p.driveData) } catch { folders = null }
         }
 
-        // Si no tiene carpetas o driveData es inválido, crear
+        // Si no tiene carpetas válidas, crear
         if (!folders || !folders.proyectoFolder?.id) {
           console.log(`[Backup] Creando carpetas para ${p.codigo}...`)
           const structure = await createProjectFolderStructure(p.codigo, p.nombre)
@@ -78,10 +74,7 @@ export async function GET() {
           }
           await db.proyecto.update({
             where: { id: p.id },
-            data: {
-              driveFolderId: structure.proyectoFolder.id,
-              driveData: JSON.stringify(folders),
-            },
+            data: { driveFolderId: structure.proyectoFolder.id, driveData: JSON.stringify(folders) },
           })
           results.proyectos.carpetasCreadas++
         }
@@ -113,7 +106,6 @@ export async function GET() {
           tareas: p.tareas,
           personal: p.personal,
           documentos: p.documentos,
-          totalOTs: p.ordenesTrabajo?.length || 0,
         }
 
         await uploadFile(
@@ -124,18 +116,13 @@ export async function GET() {
         )
         results.proyectos.archivosSubidos++
 
-        // ── Subir fotos ANTES (si tiene) ──
+        // ── Subir fotos ANTES ──
         if (p.fotosAntes && fotosAntesFolderId) {
           const fotos = parseBase64Array(p.fotosAntes)
           for (let i = 0; i < fotos.length; i++) {
             try {
-              const f = fotos[i]
-              const ext = getExtensionFromDataUrl(f)
-              await uploadBase64Image(
-                f,
-                `Foto Antes ${i + 1} - ${p.codigo}.${ext}`,
-                fotosAntesFolderId
-              )
+              const ext = getExtensionFromDataUrl(fotos[i])
+              await uploadBase64Image(fotos[i], `Foto Antes ${i + 1} - ${p.codigo}.${ext}`, fotosAntesFolderId)
               results.proyectos.fotosSubidas++
             } catch (e: any) {
               results.proyectos.errores.push(`${p.codigo} foto-antes-${i + 1}: ${e.message}`)
@@ -143,18 +130,13 @@ export async function GET() {
           }
         }
 
-        // ── Subir fotos DESPUÉS (si tiene) ──
+        // ── Subir fotos DESPUÉS ──
         if (p.fotosDespues && fotosDespuesFolderId) {
           const fotos = parseBase64Array(p.fotosDespues)
           for (let i = 0; i < fotos.length; i++) {
             try {
-              const f = fotos[i]
-              const ext = getExtensionFromDataUrl(f)
-              await uploadBase64Image(
-                f,
-                `Foto Despues ${i + 1} - ${p.codigo}.${ext}`,
-                fotosDespuesFolderId
-              )
+              const ext = getExtensionFromDataUrl(fotos[i])
+              await uploadBase64Image(fotos[i], `Foto Despues ${i + 1} - ${p.codigo}.${ext}`, fotosDespuesFolderId)
               results.proyectos.fotosSubidas++
             } catch (e: any) {
               results.proyectos.errores.push(`${p.codigo} foto-despues-${i + 1}: ${e.message}`)
@@ -162,7 +144,7 @@ export async function GET() {
           }
         }
 
-        console.log(`[Backup] Proyecto ${p.codigo} OK (${docsFolderId})`)
+        console.log(`[Backup] Proyecto ${p.codigo} OK`)
       } catch (e: any) {
         results.proyectos.errores.push(`${p.codigo}: ${e.message}`)
         console.error(`[Backup] Error proyecto ${p.codigo}:`, e)
@@ -202,10 +184,7 @@ export async function GET() {
             parentDriveFolderId = driveInfo.proyectoFolder.id
           }
           if (!proyectoCodigo) {
-            const proy = await db.proyecto.findUnique({
-              where: { id: ot.proyectoId },
-              select: { codigo: true },
-            })
+            const proy = await db.proyecto.findUnique({ where: { id: ot.proyectoId }, select: { codigo: true } })
             proyectoCodigo = proy?.codigo || ''
           }
         }
@@ -215,27 +194,21 @@ export async function GET() {
           parentDriveFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID!
         }
 
-        // Verificar si ya tiene carpetas Drive
+        // Verificar si ya tiene carpeta Drive existente
         let otFolders: any = null
         if (ot.driveFolderId) {
-          // Ya tiene carpeta, pero necesitamos las subcarpetas
-          // Intentar encontrar las subcarpetas existentes
-          const existingOTFolder = await findFolderByName(`${ot.otNum} - ${ot.titulo}`, parentDriveFolderId)
-          if (existingOTFolder) {
-            const [fa, fd, doc, sc] = await Promise.all([
-              findFolderByName('Fotos Antes', existingOTFolder.id).catch(() => null),
-              findFolderByName('Fotos Despues', existingOTFolder.id).catch(() => null),
-              findFolderByName('Documentos', existingOTFolder.id).catch(() => null),
-              findFolderByName('Solicitudes de Compra', existingOTFolder.id).catch(() => null),
-            ])
-            otFolders = {
-              otFolder: existingOTFolder,
-              fotosAntesFolder: fa,
-              fotosDespuesFolder: fd,
-              documentosFolder: doc,
-              solicitudesFolder: sc,
+          try {
+            const existingOTFolder = await findFolderByName(`${ot.otNum} - ${ot.titulo}`, parentDriveFolderId)
+            if (existingOTFolder) {
+              const [fa, fd, doc, sc] = await Promise.all([
+                findFolderByName('Fotos Antes', existingOTFolder.id).catch(() => null),
+                findFolderByName('Fotos Despues', existingOTFolder.id).catch(() => null),
+                findFolderByName('Documentos', existingOTFolder.id).catch(() => null),
+                findFolderByName('Solicitudes de Compra', existingOTFolder.id).catch(() => null),
+              ])
+              otFolders = { otFolder: existingOTFolder, fotosAntesFolder: fa, fotosDespuesFolder: fd, documentosFolder: doc, solicitudesFolder: sc }
             }
-          }
+          } catch {}
         }
 
         // Si no tiene carpetas, crear
@@ -243,16 +216,11 @@ export async function GET() {
           console.log(`[Backup] Creando carpetas para ${ot.otNum}...`)
           const structure = await createOTFolderStructure(ot.otNum, ot.titulo, parentDriveFolderId)
           otFolders = {
-            otFolder: structure.otFolder,
-            fotosAntesFolder: structure.fotosAntesFolder,
-            fotosDespuesFolder: structure.fotosDespuesFolder,
-            documentosFolder: structure.documentosFolder,
+            otFolder: structure.otFolder, fotosAntesFolder: structure.fotosAntesFolder,
+            fotosDespuesFolder: structure.fotosDespuesFolder, documentosFolder: structure.documentosFolder,
             solicitudesFolder: structure.solicitudesFolder,
           }
-          await db.ordenTrabajo.update({
-            where: { id: ot.id },
-            data: { driveFolderId: structure.otFolder.id },
-          })
+          await db.ordenTrabajo.update({ where: { id: ot.id }, data: { driveFolderId: structure.otFolder.id } })
           results.ots.carpetasCreadas++
         }
 
@@ -293,15 +261,9 @@ export async function GET() {
           for (let i = 0; i < fotos.length; i++) {
             try {
               const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(
-                fotos[i],
-                `Foto Antes ${i + 1} - ${ot.otNum}.${ext}`,
-                otFolders.fotosAntesFolder.id
-              )
+              await uploadBase64Image(fotos[i], `Foto Antes ${i + 1} - ${ot.otNum}.${ext}`, otFolders.fotosAntesFolder.id)
               results.ots.fotosSubidas++
-            } catch (e: any) {
-              results.ots.errores.push(`${ot.otNum} foto-antes-${i + 1}: ${e.message}`)
-            }
+            } catch (e: any) { results.ots.errores.push(`${ot.otNum} foto-antes-${i + 1}: ${e.message}`) }
           }
         }
 
@@ -311,15 +273,9 @@ export async function GET() {
           for (let i = 0; i < fotos.length; i++) {
             try {
               const ext = getExtensionFromDataUrl(fotos[i])
-              await uploadBase64Image(
-                fotos[i],
-                `Foto Despues ${i + 1} - ${ot.otNum}.${ext}`,
-                otFolders.fotosDespuesFolder.id
-              )
+              await uploadBase64Image(fotos[i], `Foto Despues ${i + 1} - ${ot.otNum}.${ext}`, otFolders.fotosDespuesFolder.id)
               results.ots.fotosSubidas++
-            } catch (e: any) {
-              results.ots.errores.push(`${ot.otNum} foto-despues-${i + 1}: ${e.message}`)
-            }
+            } catch (e: any) { results.ots.errores.push(`${ot.otNum} foto-despues-${i + 1}: ${e.message}`) }
           }
         }
 
@@ -349,46 +305,38 @@ export async function GET() {
 
     for (const sc of allSCs) {
       try {
-        // Buscar la carpeta de solicitudes del proyecto
         let scFolderId: string | null = null
         let proyCodigo = ''
 
-        // Primero intentar por proyectoId directo
+        // Buscar por proyectoId directo
         if (sc.proyectoId) {
           const driveInfo = proyectoDriveMap.get(sc.proyectoId)
-          if (driveInfo?.solicitudesFolder?.id) {
-            scFolderId = driveInfo.solicitudesFolder.id
-          }
+          if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
           if (!proyCodigo) proyCodigo = sc.proyectoNombre || ''
         }
 
-        // Segundo intentar por origenId (proyecto)
+        // Buscar por origenId (proyecto)
         if (!scFolderId && sc.origenTipo === 'Proyecto' && sc.origenId) {
           const driveInfo = proyectoDriveMap.get(sc.origenId)
-          if (driveInfo?.solicitudesFolder?.id) {
-            scFolderId = driveInfo.solicitudesFolder.id
-          }
+          if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
           if (!proyCodigo) proyCodigo = sc.origenCodigo || ''
         }
 
-        // Tercero intentar por otId -> proyecto
+        // Buscar por otId -> proyecto
         if (!scFolderId && sc.otId) {
           const ot = allOTs.find(o => o.id === sc.otId)
           if (ot?.proyectoId) {
             const driveInfo = proyectoDriveMap.get(ot.proyectoId)
-            if (driveInfo?.solicitudesFolder?.id) {
-              scFolderId = driveInfo.solicitudesFolder.id
-            }
+            if (driveInfo?.solicitudesFolder?.id) scFolderId = driveInfo.solicitudesFolder.id
           }
         }
 
         if (!scFolderId) {
-          // No se encontró carpeta de proyecto para esta SC
-          results.solicitudes.errores.push(`${sc.codigo}: sin carpeta de proyecto (proyectoId=${sc.proyectoId}, origen=${sc.origenTipo}/${sc.origenId})`)
+          results.solicitudes.errores.push(`${sc.codigo}: sin carpeta de proyecto (proyId=${sc.proyectoId}, orig=${sc.origenTipo}/${sc.origenId})`)
           continue
         }
 
-        // Generar contenido TXT de la SC
+        // Generar contenido TXT
         const materiales = parseMateriales(sc.materiales)
         const links = parseLinks(sc.links)
 
@@ -418,29 +366,20 @@ export async function GET() {
             if (m.precioEstimado) content += ` | Precio unit: $${Number(m.precioEstimado).toLocaleString('es-CL')}`
             if (m.total) content += ` | Total: $${Number(m.total).toLocaleString('es-CL')}`
           }
-          content += `\n  ----------------------------------------`
-          content += `\n  TOTAL MATERIALES: $${materiales.reduce((s, m) => s + (Number(m.total) || 0), 0).toLocaleString('es-CL')}`
+          content += `\n  TOTAL: $${materiales.reduce((s, m) => s + (Number(m.total) || 0), 0).toLocaleString('es-CL')}`
         }
 
         if (links.length > 0) {
           content += `\n\n${'-'.repeat(60)}\nLINKS DE REFERENCIA:\n`
-          for (const link of links) {
-            content += `  - ${link}\n`
-          }
+          for (const link of links) content += `  - ${link}\n`
         }
 
-        content += `\n\n${'='.repeat(60)}\n`
-        content += `Respaldo automatico - Sistema Condominios CYJ\n`
+        content += `\n${'='.repeat(60)}\nRespaldo automatico - Sistema Condominios CYJ\n`
 
         const safeName = `${sc.codigo} - ${sc.titulo}`.replace(/[/\\?%*:|"<>]/g, '-')
-        await uploadFile(
-          Buffer.from(content, 'utf-8'),
-          `${safeName}.txt`,
-          scFolderId,
-          'text/plain'
-        )
+        await uploadFile(Buffer.from(content, 'utf-8'), `${safeName}.txt`, scFolderId, 'text/plain')
         results.solicitudes.archivosSubidos++
-        console.log(`[Backup] SC ${sc.codigo} OK -> ${scFolderId}`)
+        console.log(`[Backup] SC ${sc.codigo} OK`)
       } catch (e: any) {
         results.solicitudes.errores.push(`${sc.codigo}: ${e.message}`)
         console.error(`[Backup] Error SC ${sc.codigo}:`, e)
@@ -458,45 +397,32 @@ export async function GET() {
 // HELPERS
 // ═══════════════════════════════════════════
 
-/** Parsea un campo JSON de fotos (array de data URLs base64) */
 function parseBase64Array(raw: string | null | undefined): string[] {
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) {
-      return parsed.filter((x): x is string => typeof x === 'string' && x.startsWith('data:'))
-    }
+    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string' && x.startsWith('data:'))
   } catch {}
   return []
 }
 
-/** Extrae la extensión de un data URL (data:image/png;base64,... → png) */
 function getExtensionFromDataUrl(dataUrl: string): string {
   const match = dataUrl.match(/^data:image\/(\w+);base64,/)
   if (match) {
-    const mime = match[1]
-    const map: Record<string, string> = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif', bmp: 'bmp' }
-    return map[mime] || 'jpg'
+    const map: Record<string, string> = { jpeg: 'jpg', png: 'png', webp: 'webp', gif: 'gif' }
+    return map[match[1]] || 'jpg'
   }
   return 'jpg'
 }
 
-/** Parsea materiales de una SC */
 function parseMateriales(raw: string | null | undefined): any[] {
   if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed
-  } catch {}
+  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p } catch {}
   return []
 }
 
-/** Parsea links de una SC */
 function parseLinks(raw: string | null | undefined): string[] {
   if (!raw) return []
-  try {
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string')
-  } catch {}
+  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p.filter((x): x is string => typeof x === 'string') } catch {}
   return []
 }

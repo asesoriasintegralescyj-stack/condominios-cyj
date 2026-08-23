@@ -355,6 +355,68 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * Respalda una solicitud de compra a Google Drive (fire-and-forget).
+ */
+async function backupSolicitudToDrive(solicitud: any, materiales: MaterialSolicitud[]) {
+  try {
+    if (!process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT) return
+
+    // Buscar carpeta de solicitudes del proyecto
+    let scFolderId: string | null = null
+    let proyCodigo = ''
+
+    if (solicitud.proyectoId) {
+      const proy = await db.proyecto.findUnique({ where: { id: solicitud.proyectoId }, select: { codigo: true, driveData: true } })
+      if (proy?.driveData) {
+        const folders = JSON.parse(proy.driveData)
+        scFolderId = folders.solicitudesFolder?.id || null
+      }
+      proyCodigo = solicitud.proyectoNombre || proy?.codigo || ''
+    }
+    if (!scFolderId && solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
+      const proy = await db.proyecto.findUnique({ where: { id: solicitud.origenId }, select: { codigo: true, driveData: true } })
+      if (proy?.driveData) {
+        const folders = JSON.parse(proy.driveData)
+        scFolderId = folders.solicitudesFolder?.id || null
+      }
+      proyCodigo = solicitud.origenCodigo || proy?.codigo || ''
+    }
+    if (!scFolderId) return
+
+    const { uploadFile } = await import('@/lib/google-drive')
+
+    let content = `SOLICITUD DE COMPRA: ${solicitud.codigo}\n`
+    content += `Fecha: ${new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })}\n`
+    content += `${'='.repeat(60)}\n\n`
+    content += `Titulo: ${solicitud.titulo}\n`
+    if (solicitud.descripcion) content += `Descripcion: ${solicitud.descripcion}\n`
+    content += `Estado: ${solicitud.estado}\n`
+    content += `Prioridad: ${solicitud.prioridad}\n`
+    if (solicitud.solicitadoPor) content += `Solicitado por: ${solicitud.solicitadoPor}\n`
+    if (solicitud.fechaEspera) content += `Fecha esperada: ${solicitud.fechaEspera}\n`
+    if (solicitud.proveedorSugerido) content += `Proveedor sugerido: ${solicitud.proveedorSugerido}\n`
+    if (solicitud.observaciones) content += `Observaciones: ${solicitud.observaciones}\n`
+    content += `Total estimado: $${Number(solicitud.totalEstimado || 0).toLocaleString('es-CL')}\n`
+    if (proyCodigo) content += `Proyecto: ${proyCodigo}\n`
+
+    if (materiales.length > 0) {
+      content += `\n${'-'.repeat(60)}\nMATERIALES:\n`
+      for (const m of materiales) {
+        content += `  * ${m.nombre || 'Sin nombre'} - ${m.cantidad} ${m.unidad || ''} - $${Number(m.total || 0).toLocaleString('es-CL')}\n`
+      }
+    }
+
+    content += `\n${'='.repeat(60)}\nRespaldo automatico - Sistema Condominios CYJ\n`
+
+    const safeName = `${solicitud.codigo} - ${solicitud.titulo}`.replace(/[/\\?%*:|"<>]/g, '-')
+    await uploadFile(Buffer.from(content, 'utf-8'), `${safeName}.txt`, scFolderId, 'text/plain')
+    console.log(`[Drive] SC ${solicitud.codigo} respaldada OK`)
+  } catch (error) {
+    console.error(`[Drive] Error respaldando SC ${solicitud.codigo}:`, error)
+  }
+}
+
 function safeParseMateriales(raw: string): MaterialSolicitud[] {
   try {
     const parsed = JSON.parse(raw)
