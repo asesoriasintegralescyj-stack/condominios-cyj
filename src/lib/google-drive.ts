@@ -1,349 +1,284 @@
+// Google Drive service for Condominios CYJ
+// CRITICAL: On Vercel serverless, google.auth.JWT MUST use keyFile (temp file), NOT string private_key
+
 import { google } from 'googleapis'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
+import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync } from 'fs'
+import { join } from 'path'
 
-// ─── Config ───────────────────────────────────────────────────────────────────
-// Soporta dos conjuntos de nombres de variables:
-//   (A) GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY + GOOGLE_DRIVE_FOLDER_ID
-//   (B) GOOGLE_DRIVE_SERVICE_ACCOUNT (JSON completo) + GOOGLE_DRIVE_PARENT_FOLDER_ID
-
-function getConfig() {
-  // Forma A: variables separadas
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
-  const key = process.env.GOOGLE_PRIVATE_KEY
-  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-  if (email && key && folderId) return { email, key, folderId }
-
-  // Forma B: JSON del service account
-  const saJson = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT
-  const folderId2 = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID
-  if (saJson && folderId2) {
-    try {
-      const parsed = JSON.parse(saJson)
-      return {
-        email: parsed.client_email,
-        key: parsed.private_key,
-        folderId: folderId2,
-      }
-    } catch {
-      console.error('[Drive] Error parseando GOOGLE_DRIVE_SERVICE_ACCOUNT JSON')
-    }
-  }
-
-  return null
-}
-
-// ─── Auth (keyFile temp file — string private_key fails on Vercel) ────────────
-
-let cachedAuth: any = null
-
-async function getAuth() {
-  if (cachedAuth) return cachedAuth
-  const cfg = getConfig()
-  if (!cfg) throw new Error('Google Drive: faltan variables de entorno (GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, GOOGLE_DRIVE_FOLDER_ID)')
-
-  // Escribir key a archivo temporal — requerido por google.auth.JWT en Vercel
-  const tmpDir = os.tmpdir()
-  const keyFilePath = path.join(tmpDir, `gdrive-key-${Date.now()}.pem`)
-  fs.writeFileSync(keyFilePath, cfg.key, 'utf8')
-
-  const auth = new google.auth.JWT({
-    email: cfg.email,
-    keyFile: keyFilePath,
-    scopes: ['https://www.googleapis.com/auth/drive'],
+const DRIVE_SERVICE_ACCT = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT ||
+  JSON.stringify({
+    type: 'service_account',
+    project_id: 'condominios-cyj-drive',
+    private_key_id: 'cf9314053f9814b0ce05b7782de12590a4e0b308',
+    private_key: '',
+    client_email: 'drive-backup@condominios-cyj-drive.iam.gserviceaccount.com',
+    client_id: '101384273577199827084',
+    auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+    token_uri: 'https://oauth2.googleapis.com/token',
+    auth_provider_x509_cert_url: 'https://accounts.google.com/oauth2/v1/certs',
+    client_x509_cert_url: 'https://accounts.google.com/robot/v1/metadata/x509/drive-backup%40condominios-cyj-drive.iam.gserviceaccount.com',
+    universe_domain: 'googleapis.com',
   })
 
-  cachedAuth = auth
-  return auth
-}
+// Parent folder ID in Google Drive (the root backup folder)
+const DRIVE_PARENT_FOLDER_ID = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID || '1CgBbB4DxKZrPQN5z3VlOg9pM_2X0WdK7jE'
 
-// ─── Drive Client ────────────────────────────────────────────────────────────
+let _driveClient: any = null
+let _keyFilePath: string | null = null
 
+/**
+ * Get authenticated Google Drive client
+ * CRITICAL: Uses temp keyFile because JWT with string private_key fails on Vercel
+ */
 export async function getDriveClient() {
-  const auth = await getAuth()
-  return google.drive({ version: 'v3', auth })
-}
+  if (_driveClient) return _driveClient
 
-export function verifyDriveConfig(): boolean {
-  return getConfig() !== null
-}
-
-export function getParentFolderId(): string {
-  const cfg = getConfig()
-  if (!cfg) throw new Error('Google Drive no configurado')
-  return cfg.folderId
-}
-
-// ─── Folder Operations ───────────────────────────────────────────────────────
-
-export async function createFolder(name: string, parentId: string): Promise<string | null> {
   try {
-    const drive = await getDriveClient()
-    const file = await drive.files.create({
-      requestBody: {
-        name,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [parentId],
-      },
-      fields: 'id',
+    const creds = JSON.parse(DRIVE_SERVICE_ACCT)
+
+    // Write credentials to temp file (required for Vercel serverless)
+    const tmpDir = '/tmp'
+    if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true })
+    _keyFilePath = join(tmpDir, `drive-key-${Date.now()}.json`)
+    writeFileSync(_keyFilePath, JSON.stringify(creds), 'utf-8')
+
+    const auth = new google.auth.JWT({
+      keyFile: _keyFilePath,
+      scopes: ['https://www.googleapis.com/auth/drive'],
     })
-    return file.data.id || null
-  } catch (e) {
-    console.error(`[Drive] Error creando carpeta "${name}":`, e)
-    return null
+
+    await auth.authorize()
+    _driveClient = google.drive({ version: 'v3', auth })
+    console.log('[Drive] Client authenticated successfully')
+    return _driveClient
+  } catch (error) {
+    console.error('[Drive] Error authenticating:', error)
+    throw error
   }
 }
 
-export async function findFolderByName(name: string, parentId: string): Promise<string | null> {
+/** Verify Drive configuration is valid */
+export async function verifyDriveConfig() {
+  const drive = await getDriveClient()
   try {
-    const drive = await getDriveClient()
-    const res = await drive.files.list({
-      q: `name = '${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, name)',
-      pageSize: 1,
-    })
-    return res.data.files?.[0]?.id || null
-  } catch (e) {
-    console.error(`[Drive] Error buscando carpeta "${name}":`, e)
-    return null
+    await drive.files.get({ fileId: DRIVE_PARENT_FOLDER_ID, fields: 'id,name' })
+    return { ok: true, parentFolderId: DRIVE_PARENT_FOLDER_ID }
+  } catch (error: any) {
+    return { ok: false, error: error.message }
   }
 }
 
-export async function findOrCreateFolder(name: string, parentId: string): Promise<string | null> {
+/** Create a folder in Google Drive */
+export async function createFolder(name: string, parentId?: string) {
+  const drive = await getDriveClient()
+  const fileMetadata: any = {
+    name,
+    mimeType: 'application/vnd.google-apps.folder',
+  }
+  if (parentId) {
+    fileMetadata.parents = [parentId]
+  }
+  const result = await drive.files.create({
+    resource: fileMetadata,
+    fields: 'id,name',
+  })
+  console.log(`[Drive] Folder created: ${name} (${result.data.id})`)
+  return result.data
+}
+
+/** Find a folder by name inside a parent */
+export async function findFolderByName(name: string, parentId: string) {
+  const drive = await getDriveClient()
+  const query = `name='${name.replace(/'/g, "\\'")}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  const result = await drive.files.list({
+    q: query,
+    fields: 'files(id, name)',
+    pageSize: 1,
+  })
+  return result.data.files?.[0] || null
+}
+
+/** List folders inside a parent */
+export async function listFolders(parentId: string) {
+  const drive = await getDriveClient()
+  const query = `'${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  const result = await drive.files.list({
+    q: query,
+    fields: 'files(id, name)',
+    pageSize: 200,
+  })
+  return result.data.files || []
+}
+
+/** List files inside a parent */
+export async function listFiles(parentId: string) {
+  const drive = await getDriveClient()
+  const query = `'${parentId}' in parents and mimeType!='application/vnd.google-apps.folder' and trashed=false`
+  const result = await drive.files.list({
+    q: query,
+    fields: 'files(id, name, mimeType, size)',
+    pageSize: 200,
+  })
+  return result.data.files || []
+}
+
+/** Create the full project folder structure: PROY-XXX - Name/ with subfolders */
+export async function createProjectFolderStructure(codigo: string, nombre: string) {
+  const parentFolder = DRIVE_PARENT_FOLDER_ID
+  const folderName = `${codigo} - ${nombre}`
+
+  // Check if project folder already exists
+  const existing = await findFolderByName(folderName, parentFolder)
+  if (existing) {
+    console.log(`[Drive] Project folder already exists: ${folderName}`)
+    // Ensure subfolders exist
+    const subfolders = ['Solicitudes de Compra', 'Documentos', 'Fotos']
+    const folderIds: Record<string, string> = { root: existing.id }
+    for (const sub of subfolders) {
+      if (sub === 'Fotos') {
+        const fotosFolder = await findOrCreateFolder('Fotos', existing.id)
+        folderIds.fotos = fotosFolder.id
+        const antesFolder = await findOrCreateFolder('Antes', fotosFolder.id)
+        const despuesFolder = await findOrCreateFolder('Despues', fotosFolder.id)
+        folderIds.fotosAntes = antesFolder.id
+        folderIds.fotosDespues = despuesFolder.id
+      } else {
+        const subFolder = await findOrCreateFolder(sub, existing.id)
+        folderIds[sub === 'Solicitudes de Compra' ? 'solicitudes' : sub.toLowerCase()] = subFolder.id
+      }
+    }
+    return folderIds
+  }
+
+  // Create main project folder
+  const projectFolder = await createFolder(folderName, parentFolder)
+  const folderIds: Record<string, string> = { root: projectFolder.id }
+
+  // Create subfolders
+  const scFolder = await createFolder('Solicitudes de Compra', projectFolder.id)
+  folderIds.solicitudes = scFolder.id
+
+  const docsFolder = await createFolder('Documentos', projectFolder.id)
+  folderIds.documentos = docsFolder.id
+
+  const fotosFolder = await createFolder('Fotos', projectFolder.id)
+  folderIds.fotos = fotosFolder.id
+
+  const antesFolder = await createFolder('Antes', fotosFolder.id)
+  folderIds.fotosAntes = antesFolder.id
+
+  const despuesFolder = await createFolder('Despues', fotosFolder.id)
+  folderIds.fotosDespues = despuesFolder.id
+
+  return folderIds
+}
+
+/** Create OT folder structure inside a project folder */
+export async function createOTFolderStructure(otNum: string, titulo: string, parentProjectFolderId?: string) {
+  const parentFolder = parentProjectFolderId || DRIVE_PARENT_FOLDER_ID
+  const folderName = `OT ${otNum} - ${titulo}`
+
+  // Check if OT folder already exists
+  const existing = await findFolderByName(folderName, parentFolder)
+  if (existing) {
+    console.log(`[Drive] OT folder already exists: ${folderName}`)
+    const fotosFolder = await findOrCreateFolder('Fotos', existing.id)
+    return { root: existing.id, fotos: fotosFolder.id }
+  }
+
+  const otFolder = await createFolder(folderName, parentFolder)
+  const fotosFolder = await createFolder('Fotos', otFolder.id)
+
+  return { root: otFolder.id, fotos: fotosFolder.id }
+}
+
+/** Find or create a folder */
+async function findOrCreateFolder(name: string, parentId: string) {
   const existing = await findFolderByName(name, parentId)
   if (existing) return existing
-  return createFolder(name, parentId)
+  return await createFolder(name, parentId)
 }
 
-export async function createProjectFolderStructure(proyectoCodigo: string, proyectoNombre: string): Promise<Record<string, string | null> | null> {
-  const parent = getParentFolderId()
-  const folderName = `${proyectoCodigo} - ${proyectoNombre}`.substring(0, 200)
-
-  // Carpeta principal del proyecto
-  const proyectoFolderId = await findOrCreateFolder(folderName, parent)
-  if (!proyectoFolderId) return null
-
-  // Subcarpetas
-  const scFolderId = await findOrCreateFolder('Solicitudes de Compra', proyectoFolderId)
-  const docsFolderId = await findOrCreateFolder('Documentos', proyectoFolderId)
-  const fotosFolderId = await findOrCreateFolder('Fotos', proyectoFolderId)
-  const antesFolderId = fotosFolderId ? await findOrCreateFolder('Antes', fotosFolderId) : null
-  const despuesFolderId = fotosFolderId ? await findOrCreateFolder('Despues', fotosFolderId) : null
-  const otFolderId = await findOrCreateFolder('Ordenes de Trabajo', proyectoFolderId)
-
-  return {
-    proyecto: proyectoFolderId,
-    solicitudes: scFolderId,
-    documentos: docsFolderId,
-    fotos: fotosFolderId,
-    fotosAntes: antesFolderId,
-    fotosDespues: despuesFolderId,
-    ordenesTrabajo: otFolderId,
-  }
-}
-
-export async function createOTFolderStructure(otNum: string, projectFolderId: string | null): Promise<Record<string, string | null> | null> {
-  const parent = projectFolderId ? projectFolderId : getParentFolderId()
-  const folderName = `${otNum}`
-
-  const otFolderId = await findOrCreateFolder(folderName, parent)
-  if (!otFolderId) return null
-
-  const antesFolderId = await findOrCreateFolder('Fotos Antes', otFolderId)
-  const despuesFolderId = await findOrCreateFolder('Fotos Despues', otFolderId)
-
-  return {
-    ot: otFolderId,
-    fotosAntes: antesFolderId,
-    fotosDespues: despuesFolderId,
-  }
-}
-
-// ─── File Operations ─────────────────────────────────────────────────────────
-
+/** Upload a text/JSON file to Google Drive */
 export async function uploadFile(
   fileName: string,
   content: string | Buffer,
   mimeType: string,
-  parentId: string,
-  overwriteName?: string
-): Promise<boolean> {
-  try {
-    const drive = await getDriveClient()
-
-    // Si se especifica overwriteName, buscar y actualizar archivo existente
-    if (overwriteName) {
-      try {
-        const existing = await drive.files.list({
-          q: `name = '${overwriteName.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed = false`,
-          fields: 'files(id)',
-          pageSize: 1,
-        })
-        if (existing.data.files?.[0]?.id) {
-          // Actualizar contenido del archivo existente
-          await drive.files.update({
-            fileId: existing.data.files[0].id,
-            media: { body: content as any },
-          })
-          console.log(`[Drive] Actualizado: ${overwriteName}`)
-          return true
-        }
-      } catch (e) {
-        console.error(`[Drive] Error buscando archivo para sobrescribir:`, e)
-      }
-    }
-
-    const fileMetadata: any = {
-      name: fileName,
-      parents: [parentId],
-    }
-
-    // Para texto, usar mimeType directamente
-    if (mimeType === 'text/plain' || mimeType === 'application/json') {
-      fileMetadata.mimeType = mimeType
-    }
-
-    await drive.files.create({
-      requestBody: fileMetadata,
-      media: { body: content as any, mimeType },
-      fields: 'id',
-    })
-    console.log(`[Drive] Subido: ${fileName} → ${parentId}`)
-    return true
-  } catch (e) {
-    console.error(`[Drive] Error subiendo "${fileName}":`, e)
-    return false
+  parentId: string
+) {
+  const drive = await getDriveClient()
+  const fileMetadata: any = {
+    name: fileName,
+    parents: [parentId],
   }
+  const media: any = {
+    body: content,
+    mimeType,
+  }
+
+  // Check if file with same name exists and update it
+  const existing = await drive.files.list({
+    q: `name='${fileName.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed=false`,
+    fields: 'files(id, name)',
+    pageSize: 1,
+  })
+
+  if (existing.data.files?.length > 0) {
+    // Update existing file
+    await drive.files.update({
+      fileId: existing.data.files[0].id,
+      media,
+    })
+    console.log(`[Drive] File updated: ${fileName}`)
+    return existing.data.files[0]
+  }
+
+  const result = await drive.files.create({
+    resource: fileMetadata,
+    media,
+    fields: 'id,name',
+  })
+  console.log(`[Drive] File uploaded: ${fileName}`)
+  return result.data
 }
 
+/** Upload a base64 image to Google Drive */
 export async function uploadBase64Image(
   base64Data: string,
   fileName: string,
   parentId: string
-): Promise<boolean> {
-  try {
-    // Extraer datos base64 y mimeType
-    const matches = base64Data.match(/^data:(image\/\w+);base64,(.+)$/)
-    if (!matches) {
-      console.warn(`[Drive] Formato base64 no valido para ${fileName}`)
-      return false
+) {
+  // Handle data URL format (data:image/jpeg;base64,...)
+  let base64 = base64Data
+  let mimeType = 'image/jpeg'
+
+  if (base64Data.startsWith('data:')) {
+    const matches = base64Data.match(/^data:(image\/\w+);base64,/)
+    if (matches) {
+      mimeType = matches[1]
     }
-    const mimeType = matches[1]
-    const buffer = Buffer.from(matches[2], 'base64')
+    base64 = base64Data.replace(/^data:image\/\w+;base64,/, '')
+  }
 
-    // Determinar extensión
-    const ext = mimeType.split('/')[1] === 'jpeg' ? 'jpg' : mimeType.split('/')[1]
-    const fullFileName = fileName.endsWith(`.${ext}`) ? fileName : `${fileName}.${ext}`
+  const buffer = Buffer.from(base64, 'base64')
+  return uploadFile(fileName, buffer, mimeType, parentId)
+}
 
-    // Verificar si ya existe (por nombre sin extensión)
-    const baseName = fileName.replace(/\.[^.]+$/, '')
-    try {
-      const drive = await getDriveClient()
-      const existing = await drive.files.list({
-        q: `name contains '${baseName.replace(/'/g, "\\'")}' and '${parentId}' in parents and trashed = false`,
-        fields: 'files(id, name)',
-      })
-      if (existing.data.files?.length) {
-        // Actualizar la primera coincidencia
-        await drive.files.update({
-          fileId: existing.data.files[0].id,
-          media: { body: buffer as any },
-        })
-        console.log(`[Drive] Imagen actualizada: ${fullFileName}`)
-        return true
-      }
-    } catch (e) {
-      console.error(`[Drive] Error verificando imagen existente:`, e)
+/** Get the parent folder ID */
+export function getParentFolderId() {
+  return DRIVE_PARENT_FOLDER_ID
+}
+
+/** Parse a JSON string array (fotosAntes, fotosDespues) safely */
+export function parsePhotoArray(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed.filter((x): x is string => typeof x === 'string' && x.length > 0)
     }
-
-    const drive = await getDriveClient()
-    await drive.files.create({
-      requestBody: {
-        name: fullFileName,
-        parents: [parentId],
-      },
-      media: { body: buffer as any, mimeType },
-      fields: 'id',
-    })
-    console.log(`[Drive] Imagen subida: ${fullFileName}`)
-    return true
-  } catch (e) {
-    console.error(`[Drive] Error subiendo imagen "${fileName}":`, e)
-    return false
-  }
-}
-
-export async function listFiles(folderId: string): Promise<any[]> {
-  try {
-    const drive = await getDriveClient()
-    const res = await drive.files.list({
-      q: `'${folderId}' in parents and trashed = false`,
-      fields: 'files(id, name, mimeType, size, modifiedTime)',
-      pageSize: 100,
-    })
-    return res.data.files || []
-  } catch (e) {
-    console.error(`[Drive] Error listando archivos:`, e)
-    return []
-  }
-}
-
-export async function listFolders(parentId: string): Promise<any[]> {
-  try {
-    const drive = await getDriveClient()
-    const res = await drive.files.list({
-      q: `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, name)',
-      pageSize: 200,
-    })
-    return res.data.files || []
-  } catch (e) {
-    console.error(`[Drive] Error listando carpetas:`, e)
-    return []
-  }
-}
-
-// ─── Helpers para parsear fotos desde JSON strings ───────────────────────────
-
-export function parseFotos(fotosJson: string | null | undefined): string[] {
-  if (!fotosJson) return []
-  try {
-    const parsed = JSON.parse(fotosJson)
-    if (Array.isArray(parsed)) return parsed.filter((x: any) => typeof x === 'string' && x.startsWith('data:image'))
     return []
   } catch {
     return []
   }
-}
-
-// ─── Funciones de backup específicas ─────────────────────────────────────────
-
-/**
- * Busca la carpeta de un proyecto en Drive por su código.
- * Retorna el folderId o null.
- */
-export async function findProjectFolder(proyectoCodigo: string): Promise<string | null> {
-  const parent = getParentFolderId()
-  const folders = await listFolders(parent)
-  const match = folders.find(f => f.name.startsWith(`${proyectoCodigo} -`) || f.name.startsWith(`${proyectoCodigo} `))
-  return match?.id || null
-}
-
-/**
- * Busca la subcarpeta "Solicitudes de Compra" dentro de un folder de proyecto.
- */
-export async function findSCFolderInProject(projectFolderId: string): Promise<string | null> {
-  const folders = await listFolders(projectFolderId)
-  const match = folders.find(f => f.name === 'Solicitudes de Compra')
-  return match?.id || null
-}
-
-/**
- * Busca la subcarpeta "Ordenes de Trabajo" dentro de un folder de proyecto.
- */
-export async function findOTFolderInProject(projectFolderId: string): Promise<string | null> {
-  const folders = await listFolders(projectFolderId)
-  const match = folders.find(f => f.name === 'Ordenes de Trabajo')
-  return match?.id || null
 }
