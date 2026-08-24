@@ -103,39 +103,42 @@ export async function backupSolicitudToDrive(scId: string) {
     const sc = await db.solicitudCompra.findUnique({ where: { id: scId } })
     if (!sc) return
 
-    let targetFolderId: string
-    if (sc.origenTipo === 'Proyecto' && sc.origenId) {
-      const proy = await db.proyecto.findUnique({ where: { id: sc.origenId }, select: { codigo: true, nombre: true } })
-      if (proy) {
-        const fIds = await createProjectFolderStructure(proy.codigo || 'PROY-000', proy.nombre || 'Sin nombre')
-        targetFolderId = fIds.solicitudes
-      } else { targetFolderId = (await getRootFolders()).scSinProyecto }
-    } else {
-      const scF = await createSCFolderStructure(sc.codigo, (await getRootFolders()).scSinProyecto)
-      targetFolderId = scF.root
+    // Preparar datos
+    let matsText = 'Sin materiales'
+    if (sc.materiales) { try { const m = JSON.parse(sc.materiales); if (Array.isArray(m) && m.length > 0) matsText = m } catch { /* keep */ } }
+    let linksArr: string[] = []
+    if (sc.links) { try { const l = JSON.parse(sc.links); if (Array.isArray(l)) linksArr = l } catch { /* keep */ } }
+
+    const scData = {
+      codigo: sc.codigo, titulo: sc.titulo, descripcion: sc.descripcion, estado: sc.estado,
+      prioridad: sc.prioridad, moneda: sc.moneda, totalEstimado: sc.totalEstimado,
+      solicitadoPor: sc.solicitadoPor, fechaSolicitud: sc.fechaSolicitud, fechaEspera: sc.fechaEspera,
+      proveedorSugerido: sc.proveedorSugerido, observaciones: sc.observaciones,
+      origenTipo: sc.origenTipo, origenCodigo: sc.origenCodigo,
+      etapaAprobacion: sc.etapaAprobacion,
+      supervisorAprobador: sc.supervisorAprobadorNombre, supervisorFecha: sc.supervisorFechaAprobacion,
+      supervisorObs: sc.supervisorObservaciones,
+      adminAprobador: sc.adminAprobadorNombre, adminFecha: sc.adminFechaAprobacion,
+      adminObs: sc.adminObservaciones,
+      materiales: matsText, links: linksArr,
+      createdAt: sc.createdAt, updatedAt: sc.updatedAt,
     }
 
-    let matsText = 'Sin materiales'
-    if (sc.materiales) { try { const m = JSON.parse(sc.materiales); if (Array.isArray(m) && m.length > 0) matsText = m.map((x: any, i: number) => `${i + 1}. ${x.nombre || x.descripcion || 'N/A'} | Cant: ${x.cantidad} ${x.unidad || ''} | P.Unit: $${x.precioEstimado || 0} | Total: $${x.total || 0}`).join('\n') } catch {} }
-    let linksText = 'Sin links'
-    if (sc.links) { try { const l = JSON.parse(sc.links); if (Array.isArray(l) && l.length > 0) linksText = l.join('\n') } catch {} }
+    const jsonStr = JSON.stringify(scData, null, 2)
 
-    const txt = [
-      `SOLICITUD DE COMPRA`, `${'='.repeat(50)}`,
-      `Codigo: ${sc.codigo}`, `Titulo: ${sc.titulo}`, `Estado: ${sc.estado}`, `Prioridad: ${sc.prioridad}`,
-      `Etapa Aprobacion: ${sc.etapaAprobacion || 'N/A'}`,
-      '', 'Descripcion:', sc.descripcion || 'Sin descripcion', '', 'Materiales:', matsText,
-      '', `Total Estimado: $${sc.totalEstimado || 0}`, `Solicitado Por: ${sc.solicitadoPor || 'N/A'}`,
-      `Fecha Solicitud: ${sc.fechaSolicitud || 'N/A'}`, `Fecha Esperada: ${sc.fechaEspera || 'N/A'}`,
-      `Proveedor Sugerido: ${sc.proveedorSugerido || 'N/A'}`,
-      `Origen: ${sc.origenTipo || 'Manual'} ${sc.origenCodigo ? `(${sc.origenCodigo})` : ''}`,
-      '', 'Observaciones:', sc.observaciones || 'Sin observaciones',
-      '', `Aprobacion Supervisor: ${sc.supervisorAprobadorNombre || 'Pendiente'} ${sc.supervisorFechaAprobacion ? `- ${new Date(sc.supervisorFechaAprobacion).toLocaleDateString('es-CL')}` : ''}`,
-      `Aprobacion Admin: ${sc.adminAprobadorNombre || 'Pendiente'} ${sc.adminFechaAprobacion ? `- ${new Date(sc.adminFechaAprobacion).toLocaleDateString('es-CL')}` : ''}`,
-      '', 'Links de compra:', linksText, '', `Creado: ${sc.createdAt}`, `Actualizado: ${sc.updatedAt}`,
-    ].join('\n')
+    if (sc.proyectoId) {
+      // SC con proyecto → JSON en la carpeta Solicitudes de Compra/ del proyecto
+      const proy = await db.proyecto.findUnique({ where: { id: sc.proyectoId }, select: { codigo: true, nombre: true } })
+      if (proy) {
+        const fIds = await createProjectFolderStructure(proy.codigo || 'PROY-000', proy.nombre || 'Sin nombre')
+        await uploadFile(`${sc.codigo} - (Portada) ${sc.titulo}.json`, jsonStr, 'application/json', fIds.solicitudes)
+      }
+    } else {
+      // SC sin proyecto → carpeta propia con JSON + Documentos/
+      const scFolder = await createSCFolderStructure(sc.codigo, (await getRootFolders()).scSinProyecto)
+      await uploadFile(`${sc.codigo} - (Portada) ${sc.titulo}.json`, jsonStr, 'application/json', scFolder.root)
+    }
 
-    await uploadFile(`${sc.codigo} - ${sc.titulo}.txt`, txt, 'text/plain', targetFolderId)
     console.log(`[Backup] SC ${sc.codigo} OK`)
   } catch (e) { console.error(`[Backup] SC ${scId}:`, e) }
 }

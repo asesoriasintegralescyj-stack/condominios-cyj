@@ -97,12 +97,13 @@ export async function createOTFolderStructure(otNum: string, parentFolderId: str
 }
 
 // ─── Estructura de carpeta de SC (sin proyecto) ─────────────────
-// Retorna: { root }
+// Retorna: { root, documentos }
 export async function createSCFolderStructure(scCodigo: string, parentFolderId: string) {
   const folderName = scCodigo
   const existing = await findFolderByName(folderName, parentFolderId)
   const scFolder = existing || await createFolder(folderName, parentFolderId)
-  return { root: scFolder.id }
+  const documentos = (await findOrCreate('Documentos', scFolder.id)).id
+  return { root: scFolder.id, documentos }
 }
 
 // ─── Helpers de carpetas ────────────────────────────────────────
