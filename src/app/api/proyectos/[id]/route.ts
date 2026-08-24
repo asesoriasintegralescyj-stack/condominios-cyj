@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
-import {
-  verifyDriveConfig,
-  findProjectFolder,
-  findOrCreateFolder,
-  uploadFile,
-  uploadBase64Image,
-  parseFotos,
-} from '@/lib/google-drive'
+import { backupProyectoToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -343,7 +336,7 @@ export async function PUT(
 
     // ─── Backup a Google Drive (fire-and-forget) ───
     if (updatedProyecto) {
-      void backupProyectoUpdateToDrive(updatedProyecto)
+      void backupProyectoToDrive(id)
     }
 
     return NextResponse.json(updatedProyecto)
@@ -353,51 +346,6 @@ export async function PUT(
   }
 }
 
-// ─── Backup actualización de proyecto a Drive ──────────────────────────────
-async function backupProyectoUpdateToDrive(proyecto: any) {
-  if (!verifyDriveConfig()) return
-  try {
-    const codigo = proyecto.codigo || `SIN-CODIGO-${proyecto.id.substring(0, 6)}`
-    const folderId = await findProjectFolder(codigo)
-    if (!folderId) return
-
-    // Actualizar JSON del proyecto
-    const data = {
-      codigo: proyecto.codigo, nombre: proyecto.nombre, categoria: proyecto.categoria,
-      estado: proyecto.estado, ubicacion: proyecto.ubicacion, descripcion: proyecto.descripcion,
-      materiales: proyecto.materiales, herramientas: proyecto.herramientas,
-      tareas: proyecto.tareas, personal: proyecto.personal,
-      createdAt: proyecto.createdAt, updatedAt: proyecto.updatedAt,
-      _backupDate: new Date().toISOString(),
-    }
-    await uploadFile(`${codigo} - Datos del Proyecto.json`, JSON.stringify(data, null, 2), 'application/json', folderId, `${codigo} - Datos del Proyecto.json`)
-
-    // Actualizar fotos si las hay en el payload
-    if (proyecto.fotosAntes) {
-      const fotosFolderId = await findOrCreateFolder('Fotos', folderId)
-      const antesId = fotosFolderId ? await findOrCreateFolder('Antes', fotosFolderId) : null
-      if (antesId) {
-        const fotos = parseFotos(proyecto.fotosAntes)
-        for (let i = 0; i < fotos.length; i++) {
-          await uploadBase64Image(fotos[i], `${codigo}_antes_${i + 1}`, antesId)
-        }
-      }
-    }
-    if (proyecto.fotosDespues) {
-      const fotosFolderId = await findOrCreateFolder('Fotos', folderId)
-      const despuesId = fotosFolderId ? await findOrCreateFolder('Despues', fotosFolderId) : null
-      if (despuesId) {
-        const fotos = parseFotos(proyecto.fotosDespues)
-        for (let i = 0; i < fotos.length; i++) {
-          await uploadBase64Image(fotos[i], `${codigo}_despues_${i + 1}`, despuesId)
-        }
-      }
-    }
-    console.log(`[Drive] Proyecto ${codigo} actualizado en Drive`)
-  } catch (e) {
-    console.error(`[Drive] Error backup update proyecto:`, e)
-  }
-}
 
 // DELETE - Delete proyecto
 export async function DELETE(

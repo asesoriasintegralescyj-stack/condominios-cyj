@@ -6,6 +6,7 @@ import {
   sendSolicitudCompraEmail,
   type MaterialSolicitud,
 } from '@/lib/email-solicitud-compra'
+import { backupSolicitudToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -337,7 +338,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Respaldo automático a Google Drive (fire-and-forget)
-    void backupSolicitudToDrive(updated, materialesRaw)
+    void backupSolicitudToDrive(updated.id)
 
     return NextResponse.json(
       {
@@ -355,61 +356,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// --- Funcion de backup de SC a Google Drive ---
-async function backupSolicitudToDrive(solicitud: any, materiales: any[]) {
-  if (!verifyDriveConfig()) return
-  try {
-    const parent = getParentFolderId()
-    let scFolderId: string | null = null
-
-    if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
-      const proyecto = await db.proyecto.findUnique({
-        where: { id: solicitud.origenId },
-        select: { codigo: true },
-      })
-      if (proyecto?.codigo) {
-        const projectFolderId = await findProjectFolder(proyecto.codigo)
-        if (projectFolderId) {
-          scFolderId = await findOrCreateFolder('Solicitudes de Compra', projectFolderId)
-        }
-      }
-    }
-    if (!scFolderId) {
-      scFolderId = await findOrCreateFolder('Solicitudes de Compra (Sin Proyecto)', parent)
-    }
-    if (!scFolderId) return
-
-    let txt = `SOLICITUD DE COMPRA: ${solicitud.codigo}\n`
-    txt += `${'='.repeat(60)}\n\n`
-    txt += `Titulo: ${solicitud.titulo}\n`
-    txt += `Descripcion: ${solicitud.descripcion || 'Sin descripcion'}\n\n`
-    txt += `Estado: ${solicitud.estado} | Prioridad: ${solicitud.prioridad}\n`
-    txt += `Etapa de Aprobacion: ${solicitud.etapaAprobacion}\n\n`
-    txt += `Origen: ${solicitud.origenTipo || 'Manual'} (${solicitud.origenCodigo || 'N/A'})\n`
-    txt += `Solicitado por: ${solicitud.solicitadoPor || 'N/A'}\n`
-    txt += `Fecha Solicitud: ${solicitud.fechaSolicitud}\n`
-    txt += `Fecha Esperada: ${solicitud.fechaEspera || 'N/A'}\n\n`
-    txt += `--- Materiales (${materiales.length}) ---\n`
-    materiales.forEach((m: any, i: number) => {
-      txt += `  ${i + 1}. ${m.nombre || m.descripcion || 'Sin nombre'}\n`
-      txt += `     Cantidad: ${m.cantidad} ${m.unidad || 'unidad'} | Precio: $${Number(m.precioEstimado || 0).toLocaleString('es-CL')} | Total: $${Number(m.total || 0).toLocaleString('es-CL')}\n`
-      if (m.mejorUrl) txt += `     Link: ${m.mejorUrl}\n`
-    })
-    txt += `\nTotal Estimado: $${Number(solicitud.totalEstimado || 0).toLocaleString('es-CL')}\n`
-    txt += `\nBackup: ${new Date().toISOString()}\n`
-
-    await uploadFile(
-      `${solicitud.codigo} - ${solicitud.titulo.replace(/[\\/]/g, '-')}.txt`,
-      txt,
-      'text/plain',
-      scFolderId,
-      `${solicitud.codigo} - *.txt`
-    )
-    console.log(`[Drive] SC ${solicitud.codigo} respaldada`)
-  } catch (e) {
-    console.error(`[Drive] Error backup SC ${solicitud.codigo}:`, e)
-  }
-}
 
 function safeParseMateriales(raw: string): MaterialSolicitud[] {
   try {

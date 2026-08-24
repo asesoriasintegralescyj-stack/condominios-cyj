@@ -3,13 +3,7 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
-import {
-  verifyDriveConfig,
-  getParentFolderId,
-  findProjectFolder,
-  findOrCreateFolder,
-  uploadFile,
-} from '@/lib/google-drive'
+import { backupSolicitudToDrive } from '@/lib/backup-helpers'
 
 /** Auto-migra columnas faltantes en SolicitudCompra (idempotente) */
 async function ensureColumns() {
@@ -217,7 +211,7 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const updated = await db.solicitudCompra.update({ where: { id }, data })
 
     // --- Backup actualizacion SC a Google Drive (fire-and-forget) ---
-    void backupSCUpdateToDrive(updated, materialesRaw, safeParseLinks(updated.links))
+    void backupSolicitudToDrive(id)
 
     return NextResponse.json({
       ...updated,
@@ -258,61 +252,3 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
   }
 }
 
-// --- Backup actualizacion SC a Google Drive ----------------------------------------
-async function backupSCUpdateToDrive(solicitud: any, materiales: any[], links: string[]) {
-  if (!verifyDriveConfig()) return
-  try {
-    const parent = getParentFolderId()
-    let scFolderId: string | null = null
-
-    if (solicitud.origenTipo === 'Proyecto' && solicitud.origenId) {
-      const proyecto = await db.proyecto.findUnique({
-        where: { id: solicitud.origenId },
-        select: { codigo: true },
-      })
-      if (proyecto?.codigo) {
-        const projectFolderId = await findProjectFolder(proyecto.codigo)
-        if (projectFolderId) {
-          scFolderId = await findOrCreateFolder('Solicitudes de Compra', projectFolderId)
-        }
-      }
-    }
-    if (!scFolderId) {
-      scFolderId = await findOrCreateFolder('Solicitudes de Compra (Sin Proyecto)', parent)
-    }
-    if (!scFolderId) return
-
-    let txt = `SOLICITUD DE COMPRA: ${solicitud.codigo}
-`
-    txt += `${'='.repeat(60)}\n\n`
-    txt += `Titulo: ${solicitud.titulo}\n`
-    txt += `Descripcion: ${solicitud.descripcion || 'Sin descripcion'}\n\n`
-    txt += `Estado: ${solicitud.estado} | Prioridad: ${solicitud.prioridad}\n`
-    txt += `Etapa de Aprobacion: ${solicitud.etapaAprobacion}\n\n`
-    txt += `Origen: ${solicitud.origenTipo || 'Manual'} (${solicitud.origenCodigo || 'N/A'})\n`
-    txt += `Solicitado por: ${solicitud.solicitadoPor || 'N/A'}\n`
-    txt += `Fecha Solicitud: ${solicitud.fechaSolicitud}\n\n`
-    txt += `--- Materiales (${materiales.length}) ---\n`
-    materiales.forEach((m: any, i: number) => {
-      txt += `  ${i + 1}. ${m.nombre || m.descripcion || 'Sin nombre'}\n`
-      txt += `     Cantidad: ${m.cantidad} ${m.unidad || 'unidad'} | Total: $${Number(m.total || 0).toLocaleString('es-CL')}\n`
-    })
-    txt += `\nTotal Estimado: $${Number(solicitud.totalEstimado || 0).toLocaleString('es-CL')}\n`
-    if (links.length > 0) {
-      txt += `\n--- Links ---\n`
-      links.forEach((l, i) => { txt += `  ${i + 1}. ${l}\n` })
-    }
-    txt += `\nBackup: ${new Date().toISOString()}\n`
-
-    await uploadFile(
-      `${solicitud.codigo} - ${solicitud.titulo.replace(/[\\/]/g, '-')}.txt`,
-      txt,
-      'text/plain',
-      scFolderId,
-      `${solicitud.codigo} - *.txt`
-    )
-    console.log(`[Drive] SC ${solicitud.codigo} actualizada en Drive`)
-  } catch (e) {
-    console.error(`[Drive] Error backup update SC ${solicitud.codigo}:`, e)
-  }
-}

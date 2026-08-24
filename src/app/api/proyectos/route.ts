@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
+import { backupProyectoToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -364,7 +365,7 @@ export async function POST(request: NextRequest) {
     })
 
     // --- Backup a Google Drive (fire-and-forget) ---
-    void backupProyectoToDrive(proyecto)
+    void backupProyectoToDrive(proyecto.id)
 
     return NextResponse.json(proyecto)
   } catch (error) {
@@ -373,39 +374,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// --- Funcion de backup a Google Drive ---
-async function backupProyectoToDrive(proyecto: any) {
-  if (!verifyDriveConfig()) return
-  try {
-    const codigo = proyecto.codigo || `SIN-CODIGO`
-    const folders = await createProjectFolderStructure(codigo, proyecto.nombre)
-    if (!folders?.proyecto) return
-
-    const data = {
-      codigo: proyecto.codigo, nombre: proyecto.nombre, categoria: proyecto.categoria,
-      estado: proyecto.estado, ubicacion: proyecto.ubicacion, descripcion: proyecto.descripcion,
-      materiales: proyecto.materiales, herramientas: proyecto.herramientas,
-      tareas: proyecto.tareas, personal: proyecto.personal,
-      createdAt: proyecto.createdAt, updatedAt: proyecto.updatedAt,
-      _backupDate: new Date().toISOString(),
-    }
-    await uploadFile(`${codigo} - Datos del Proyecto.json`, JSON.stringify(data, null, 2), 'application/json', folders.proyecto)
-
-    const fotosAntes = parseFotos(proyecto.fotosAntes)
-    if (folders.fotosAntes) {
-      for (let i = 0; i < fotosAntes.length; i++) {
-        await uploadBase64Image(fotosAntes[i], `${codigo}_antes_${i + 1}`, folders.fotosAntes)
-      }
-    }
-
-    const fotosDespues = parseFotos(proyecto.fotosDespues)
-    if (folders.fotosDespues) {
-      for (let i = 0; i < fotosDespues.length; i++) {
-        await uploadBase64Image(fotosDespues[i], `${codigo}_despues_${i + 1}`, folders.fotosDespues)
-      }
-    }
-    console.log(`[Drive] Proyecto ${codigo} respaldado`)
-  } catch (e) {
-    console.error(`[Drive] Error backup proyecto:`, e)
-  }
-}

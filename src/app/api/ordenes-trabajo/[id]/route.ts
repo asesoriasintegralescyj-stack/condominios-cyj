@@ -2,14 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
-import {
-  verifyDriveConfig,
-  getDriveClient,
-  findOrCreateFolder,
-  uploadFile,
-  uploadBase64Image,
-  parseFotos,
-} from '@/lib/google-drive'
+import { backupOTToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -408,7 +401,7 @@ export async function PUT(
     }
 
     // ─── Backup actualización OT a Google Drive (fire-and-forget) ───
-    void backupOTUpdateToDrive(orden)
+    void backupOTToDrive(id)
 
     return NextResponse.json(orden)
   } catch (error: any) {
@@ -455,62 +448,3 @@ export async function DELETE(
   }
 }
 
-// ─── Backup actualización OT a Drive ──────────────────────────────────────
-async function backupOTUpdateToDrive(orden: any) {
-  if (!verifyDriveConfig()) return
-  try {
-    // Buscar la carpeta de la OT en Drive
-    const drive = await getDriveClient()
-    const parentRes = await drive.files.list({
-      q: `name = '${orden.otNum}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
-      fields: 'files(id, parents)',
-      pageSize: 5,
-    })
-    let otFolderId = parentRes.data.files?.[0]?.id
-    if (!otFolderId) {
-      // La OT no tiene carpeta aún (fue creada antes del backup), crearla
-      const { getParentFolderId, createOTFolderStructure } = await import('@/lib/google-drive')
-      const folders = await createOTFolderStructure(orden.otNum, null)
-      otFolderId = folders?.ot || null
-    }
-    if (!otFolderId) return
-
-    // Actualizar JSON
-    const data = {
-      otNum: orden.otNum, titulo: orden.titulo, tipo: orden.tipo, prioridad: orden.prioridad,
-      estado: orden.estado, ubicacion: orden.ubicacion, descripcion: orden.descripcion,
-      costoEstimado: orden.costoEstimado, costoReal: orden.costoReal, progreso: orden.progreso,
-      estadoAprobacion: orden.estadoAprobacion, formaPago: orden.formaPago,
-      notas: orden.notas?.replace(/\[IDEM:[^\]]+\]\s*/g, ''),
-      propiedad: orden.propiedad, asignado: orden.asignado, centroCosto: orden.centroCosto,
-      materiales: orden.materiales, herramientas: orden.herramientas,
-      tareas: orden.tareas, personalOT: orden.personalOT,
-      creadoPor: orden.creadoPorNombre, createdAt: orden.createdAt, updatedAt: orden.updatedAt,
-      _backupDate: new Date().toISOString(),
-    }
-    await uploadFile(`${orden.otNum} - Datos OT.json`, JSON.stringify(data, null, 2), 'application/json', otFolderId, `${orden.otNum} - Datos OT.json`)
-
-    // Actualizar fotos si se proporcionaron
-    if (orden.fotosAntes) {
-      const antesId = await findOrCreateFolder('Fotos Antes', otFolderId)
-      if (antesId) {
-        const fotos = parseFotos(typeof orden.fotosAntes === 'string' ? orden.fotosAntes : JSON.stringify(orden.fotosAntes))
-        for (let i = 0; i < fotos.length; i++) {
-          await uploadBase64Image(fotos[i], `${orden.otNum}_antes_${i + 1}`, antesId)
-        }
-      }
-    }
-    if (orden.fotosDespues) {
-      const despuesId = await findOrCreateFolder('Fotos Despues', otFolderId)
-      if (despuesId) {
-        const fotos = parseFotos(typeof orden.fotosDespues === 'string' ? orden.fotosDespues : JSON.stringify(orden.fotosDespues))
-        for (let i = 0; i < fotos.length; i++) {
-          await uploadBase64Image(fotos[i], `${orden.otNum}_despues_${i + 1}`, despuesId)
-        }
-      }
-    }
-    console.log(`[Drive] OT ${orden.otNum} actualizada en Drive`)
-  } catch (e) {
-    console.error(`[Drive] Error backup update OT ${orden.otNum}:`, e)
-  }
-}
