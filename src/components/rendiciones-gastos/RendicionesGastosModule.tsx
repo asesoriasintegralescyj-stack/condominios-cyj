@@ -66,6 +66,7 @@ import {
   ChevronUp,
   Loader2,
   X,
+  FileDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -1121,7 +1122,17 @@ export function RendicionesGastosModule() {
                   <span className="font-mono text-sm text-muted-foreground">{detailRendicion.codigo}</span>
                   {estadoBadge(detailRendicion.estado)}
                 </DialogTitle>
-                <DialogDescription>{detailRendicion.concepto}</DialogDescription>
+                <div className="flex items-center justify-between">
+                  <DialogDescription>{detailRendicion.concepto}</DialogDescription>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => window.open(`/api/rendiciones-gastos/${detailRendicion.id}/pdf`, '_blank')}
+                  >
+                    <FileDown className="w-4 h-4 mr-1" /> Ver PDF
+                  </Button>
+                </div>
               </DialogHeader>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
