@@ -57,8 +57,12 @@ export async function PUT(
       db.rendicionGasto.findUnique({ where: { id } })
     )
     if (!existing) return apiError('Rendición no encontrada', 404)
-    if (existing.estado !== 'Borrador' && existing.estado !== 'En Revisión') {
+    const isAdmin = session.user.rol === 'admin'
+    if (!isAdmin && existing.estado !== 'Borrador' && existing.estado !== 'En Revisión') {
       return apiError('Solo se pueden editar rendiciones en estado Borrador o En Revisión')
+    }
+    if (isAdmin && existing.estado === 'Anulada') {
+      return apiError('No se puede editar una rendición anulada')
     }
 
     const montoTotal = (boletas || []).reduce((sum: number, b: any) => sum + (Number(b.monto) || 0), 0)

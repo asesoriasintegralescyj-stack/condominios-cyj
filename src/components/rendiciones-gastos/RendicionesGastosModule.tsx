@@ -688,7 +688,7 @@ export function RendicionesGastosModule() {
                       <Button variant="outline" size="sm" onClick={() => setDetailRendicion(r)}>
                         <Eye className="w-3 h-3 mr-1" /> Ver Detalle
                       </Button>
-                      {(r.estado === 'Borrador' || r.estado === 'En Revisión') && (
+                      {(r.estado === 'Borrador' || r.estado === 'En Revisión' || (isAdmin() && r.estado !== 'Anulada')) && (
                         <Button variant="outline" size="sm" onClick={() => openEdit(r)}>
                           <Pencil className="w-3 h-3 mr-1" /> Editar
                         </Button>
