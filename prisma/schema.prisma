@@ -1626,7 +1626,7 @@ model MovilProfile {
   id          String   @id @default(cuid())
   name        String
   password    String   @default("")
-  accessCode  String   @default("")
+  accessCode  String   @default("") @unique
   color       String   @default("")
   icon        String   @default("")
   workAreaIds String[] @default([])

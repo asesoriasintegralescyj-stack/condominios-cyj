@@ -36,6 +36,7 @@ export async function GET() {
 
     const result = perfiles.map(p => ({
       ...p,
+      password: undefined,
       personal: p.personalId ? (personalMap[p.personalId] || null) : null,
     }))
 
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       user = users[0] || null
     }
 
-    return NextResponse.json({ ...perfil, personal, user }, { status: 201 })
+    return NextResponse.json({ ...perfil, password: undefined, personal, user }, { status: 201 })
   } catch (error) {
     console.error('Error creating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al crear perfil' }, { status: 500 })
