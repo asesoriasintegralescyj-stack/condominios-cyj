@@ -21,7 +21,7 @@ async function runCleanup() {
 
   // PASO 1: Encontrar userIds duplicados
   const duplicates = await db.$queryRawUnsafe(`
-    SELECT "userId", COUNT(*) as perfil_count, 
+    SELECT "userId", COUNT(*)::int as perfil_count, 
            ARRAY_AGG(id ORDER BY "createdAt") as perfil_ids,
            ARRAY_AGG(name ORDER BY "createdAt") as perfil_names
     FROM "MovilProfile"
@@ -126,9 +126,9 @@ async function runCleanup() {
   // PASO 4: Diagnostico final
   const diag = await db.$queryRawUnsafe(`
     SELECT 
-      (SELECT COUNT(*) FROM "MovilProfile" WHERE "userId" IS NOT NULL) as vinculados,
-      (SELECT COUNT(*) FROM "MovilProfile") as total,
-      (SELECT COUNT(DISTINCT "userId") FROM "MovilProfile" WHERE "userId" IS NOT NULL) as users_unicos
+      (SELECT COUNT(*)::int FROM "MovilProfile" WHERE "userId" IS NOT NULL) as vinculados,
+      (SELECT COUNT(*)::int FROM "MovilProfile") as total,
+      (SELECT COUNT(DISTINCT "userId")::int FROM "MovilProfile" WHERE "userId" IS NOT NULL) as users_unicos
   `) as any[]
 
   const d = diag[0]
@@ -136,12 +136,16 @@ async function runCleanup() {
 
   return {
     success: true,
-    totalCleaned,
-    reLinked,
-    duplicatesFound: duplicates.length,
-    mismatchedFound: mismatched.length,
+    totalCleaned: Number(totalCleaned),
+    reLinked: Number(reLinked),
+    duplicatesFound: Number(duplicates.length),
+    mismatchedFound: Number(mismatched.length),
     results,
-    diagnostics: { vinculados: d.vinculados, total: d.total, usersUnicos: d.users_unicos }
+    diagnostics: { 
+      vinculados: Number(d.vinculados), 
+      total: Number(d.total), 
+      usersUnicos: Number(d.users_unicos) 
+    }
   }
 }
 
