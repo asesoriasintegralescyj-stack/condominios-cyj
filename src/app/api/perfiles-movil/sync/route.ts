@@ -1,7 +1,11 @@
 /**
  * Auto-Sincronizar: vincula perfiles móviles con usuarios de escritorio
- * Busca coincidencias por email del Personal vinculado → email del User
- * También intenta coincidencia por nombre/apellido.
+ * 
+ * REGLAS ESTRICTAS (v2):
+ * 1. Solo vincula por email EXACTO: Personal.email = User.email
+ * 2. Un User solo puede estar vinculado a UN MovilProfile (relación 1:1)
+ * 3. Ya NO se vincula por nombre (era demasiado permisivo y causaba enlaces incorrectos)
+ * 4. Perfiles sin User correspondiente quedan con userId = NULL (correcto para guardias solo-móvil)
  */
 
 import { NextResponse } from 'next/server'
@@ -25,7 +29,7 @@ export async function POST() {
              p.nombre as "personalNombre", p.email as "personalEmail"
       FROM "MovilProfile" mp
       JOIN "Personal" p ON mp."personalId" = p.id
-      WHERE mp."userId" IS NULL AND mp."personalId" IS NOT NULL
+      WHERE mp."personalId" IS NOT NULL
     `) as any[]
 
     // 2. Obtener todos los usuarios activos
@@ -39,63 +43,73 @@ export async function POST() {
       if (u.email) emailMap.set(u.email.toLowerCase().trim(), u.id)
     }
 
-    // 4. Vincular por email del personal
+    // 4. Conjunto de userIds ya vinculados (para garantizar 1:1)
+    const alreadyLinked = new Set<string>()
+    const existingLinks = await db.$queryRawUnsafe(`
+      SELECT "userId" FROM "MovilProfile" WHERE "userId" IS NOT NULL
+    `) as any[]
+    for (const link of existingLinks) {
+      alreadyLinked.add(link.userId)
+    }
+
+    // 5. Vincular SOLO por email EXACTO del Personal → User
     let linked = 0
+    let skippedAlreadyLinked = 0
+    let skippedNoEmail = 0
+    let skippedNoMatch = 0
+
     for (const perfil of perfiles) {
+      // Si ya tiene userId asignado, verificar que sea 1:1
+      if (perfil.userId) {
+        // Este perfil ya está vinculado, lo contamos pero no tocamos
+        continue
+      }
+
       const personalEmail = (perfil.personalEmail || '').toLowerCase().trim()
-      if (!personalEmail) continue
+      if (!personalEmail) {
+        skippedNoEmail++
+        continue
+      }
 
       const userId = emailMap.get(personalEmail)
-      if (userId) {
-        await db.$executeRawUnsafe(
-          `UPDATE "MovilProfile" SET "userId" = $1 WHERE id = $2 AND "userId" IS NULL`,
-          userId, perfil.id
-        )
-        linked++
+      if (!userId) {
+        skippedNoMatch++
+        continue
       }
+
+      // Verificar que este userId no esté ya vinculado a OTRO perfil (1:1)
+      if (alreadyLinked.has(userId)) {
+        skippedAlreadyLinked++
+        continue
+      }
+
+      await db.$executeRawUnsafe(
+        `UPDATE "MovilProfile" SET "userId" = $1 WHERE id = $2 AND "userId" IS NULL`,
+        userId, perfil.id
+      )
+      alreadyLinked.add(userId)
+      linked++
     }
 
-    // 5. Intentar vincular los restantes por nombre (primera parte del nombre personal → nombre user)
-    const remaining = await db.$queryRawUnsafe(`
-      SELECT mp.id, mp.name, mp."personalId",
-             p.nombre as "personalNombre", p.email as "personalEmail"
-      FROM "MovilProfile" mp
-      JOIN "Personal" p ON mp."personalId" = p.id
-      WHERE mp."userId" IS NULL AND mp."personalId" IS NOT NULL
+    // 6. Diagnóstico final
+    const diag = await db.$queryRawUnsafe(`
+      SELECT 
+        (SELECT COUNT(*) FROM "MovilProfile" WHERE "userId" IS NOT NULL) as vinculados,
+        (SELECT COUNT(*) FROM "MovilProfile") as total
     `) as any[]
-
-    for (const perfil of remaining) {
-      const personalName = (perfil.personalNombre || '').trim().toLowerCase()
-      if (!personalName) continue
-
-      // Tomar primera palabra del nombre del personal
-      const firstName = personalName.split(' ')[0]
-      const personalEmail = (perfil.personalEmail || '').toLowerCase().trim()
-
-      // Buscar usuario cuyo nombre empiece igual Y que no tenga email conflictivo
-      const match = users.find(u => {
-        const uName = (u.nombre || '').toLowerCase().trim()
-        const uEmail = (u.email || '').toLowerCase().trim()
-        return (
-          uName.startsWith(firstName) &&
-          uEmail !== personalEmail // evitar coincidencia falsa si es el mismo email
-        )
-      })
-
-      if (match) {
-        await db.$executeRawUnsafe(
-          `UPDATE "MovilProfile" SET "userId" = $1 WHERE id = $2 AND "userId" IS NULL`,
-          match.id, perfil.id
-        )
-        linked++
-      }
-    }
 
     return NextResponse.json({
       success: true,
       linked,
       total: perfiles.length,
-      message: `Se vincularon ${linked} de ${perfiles.length} perfiles con usuarios de escritorio`,
+      vinculados: diag[0]?.vinculados || 0,
+      totalPerfiles: diag[0]?.total || 0,
+      skipped: {
+        noEmail: skippedNoEmail,
+        noMatch: skippedNoMatch,
+        alreadyLinked: skippedAlreadyLinked,
+      },
+      message: `Se vincularon ${linked} perfiles por email exacto. ${skippedAlreadyLinked} omitidos (userId ya usado), ${skippedNoEmail} sin email de personal, ${skippedNoMatch} sin coincidencia.`,
     })
   } catch (error: any) {
     console.error('Error auto-sincronizando perfiles:', error)

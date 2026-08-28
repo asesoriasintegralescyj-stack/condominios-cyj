@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
           workAreaIds: body.workAreaIds || [],
           permissions: body.permissions || ['view'],
           personalId: body.personalId || null,
+          userId: body.userId || null,
         },
       }),
     )

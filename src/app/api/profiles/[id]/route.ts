@@ -32,6 +32,9 @@ export async function PUT(
     if (body.workAreaIds !== undefined) updateData.workAreaIds = body.workAreaIds
     if (body.permissions !== undefined) updateData.permissions = body.permissions
     if (body.personalId !== undefined) updateData.personalId = body.personalId
+    if (body.userId !== undefined) {
+      updateData.userId = body.userId === '' ? null : body.userId
+    }
 
     const profile = await withRetry(() =>
       db.movilProfile.update({ where: { id }, data: updateData }),
