@@ -27,7 +27,17 @@ export async function GET(
       })
     }
 
-    return NextResponse.json({ ...perfil, personal })
+    // Lookup usuario vinculado
+    let user = null
+    if (perfil.userId) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, nombre, apellido, email, rol, activo FROM "User" WHERE id = $1`,
+        perfil.userId
+      ) as any[]
+      user = users[0] || null
+    }
+
+    return NextResponse.json({ ...perfil, password: undefined, personal, user })
   } catch (error) {
     console.error('Error fetching perfil móvil:', error)
     return NextResponse.json({ error: 'Error al obtener perfil' }, { status: 500 })
@@ -65,7 +75,17 @@ export async function PUT(
       })
     }
 
-    return NextResponse.json({ ...perfil, personal: personalLinked })
+    // Lookup usuario vinculado
+    let userLinked = null
+    if (perfil.userId) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, nombre, apellido, email, rol, activo FROM "User" WHERE id = $1`,
+        perfil.userId
+      ) as any[]
+      userLinked = users[0] || null
+    }
+
+    return NextResponse.json({ ...perfil, password: undefined, personal: personalLinked, user: userLinked })
   } catch (error) {
     console.error('Error updating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al actualizar perfil' }, { status: 500 })
