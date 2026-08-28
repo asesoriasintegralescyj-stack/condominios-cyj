@@ -238,38 +238,18 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET: Listar estado o ejecutar cleanup
+// GET: Ejecuta limpieza automaticamente al abrir con token
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const token = searchParams.get('token')
-  const action = searchParams.get('action')
   
   if (token !== MIGRATE_TOKEN) {
     return NextResponse.json({ error: 'Token de migración inválido' }, { status: 403 })
   }
 
   try {
-    // Si se pide cleanup por GET
-    if (action === 'cleanup') {
-      const result = await runCleanup()
-      return NextResponse.json(result)
-    }
-
-    // Por defecto: listar estado
-    const profiles = await db.$queryRawUnsafe(`
-      SELECT mp.id, mp.name, mp."userId", u.nombre as "userNombre", u.email as "userEmail"
-      FROM "MovilProfile" mp
-      LEFT JOIN "User" u ON mp."userId" = u.id
-      ORDER BY mp.name
-    `) as any[]
-
-    const users = await db.$queryRawUnsafe(`
-      SELECT id, nombre, apellido, email, rol, "activo"
-      FROM "User"
-      ORDER BY nombre
-    `) as any[]
-
-    return NextResponse.json({ profiles, users })
+    const result = await runCleanup()
+    return NextResponse.json(result)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
