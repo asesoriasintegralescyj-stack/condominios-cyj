@@ -54,7 +54,8 @@ async function runCleanup() {
     }
   }
 
-  // PASO 2: Limpiar donde nombre no coincide
+  // PASO 2: Limpiar donde nombre no coincide (excluir perfiles de rol)
+  const ROLE_PROFILES = ['ADMINISTRADOR', 'SUPERVISOR', 'CONSERJE', 'Conserje', 'Administrador', 'Supervisor']
   const mismatched = await db.$queryRawUnsafe(`
     SELECT mp.id, mp.name, mp."userId", u.nombre as "userNombre", u.email as "userEmail"
     FROM "MovilProfile" mp
@@ -64,6 +65,11 @@ async function runCleanup() {
   `) as any[]
 
   for (const m of mismatched) {
+    // Skip role-based profiles (ADMINISTRADOR, SUPERVISOR, Conserje)
+    if (ROLE_PROFILES.includes(m.name)) {
+      results.push(`Nombre no coincide pero es perfil de rol - MANTENIENDO: "${m.name}" -> "${m.userNombre}" (${m.userEmail})`)
+      continue
+    }
     await db.$executeRawUnsafe(
       `UPDATE "MovilProfile" SET "userId" = NULL WHERE id = $1`,
       m.id
@@ -125,7 +131,27 @@ async function runCleanup() {
     reLinked++
   }
 
-  // PASO 4: Diagnostico final
+  // PASO 4: Actualizar OTs con perfilMovilId pero sin creadoPor
+  let otsUpdated = 0
+  try {
+    const res = await db.$executeRawUnsafe(`
+      UPDATE "OrdenTrabajo" ot
+      SET "creadoPor" = mp."userId",
+          "creadoPorNombre" = mp.name
+      FROM "MovilProfile" mp
+      WHERE ot."perfilMovilId" = mp.id
+        AND mp."userId" IS NOT NULL
+        AND (ot."creadoPor" IS NULL OR ot."creadoPor" = '')
+    `)
+    otsUpdated = Number(res) || 0
+    if (otsUpdated > 0) {
+      results.push(`OTs actualizadas con creadoPor desde perfilMovilId: ${otsUpdated}`)
+    }
+  } catch (e: any) {
+    results.push(`Error actualizando OTs: ${e.message}`)
+  }
+
+  // PASO 5: Diagnostico final
   const diag = await db.$queryRawUnsafe(`
     SELECT 
       (SELECT COUNT(*)::int FROM "MovilProfile" WHERE "userId" IS NOT NULL) as vinculados,
