@@ -1,12 +1,14 @@
 /**
  * Reparar contador de Secuencia sincronizado con el máximo otNum real
- * 
+ *
  * GET /api/migrate/fix-counter?token=MIGRATE_2026_ALFREDO
- * 
+ *
  * 1. Lee MAX(otNum) de la tabla OrdenTrabajo
  * 2. Lee Secuencia.ultimoNum para OrdenTrabajo
  * 3. Si Secuencia está desactualizado, lo actualiza al valor correcto
  * 4. También repara otros contadores (Proyecto, SolicitudCompra, etc.)
+ *
+ * Force redeploy v2
  */
 
 import { NextRequest, NextResponse } from 'next/server'
