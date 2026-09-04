@@ -298,7 +298,7 @@ async function runFixCounter() {
 
   // ─── Reparar contador de SolicitudCompra ───
   const maxSC = await db.$queryRawUnsafe(`
-    SELECT COALESCE(MAX(CAST(SUBSTRING("numero" FROM 4) AS INT)), 0)::int as max_num
+    SELECT COALESCE(MAX(CAST(SUBSTRING("codigo" FROM 4) AS INT)), 0)::int as max_num
     FROM "SolicitudCompra"
   `) as any[]
 
@@ -310,7 +310,7 @@ async function runFixCounter() {
 
   const currentSCSec = secSC[0]?.num || 0
 
-  results.push(`SolicitudCompra: MAX(numero)=${maxSCNum}, Secuencia.ultimoNum=${currentSCSec}`)
+  results.push(`SolicitudCompra: MAX(codigo)=${maxSCNum}, Secuencia.ultimoNum=${currentSCSec}`)
 
   if (currentSCSec < maxSCNum) {
     await db.$executeRawUnsafe(`
