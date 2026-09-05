@@ -684,7 +684,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
-    // Solicitudes de Compra — admin solo gestiona en 2da etapa (NO aprueba como supervisor)
+    // Solicitudes de Compra — admin gestiona y aprueba en 2da etapa
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
   ],
   supervisor: [
     // Acceso de supervisión
