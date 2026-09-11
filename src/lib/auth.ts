@@ -684,8 +684,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
-    // Solicitudes de Compra — admin gestiona y aprueba en 2da etapa
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
+    // Solicitudes de Compra — admin gestiona todo (editar, eliminar, aprobar en 2da etapa)
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.eliminar', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -708,7 +708,7 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar',
     // Solicitudes de Compra — supervisor aprueba en primera etapa
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     // Acceso básico
@@ -722,14 +722,14 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver',
     // Rendicion de Gastos
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.eliminar',
-    // Solicitudes de Compra — todos pueden crear
-    'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Solicitudes de Compra — puede crear y editar
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar',
   ],
   personal: [
     // Solo puede ver OT y modificar progreso
     'ots.ver', 'ots.progreso',
-    // Solicitudes de Compra — todos pueden crear
-    'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Solicitudes de Compra — puede crear y editar
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar',
     // Catálogos (para ver manuales de herramientas)
     'catalogos.ver',
   ],

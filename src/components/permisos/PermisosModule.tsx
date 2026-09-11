@@ -74,6 +74,8 @@ const CATEGORIAS: Categoria[] = [
     permisos: [
       { id: 'solicitudescompra.ver', label: 'Ver', descripcion: 'Ver solicitudes' },
       { id: 'solicitudescompra.crear', label: 'Crear', descripcion: 'Crear solicitudes' },
+      { id: 'solicitudescompra.editar', label: 'Editar', descripcion: 'Editar solicitudes existentes' },
+      { id: 'solicitudescompra.eliminar', label: 'Eliminar', descripcion: 'Eliminar solicitudes' },
       { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Sup)', descripcion: 'Aprobar en 1ra etapa' },
       { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)', descripcion: 'Aprobar en 2da etapa' },
       { id: 'solicitudescompra.gestionar', label: 'Gestionar', descripcion: 'Gestionar compra' },

@@ -219,6 +219,8 @@ const CATEGORIAS_PERMISOS = {
     permisos: [
       { id: 'solicitudescompra.ver', label: 'Ver' },
       { id: 'solicitudescompra.crear', label: 'Crear' },
+      { id: 'solicitudescompra.editar', label: 'Editar' },
+      { id: 'solicitudescompra.eliminar', label: 'Eliminar' },
       { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Sup.)' },
       { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)' },
       { id: 'solicitudescompra.gestionar', label: 'Gestionar' },
@@ -264,7 +266,7 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
     'centros-costo.ver',
     'reportes.ver', 'reportes.exportar',
     'inventario.ver', 'inventario.editar',
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     'residentes.ver',
