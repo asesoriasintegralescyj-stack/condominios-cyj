@@ -28,10 +28,10 @@ export const maxDuration = 30
 const ETAPAS = {
   aprobar_supervisor: 'Aprobada Supervisor',
   rechazar_supervisor: 'Rechazada Supervisor',
-  devolver_supervisor: 'Pendiente Supervisor',
+  devolver_supervisor: 'Devuelta Borrador',
   aprobar_admin: 'Aprobada Admin',
   rechazar_admin: 'Rechazada Admin',
-  devolver_admin: 'Pendiente Supervisor',
+  devolver_admin: 'Devuelta Borrador',
 } as const
 
 const PERMISOS_POR_ACCION = {
@@ -68,10 +68,10 @@ export async function POST(
   const permisoRequerido = PERMISOS_POR_ACCION[accion]
 
   // Validación por rol:
-  // - acciones *_supervisor → solo rol supervisor (explícito)
+  // - acciones *_supervisor → rol supervisor o admin (admin puede intervenir en cualquier etapa)
   // - acciones *_admin → solo rol admin
-  if (accion.endsWith('_supervisor') && !isSupervisor) {
-    return apiError('Solo el Supervisor puede realizar esta acción. El Administrador interviene en la segunda etapa del flujo.', 403)
+  if (accion.endsWith('_supervisor') && !isSupervisor && !isAdmin) {
+    return apiError('Solo el Supervisor o Administrador puede realizar esta acción.', 403)
   }
   if (accion.endsWith('_admin') && !isAdmin) {
     return apiError('Solo el Administrador puede realizar esta acción.', 403)
@@ -144,12 +144,14 @@ export async function POST(
       updateData.adminObservaciones = observaciones || null
       updateData.estado = 'Rechazada'
     } else if (accion === 'devolver_supervisor') {
-      // Devolver: la solicitud vuelve a Pendiente Supervisor con observaciones
+      // Devolver: la solicitud vuelve a Borrador con observaciones
       // para que el solicitante corrija y reenvíe
-      updateData.estado = 'Solicitado'
+      updateData.estado = 'Borrador'
+      updateData.etapaAprobacion = null
     } else if (accion === 'devolver_admin') {
-      // Devolver desde admin: vuelve a Pendiente Supervisor
-      updateData.estado = 'Solicitado'
+      // Devolver desde admin: vuelve a Borrador para correcciones
+      updateData.estado = 'Borrador'
+      updateData.etapaAprobacion = null
     }
 
     // Transacción: actualizar SC + crear historial + crear notificaciones

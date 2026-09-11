@@ -684,8 +684,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
-    // Solicitudes de Compra — admin gestiona todo (editar, eliminar, aprobar en 2da etapa)
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.eliminar', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
+    // Solicitudes de Compra — admin tiene TODOS los permisos (ver, crear, editar, eliminar, aprobar ambas etapas, gestionar)
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.eliminar', 'solicitudescompra.aprobar_supervisor', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -780,15 +780,37 @@ export function getPermissions(rol: string, userPermisosOverride?: string | null
 
   try {
     const override = JSON.parse(userPermisosOverride);
-    const agregar: string[] = Array.isArray(override.agregar) ? override.agregar : [];
-    const quitar: string[] = Array.isArray(override.quitar) ? override.quitar : [];
 
-    // Base + lo que se agrega individualmente
-    const combined = [...base, ...agregar];
+    // Formato 1: { agregar: [...], quitar: [...] } — overrides relativos al rol
+    if (!Array.isArray(override) && (override.agregar || override.quitar)) {
+      const agregar: string[] = Array.isArray(override.agregar) ? override.agregar : [];
+      const quitar: string[] = Array.isArray(override.quitar) ? override.quitar : [];
+      const combined = [...base, ...agregar];
+      const removeSet = new Set(quitar);
+      return combined.filter(p => !removeSet.has(p));
+    }
 
-    // Quitar los que se han revocado (sin duplicar)
-    const removeSet = new Set(quitar);
-    return combined.filter(p => !removeSet.has(p));
+    // Formato 2: ["modulo.permiso", ...] — lista explícita de permisos activos (desde UsuariosModule)
+    // Compara con los permisos base del rol: los que están en base pero NO en la lista se quitan,
+    // los que están en la lista pero NO en base se agregan.
+    if (Array.isArray(override)) {
+      const overrideSet = new Set(override as string[]);
+      // Permisos base que siguen activos + permisos adicionales que no están en base
+      const result: string[] = [];
+      // Primero: permisos base que el usuario NO ha desactivado
+      for (const p of base) {
+        if (overrideSet.has(p)) result.push(p);
+      }
+      // Segundo: permisos adicionales que no están en el rol base
+      for (const p of override as string[]) {
+        if (!base.includes(p)) result.push(p);
+      }
+      return result;
+    }
+
+    // Formato 3: { "modulo.permiso": true/false } — objeto booleano (legacy init-admin)
+    // Ignorar y usar permisos del rol base
+    return [...base];
   } catch {
     return [...base];
   }

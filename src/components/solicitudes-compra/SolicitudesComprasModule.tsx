@@ -187,7 +187,7 @@ const emptyForm = {
 
 export function SolicitudesComprasModule() {
   const { user, hasPermission, isAdmin } = useSession()
-  const canAprobarSupervisor = !isAdmin() && hasPermission('solicitudescompra.aprobar_supervisor')
+  const canAprobarSupervisor = isAdmin() || hasPermission('solicitudescompra.aprobar_supervisor')
   const canAprobarAdmin = isAdmin() || hasPermission('solicitudescompra.aprobar_admin')
   const [solicitudes, setSolicitudes] = useState<SolicitudCompra[]>([])
   const [loading, setLoading] = useState(true)
