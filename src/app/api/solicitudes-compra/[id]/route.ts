@@ -34,8 +34,8 @@ async function ensureColumns() {
 // Transiciones válidas de estado
 const ESTADO_TRANSITIONS: Record<string, string[]> = {
   Borrador: ['Solicitado', 'Anulada'],
-  Solicitado: ['En Proceso', 'Rechazado', 'Anulada'],
-  'En Proceso': ['Comprado', 'Anulada'],
+  Solicitado: ['Borrador', 'En Proceso', 'Rechazado', 'Anulada'],  // Borrador: para devolver a borrador
+  'En Proceso': ['Borrador', 'Comprado', 'Anulada'],  // Borrador: admin puede devolver
   Comprado: ['Anulada'],
   Rechazado: [],
   Anulada: [],
@@ -181,6 +181,10 @@ export async function PUT(request: NextRequest, { params }: Context) {
         return apiError(`No se puede cambiar de "${existing.estado}" a "${body.estado}". Transiciones permitidas: ${allowed ? allowed.join(', ') : 'ninguna'}`, 400)
       }
       data.estado = String(body.estado)
+      // Si se devuelve a Borrador, resetear etapaAprobacion para permitir re-envío
+      if (String(body.estado) === 'Borrador') {
+        data.etapaAprobacion = null
+      }
     }
     if (body.prioridad !== undefined) data.prioridad = String(body.prioridad)
     if (body.fechaEspera !== undefined) data.fechaEspera = body.fechaEspera ? String(body.fechaEspera) : null

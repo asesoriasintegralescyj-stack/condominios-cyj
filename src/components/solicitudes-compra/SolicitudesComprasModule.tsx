@@ -485,7 +485,9 @@ export function SolicitudesComprasModule() {
 
     const payload = {
       ...formData,
-      estado: submitDirectly ? 'Solicitado' : 'Borrador',
+      // Al editar: NO cambiar el estado (mantener el actual).
+      // Al crear nueva: 'Borrador' por defecto, 'Solicitado' si se envía directamente.
+      estado: editing ? editing.estado : (submitDirectly ? 'Solicitado' : 'Borrador'),
       materiales: cleanMateriales,
       totalEstimado,
       links: links.map((l) => l.trim()).filter((l) => l !== ''),
@@ -548,6 +550,27 @@ export function SolicitudesComprasModule() {
       console.error(e)
       toast.error('Error de conexión')
     } finally { setSubmitting(false) }
+  }
+
+  // Volver a Borrador (admin: reabrir para edición)
+  const handleVolverBorrador = async (s: SolicitudCompra) => {
+    if (!window.confirm(`¿Devolver la solicitud ${s.codigo} a Borrador? Podrá editarla y reenviarla a revisión.`)) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/solicitudes-compra/${s.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: 'Borrador' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al devolver a borrador')
+      toast.success(`Solicitud ${s.codigo} devuelta a Borrador`)
+      setDetailOpen(false)
+      void fetchSolicitudes()
+    } catch (e) {
+      console.error(e)
+      toast.error(e instanceof Error ? e.message : 'Error al devolver a borrador')
+    } finally { setSaving(false) }
   }
 
   const handleDelete = async (s: SolicitudCompra) => {
@@ -1165,6 +1188,11 @@ export function SolicitudesComprasModule() {
                 {detail.estado === 'Borrador' && (detail.solicitadoPorId === user?.id || isAdmin()) && (
                   <Button className="bg-blue-600 hover:bg-blue-700 text-white" disabled={submitting} onClick={() => { void handleSubmitToReview(detail); setDetailOpen(false) }}>
                     {submitting ? 'Enviando...' : <><Send className="w-4 h-4 mr-1" /> Enviar a Revisión</>}
+                  </Button>
+                )}
+                {detail.estado !== 'Borrador' && detail.estado !== 'Rechazada' && detail.estado !== 'Anulada' && isAdmin() && (
+                  <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" disabled={saving} onClick={() => void handleVolverBorrador(detail)}>
+                    <RotateCcw className="w-4 h-4 mr-1" /> Volver a Borrador
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => window.open(`/api/solicitudes-compra/${detail.id}/pdf`, '_blank')}><FileText className="w-4 h-4 mr-1" /> PDF</Button>
