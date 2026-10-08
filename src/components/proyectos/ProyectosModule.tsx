@@ -2093,155 +2093,6 @@ export function ProyectosModule() {
     }
   }
 
-  // Crear Orden de Trabajo desde Proyecto (enlazada)
-  const crearOTDesdeProyecto = async (proy: Proyecto) => {
-    setCreandoOT(true)
-    try {
-      const codigoProy = proy.codigo || extraerCodigoProyecto(proy.nombre)
-      const descripcionProy = extraerDescripcion(proy.nombre)
-
-      // Mapear materiales del proyecto → materiales de OT
-      const materialesOT = (proy.materiales || [])
-        .filter((m) => (m.descripcion || '').trim() !== '')
-        .map((m) => ({
-          descripcion: (m.descripcion || '').trim(),
-          cantidad: Number(m.cantidad) || 1,
-          unidad: m.unidad || 'unidad',
-          precioUnit: Number(m.precioUnit) || 0,
-          total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
-        }))
-
-      // Mapear herramientas del proyecto → herramientas de OT
-      const herramientasOT = (proy.herramientas || [])
-        .filter((h) => (h.nombre || '').trim() !== '')
-        .map((h) => ({
-          nombre: h.nombre.trim(),
-          cantidad: Number(h.cantidad) || 1,
-        }))
-
-      // Mapear tareas del proyecto → tareas de OT
-      const tareasOT = (proy.tareas || [])
-        .filter((t) => (t.descripcion || '').trim() !== '')
-        .map((t) => ({
-          descripcion: t.descripcion.trim(),
-          cantidad: Number(t.cantidad) || 1,
-          estado: t.estado || 'Pendiente',
-        }))
-
-      // Mapear personal del proyecto → personal de OT
-      const personalOT = (proy.personal || [])
-        .filter((p) => (p.nombre || '').trim() !== '')
-        .map((p) => ({
-          nombre: p.nombre.trim(),
-          tipo: p.tipo || 'Interno',
-          cantidad: Number(p.cantidad) || 1,
-          precioUnit: Number(p.precioUnit) || 0,
-          total: Number(p.total) || 0,
-        }))
-
-      const payload = {
-        titulo: `OT desde Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
-        tipo: proy.tipoTrabajo || 'Correctivo',
-        prioridad: proy.prioridad || 'Media',
-        estado: 'Pendiente',
-        ubicacion: proy.ubicacion || null,
-        descripcion: proy.descripcion || `Orden de trabajo generada desde Proyecto ${proy.nombre} (${codigoProy}).`,
-        costoEstimado: proy.monto || proy.presProg || 0,
-        fechaInicio: proy.fechaInicio || null,
-        fechaLimite: proy.fechaFin || null,
-        centroCostoId: proy.centroCostoId || null,
-        origenTipo: 'Proyecto',
-        origenId: proy.id,
-        origenCodigo: codigoProy,
-        materiales: materialesOT,
-        herramientas: herramientasOT,
-        tareas: tareasOT,
-        personalOT,
-        notas: `Creada desde Proyecto: ${proy.nombre} (${codigoProy})`,
-      }
-
-      const res = await fetch('/api/ordenes-trabajo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.error || 'Error al crear la orden de trabajo')
-      }
-      toast.success(`OT ${data.otNum} creada desde Proyecto ${codigoProy}`)
-    } catch (error) {
-      console.error('Error creando OT desde proyecto:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al crear la orden de trabajo')
-    } finally {
-      setCreandoOT(false)
-    }
-  }
-
-  // Crear Solicitud de Compra desde Proyecto (enlazada) — versión mejorada del botón existente
-  const crearSCDesdeProyecto = async (proy: Proyecto) => {
-    setCreandoSC(true)
-    try {
-      const codigoProy = proy.codigo || extraerCodigoProyecto(proy.nombre)
-      const descripcionProy = extraerDescripcion(proy.nombre)
-
-      const materialesSolicitud = (proy.materiales || [])
-        .filter((m) => (m.descripcion || '').trim() !== '')
-        .map((m) => ({
-          nombre: (m.descripcion || '').trim(),
-          cantidad: Number(m.cantidad) || 0,
-          unidad: m.unidad || 'unidad',
-          precioEstimado: Number(m.precioUnit) || 0,
-          total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
-          linkCompra: m.linkCompra || '',
-        }))
-
-      if (materialesSolicitud.length === 0) {
-        toast.error('El proyecto no tiene materiales para solicitar')
-        setCreandoSC(false)
-        return
-      }
-
-      const links = (proy.materiales || [])
-        .map((m) => (m.linkCompra || '').trim())
-        .filter((l) => l !== '')
-
-      const total = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
-
-      const payload = {
-        titulo: `SC desde Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
-        descripcion: proy.descripcion || `Solicitud generada desde Proyecto ${proy.nombre} (${codigoProy}).`,
-        prioridad: (proy.prioridad === 'Urgente' ? 'Alta' : proy.prioridad) || 'Media',
-        materiales: materialesSolicitud,
-        totalEstimado: total,
-        origenTipo: 'Proyecto',
-        origenId: proy.id,
-        origenCodigo: codigoProy,
-        links,
-        centroCostoId: proy.centroCostoId || null,
-      }
-
-      const res = await fetch('/api/solicitudes-compra', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data?.error || 'Error al crear la solicitud de compra')
-      }
-      const emailMsg = data?.emailSkipped
-        ? ' (SMTP no configurado)'
-        : data?.emailEnviado ? ' y email enviado' : ''
-      toast.success(`SC ${data.codigo} creada desde Proyecto ${codigoProy}${emailMsg}`)
-    } catch (error) {
-      console.error('Error creando SC desde proyecto:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al crear la solicitud de compra')
-    } finally {
-      setCreandoSC(false)
-    }
-  }
-
   // ============================================
   // Crear OT y SC desde Proyecto (enlazadas)
   // ============================================
@@ -2286,6 +2137,8 @@ export function ProyectosModule() {
           total: Number(p.total) || 0,
         }))
 
+      const idempotencyToken = `OT-PROY-${proy.id}-${Date.now()}`
+
       const payload = {
         titulo: `OT desde Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
         tipo: proy.tipoTrabajo || 'Correctivo',
@@ -2305,6 +2158,7 @@ export function ProyectosModule() {
         tareas: tareasOT,
         personalOT,
         notas: `Creada desde Proyecto: ${proy.nombre} (${codigoProy})`,
+        _clientIdempotency: idempotencyToken,
       }
 
       const res = await fetch('/api/ordenes-trabajo', {
@@ -2312,11 +2166,16 @@ export function ProyectosModule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data?.details || data?.error || 'Error al crear la orden de trabajo')
+        const errorMsg = data?.details || data?.error || `Error al crear OT (HTTP ${res.status})`
+        throw new Error(errorMsg)
       }
-      toast.success(`OT ${data.otNum} creada desde Proyecto ${codigoProy}`)
+      if (data._duplicate) {
+        toast.info(`OT ya existe: ${data.otNum}`)
+      } else {
+        toast.success(`OT ${data.otNum} creada desde Proyecto ${codigoProy}`)
+      }
     } catch (error) {
       console.error('Error creando OT desde proyecto:', error)
       toast.error(error instanceof Error ? error.message : 'Error al crear la orden de trabajo')
