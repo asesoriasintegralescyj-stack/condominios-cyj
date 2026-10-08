@@ -221,82 +221,123 @@ export async function POST(request: NextRequest) {
       ? `[IDEM:${clientIdempotency}]${notasBase ? ' ' + notasBase : ''}`
       : notasBase || null
 
-    const orden = await db.ordenTrabajo.create({
-      data: {
-        otNum: nextNum,
-        titulo: otData.titulo,
-        tipo: otData.tipo || 'Correctivo',
-        prioridad: otData.prioridad || 'Media',
-        estado: otData.estado || 'Pendiente',
-        ubicacion: otData.ubicacion || null,
-        fechaInicio: otData.fechaInicio || null,
-        fechaLimite: otData.fechaLimite || null,
-        fechaInicioReal: otData.fechaInicioReal || null,
-        fechaFinReal: otData.fechaFinReal || null,
-        costoEstimado: parseFloat(otData.costoEstimado) || 0,
-        costoReal: parseFloat(otData.costoReal) || 0,
-        progreso: parseInt(otData.progreso) || 0,
-        descripcion: otData.descripcion || null,
-        tiempoEst: parseInt(otData.tiempoEst) || 0,
-        tiempoReal: parseInt(otData.tiempoReal) || 0,
-        valorHora: parseFloat(otData.valorHora) || 0,
-        notas: notasFinal,
-        propiedadId: otData.propiedadId || null,
-        asignadoId: otData.asignadoId || null,
-        activoId: otData.activoId || null,
-        centroCostoId: centroCostoId || null,
-        esRecurrente: otData.esRecurrente || false,
-        formaPago: otData.formaPago || null,
-        creadoPor: session.user.id,
-        creadoPorNombre: session.user.nombre || session.user.email,
-        origenTipo: otData.origenTipo || null,
-        origenId: otData.origenId || null,
-        origenCodigo: otData.origenCodigo || null,
-        fotosAntes: otData.fotosAntes && otData.fotosAntes.length > 0 ? JSON.stringify(otData.fotosAntes) : null,
-        fotosDespues: otData.fotosDespues && otData.fotosDespues.length > 0 ? JSON.stringify(otData.fotosDespues) : null,
-        materiales: materiales && materiales.length > 0 ? {
-          create: materiales.map((m: any) => ({
-            descripcion: m.descripcion,
-            cantidad: parseFloat(m.cantidad) || 1,
-            unidad: m.unidad || 'unidad',
-            precioUnit: parseFloat(m.precioUnit) || 0,
-            total: parseFloat(m.total) || 0,
-          }))
-        } : undefined,
-        herramientas: herramientas && herramientas.length > 0 ? {
-          create: herramientas.map((h: any) => ({
-            nombre: h.nombre,
-            cantidad: parseInt(h.cantidad) || 1,
-          }))
-        } : undefined,
-        tareas: tareas && tareas.length > 0 ? {
-          create: tareas.map((t: any) => ({
-            descripcion: t.descripcion,
-            cantidad: parseInt(t.cantidad) || 1,
-            estado: t.estado || 'Pendiente',
-            ok: t.ok === true,
-            noOk: t.noOk === true,
-            na: t.na === true,
-          }))
-        } : undefined,
-        personalOT: personalOT && personalOT.length > 0 ? {
-          create: personalOT.map((p: any) => ({
-            nombre: p.nombre,
-            tipo: p.tipo || 'Interno',
-            cantidad: parseInt(p.cantidad) || 1,
-            precioUnit: parseFloat(p.precioUnit) || 0,
-            horasTrabajadas: parseFloat(p.horasTrabajadas) || 0,
-            total: parseFloat(p.total) || 0,
-            cumple: p.cumple || null,
-            observaciones: p.observaciones || null,
-          }))
-        } : undefined,
-      },
-      include: {
-        propiedad: true, asignado: true, centroCosto: true,
-        materiales: true, herramientas: true, tareas: true, personalOT: true,
+    // Build create data — only include fields that Prisma client knows about
+    const createData: any = {
+      otNum: nextNum,
+      titulo: otData.titulo,
+      tipo: otData.tipo || 'Correctivo',
+      prioridad: otData.prioridad || 'Media',
+      estado: otData.estado || 'Pendiente',
+      ubicacion: otData.ubicacion || null,
+      fechaInicio: otData.fechaInicio || null,
+      fechaLimite: otData.fechaLimite || null,
+      fechaInicioReal: otData.fechaInicioReal || null,
+      fechaFinReal: otData.fechaFinReal || null,
+      costoEstimado: parseFloat(otData.costoEstimado) || 0,
+      costoReal: parseFloat(otData.costoReal) || 0,
+      progreso: parseInt(otData.progreso) || 0,
+      descripcion: otData.descripcion || null,
+      tiempoEst: parseInt(otData.tiempoEst) || 0,
+      tiempoReal: parseInt(otData.tiempoReal) || 0,
+      valorHora: parseFloat(otData.valorHora) || 0,
+      notas: notasFinal,
+      propiedadId: otData.propiedadId || null,
+      asignadoId: otData.asignadoId || null,
+      activoId: otData.activoId || null,
+      centroCostoId: centroCostoId || null,
+      esRecurrente: otData.esRecurrente || false,
+      formaPago: otData.formaPago || null,
+      creadoPor: session.user.id,
+      creadoPorNombre: session.user.nombre || session.user.email,
+      fotosAntes: otData.fotosAntes && otData.fotosAntes.length > 0 ? JSON.stringify(otData.fotosAntes) : null,
+      fotosDespues: otData.fotosDespues && otData.fotosDespues.length > 0 ? JSON.stringify(otData.fotosDespues) : null,
+    }
+
+    // Origen fields — try to include, but don't fail if DB columns don't exist yet
+    try {
+      createData.origenTipo = otData.origenTipo || null
+      createData.origenId = otData.origenId || null
+      createData.origenCodigo = otData.origenCodigo || null
+      createData.driveFolderId = null
+    } catch (_) { /* ignore */ }
+
+    // Nested creates for resources
+    if (materiales && materiales.length > 0) {
+      createData.materiales = {
+        create: materiales.map((m: any) => ({
+          descripcion: m.descripcion,
+          cantidad: parseFloat(m.cantidad) || 1,
+          unidad: m.unidad || 'unidad',
+          precioUnit: parseFloat(m.precioUnit) || 0,
+          total: parseFloat(m.total) || 0,
+        }))
       }
-    })
+    }
+    if (herramientas && herramientas.length > 0) {
+      createData.herramientas = {
+        create: herramientas.map((h: any) => ({
+          nombre: h.nombre,
+          cantidad: parseInt(h.cantidad) || 1,
+        }))
+      }
+    }
+    if (tareas && tareas.length > 0) {
+      createData.tareas = {
+        create: tareas.map((t: any) => ({
+          descripcion: t.descripcion,
+          cantidad: parseInt(t.cantidad) || 1,
+          estado: t.estado || 'Pendiente',
+          ok: t.ok === true,
+          noOk: t.noOk === true,
+          na: t.na === true,
+        }))
+      }
+    }
+    if (personalOT && personalOT.length > 0) {
+      createData.personalOT = {
+        create: personalOT.map((p: any) => ({
+          nombre: p.nombre,
+          tipo: p.tipo || 'Interno',
+          cantidad: parseInt(p.cantidad) || 1,
+          precioUnit: parseFloat(p.precioUnit) || 0,
+          horasTrabajadas: parseFloat(p.horasTrabajadas) || 0,
+          total: parseFloat(p.total) || 0,
+          cumple: p.cumple || null,
+          observaciones: p.observaciones || null,
+        }))
+      }
+    }
+
+    let orden
+    try {
+      orden = await db.ordenTrabajo.create({
+        data: createData,
+        include: {
+          propiedad: true, asignado: true, centroCosto: true,
+          materiales: true, herramientas: true, tareas: true, personalOT: true,
+        }
+      })
+    } catch (createErr: any) {
+      // If create fails with origen fields, retry without them
+      const errMsg = createErr?.message || String(createErr)
+      console.error(`[OT] Create failed with origen fields: ${errMsg}`)
+      if (errMsg.includes('origenTipo') || errMsg.includes('origenId') || errMsg.includes('origenCodigo') || errMsg.includes('driveFolderId') || errMsg.includes('Unknown arg')) {
+        console.log('[OT] Retrying create without origen fields...')
+        delete createData.origenTipo
+        delete createData.origenId
+        delete createData.origenCodigo
+        delete createData.driveFolderId
+        orden = await db.ordenTrabajo.create({
+          data: createData,
+          include: {
+            propiedad: true, asignado: true, centroCosto: true,
+            materiales: true, herramientas: true, tareas: true, personalOT: true,
+          }
+        })
+      } else {
+        throw createErr
+      }
+    }
 
     console.log(`[OT] Creada ${orden.otNum} por ${session.user.email} (${orden.id})`)
 
