@@ -375,13 +375,14 @@ model OrdenTrabajo {
   origenTipo        String?  // "Proyecto", "Manual", etc.
   origenId          String?  // ID de la entidad origen
   origenCodigo      String?  // Codigo legible: "PROY-001", etc.
-  
+
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
   fotosDespues    String?  // JSON array de fotos después del trabajo
 
   // Google Drive
   driveFolderId  String?  // ID de la carpeta de la OT en Drive
+
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -416,6 +417,8 @@ model OrdenTrabajo {
   @@index([perfilMovilId])
   @@index([createdAt])
   @@index([fechaInicio])
+  @@index([origenTipo, origenId])
+  @@index([driveFolderId])
 }
 
 model OTMaterial {
