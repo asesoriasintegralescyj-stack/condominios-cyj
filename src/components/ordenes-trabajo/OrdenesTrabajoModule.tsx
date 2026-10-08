@@ -158,6 +158,9 @@ interface OrdenTrabajo {
   fotosAntes?: string[]
   fotosDespues?: string[]
   creadoPorNombre?: string | null
+  origenTipo?: string | null
+  origenId?: string | null
+  origenCodigo?: string | null
 }
 
 interface Personal {

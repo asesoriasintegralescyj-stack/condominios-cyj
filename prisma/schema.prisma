@@ -371,6 +371,11 @@ model OrdenTrabajo {
   creadoPorNombre   String?  // nombre legible del creador
   perfilMovilId     String?  // ID del MovilProfile que creó la OT desde la app móvil
   
+  // Origen: permite enlazar OT a Proyecto u otra entidad
+  origenTipo        String?  // "Proyecto", "Manual", etc.
+  origenId          String?  // ID de la entidad origen
+  origenCodigo      String?  // Codigo legible: "PROY-001", etc.
+  
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
   fotosDespues    String?  // JSON array de fotos después del trabajo

@@ -13,6 +13,9 @@ export const maxDuration = 30
 async function ensureColumns() {
   const cols: { name: string; type: string }[] = [
     { name: 'driveFolderId', type: 'TEXT' },
+    { name: 'origenTipo', type: 'TEXT' },
+    { name: 'origenId', type: 'TEXT' },
+    { name: 'origenCodigo', type: 'TEXT' },
   ]
   for (const col of cols) {
     try {
@@ -29,7 +32,7 @@ async function ensureColumns() {
       console.warn(`[ensureColumns] Error con ${col.name}:`, e)
     }
   }
-  // Índice
+  // Índices
   try {
     const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
       `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='OrdenTrabajo_driveFolderId_idx')`
@@ -39,7 +42,18 @@ async function ensureColumns() {
       console.log(`[ensureColumns] Índice OrdenTrabajo_driveFolderId_idx creado`)
     }
   } catch (e) {
-    console.warn(`[ensureColumns] Error con índice:`, e)
+    console.warn(`[ensureColumns] Error con índice driveFolderId:`, e)
+  }
+  try {
+    const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='OrdenTrabajo_origen_idx')`
+    )
+    if (!r[0]?.exists) {
+      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_origen_idx" ON "OrdenTrabajo"("origenTipo","origenId")`)
+      console.log(`[ensureColumns] Índice OrdenTrabajo_origen_idx creado`)
+    }
+  } catch (e) {
+    console.warn(`[ensureColumns] Error con índice origen:`, e)
   }
 }
 
@@ -235,6 +249,9 @@ export async function POST(request: NextRequest) {
         formaPago: otData.formaPago || null,
         creadoPor: session.user.id,
         creadoPorNombre: session.user.nombre || session.user.email,
+        origenTipo: otData.origenTipo || null,
+        origenId: otData.origenId || null,
+        origenCodigo: otData.origenCodigo || null,
         fotosAntes: otData.fotosAntes && otData.fotosAntes.length > 0 ? JSON.stringify(otData.fotosAntes) : null,
         fotosDespues: otData.fotosDespues && otData.fotosDespues.length > 0 ? JSON.stringify(otData.fotosDespues) : null,
         materiales: materiales && materiales.length > 0 ? {
