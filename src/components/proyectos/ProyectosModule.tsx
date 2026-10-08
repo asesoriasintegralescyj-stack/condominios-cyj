@@ -3633,8 +3633,61 @@ export function ProyectosModule() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            {editingProy && (() => {
+              // Construir objeto Proyecto sintético con datos actuales del formulario
+              const proyFromForm: Proyecto = {
+                ...editingProy,
+                nombre: formData.nombre || editingProy.nombre,
+                categoria: formData.categoria || editingProy.categoria,
+                estado: formData.estado || editingProy.estado,
+                ubicacion: formData.ubicacion || editingProy.ubicacion,
+                fechaInicio: formData.fechaInicio || editingProy.fechaInicio,
+                fechaFin: formData.fechaFin || editingProy.fechaFin,
+                presProg: formData.presProg || editingProy.presProg,
+                descripcion: formData.descripcion || editingProy.descripcion,
+                sector: formData.sector || editingProy.sector,
+                tipoReparacion: formData.tipoReparacion || editingProy.tipoReparacion,
+                tipoTrabajo: formData.tipoTrabajo || editingProy.tipoTrabajo,
+                prioridad: formData.prioridad || editingProy.prioridad,
+                responsable: formData.responsable || editingProy.responsable,
+                responsableExterno: formData.responsableExterno || editingProy.responsableExterno,
+                tiempoEstimado: formData.tiempoEstimado || editingProy.tiempoEstimado,
+                monto: formData.monto || editingProy.monto,
+                centroCostoId: formData.centroCostoId || editingProy.centroCostoId,
+                materiales,
+                herramientas,
+                tareas,
+                personal,
+              }
+              return (
+                <>
+                  <Button
+                    variant="outline"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                    onClick={() => void crearOTDesdeProyecto(proyFromForm)}
+                    disabled={creandoOT}
+                    title="Crea una Orden de Trabajo con todos los datos del proyecto"
+                  >
+                    <ClipboardList className="w-4 h-4 mr-1" />
+                    {creandoOT ? 'Creando...' : 'Crear OT'}
+                  </Button>
+                  {materiales.length > 0 && (
+                    <Button
+                      variant="secondary"
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => void crearSCDesdeProyecto(proyFromForm)}
+                      disabled={creandoSC}
+                      title="Crea una Solicitud de Compra con los materiales del proyecto"
+                    >
+                      <ShoppingCart className="w-4 h-4 mr-1" />
+                      {creandoSC ? 'Creando...' : 'Crear SC'}
+                    </Button>
+                  )}
+                </>
+              )
+            })()}
             <Button onClick={handleSave}>Guardar Proyecto</Button>
           </DialogFooter>
         </DialogContent>
