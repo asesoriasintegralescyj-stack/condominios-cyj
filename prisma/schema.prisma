@@ -522,6 +522,10 @@ model Proyecto {
   driveFolderId  String?  // ID de la carpeta raíz del proyecto en Drive
   driveData      String?  // JSON con IDs de subcarpetas
 
+  // Vinculación con OT y SC creadas desde este proyecto
+  otsVinculadas  String?  // JSON array: [{id, otNum, titulo, estado, createdAt}]
+  scsVinculadas  String?  // JSON array: [{id, codigo, titulo, estado, createdAt}]
+
   // Relación con Condominio
   condominioId  String?
   condominio    Condominio? @relation(fields: [condominioId], references: [id])

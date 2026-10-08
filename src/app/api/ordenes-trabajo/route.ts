@@ -363,6 +363,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ─── Actualizar proyecto con la OT vinculada ───
+    if (origenTipo === 'Proyecto' && origenId) {
+      try {
+        const proyecto = await db.proyecto.findUnique({
+          where: { id: origenId },
+          select: { otsVinculadas: true },
+        })
+        if (proyecto) {
+          const existing: any[] = proyecto.otsVinculadas ? JSON.parse(proyecto.otsVinculadas) : []
+          // Evitar duplicados
+          if (!existing.find((o: any) => o.id === orden.id)) {
+            existing.push({
+              id: orden.id,
+              otNum: orden.otNum,
+              titulo: orden.titulo,
+              estado: orden.estado,
+              createdAt: new Date().toISOString(),
+            })
+            await db.$executeRawUnsafe(
+              `UPDATE "Proyecto" SET "otsVinculadas" = $1 WHERE "id" = $2`,
+              JSON.stringify(existing), origenId
+            )
+            console.log(`[OT POST] Proyecto ${origenCodigo} actualizado con OT ${orden.otNum}`)
+          }
+        }
+      } catch (proyErr: any) {
+        // Non-critical: la OT ya fue creada, esto es solo vinculación
+        console.warn(`[OT POST] No se pudo actualizar proyecto con OT vinculada: ${proyErr?.message || proyErr}`)
+      }
+    }
+
     console.log(`[OT] Creada ${orden.otNum} por ${session.user.email} (${orden.id})`)
 
     // ─── Backup a Google Drive (fire-and-forget) ───

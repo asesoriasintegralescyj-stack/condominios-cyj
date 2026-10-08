@@ -279,6 +279,33 @@ export async function POST(request: NextRequest) {
           e
         )
       }
+
+      // ─── Actualizar proyecto con la SC vinculada ───
+      try {
+        const proyecto = await db.proyecto.findUnique({
+          where: { id: solicitud.origenId },
+          select: { scsVinculadas: true },
+        })
+        if (proyecto) {
+          const existing: any[] = proyecto.scsVinculadas ? JSON.parse(proyecto.scsVinculadas) : []
+          if (!existing.find((s: any) => s.id === solicitud.id)) {
+            existing.push({
+              id: solicitud.id,
+              codigo: solicitud.codigo,
+              titulo: solicitud.titulo,
+              estado: solicitud.estado,
+              createdAt: new Date().toISOString(),
+            })
+            await db.$executeRawUnsafe(
+              `UPDATE "Proyecto" SET "scsVinculadas" = $1 WHERE "id" = $2`,
+              JSON.stringify(existing), solicitud.origenId
+            )
+            console.log(`[SC POST] Proyecto actualizado con SC ${solicitud.codigo}`)
+          }
+        }
+      } catch (proyErr: any) {
+        console.warn(`[SC POST] No se pudo actualizar proyecto con SC vinculada: ${proyErr?.message || proyErr}`)
+      }
     }
 
     // Also include any linkCompra provided in the materiales payload itself

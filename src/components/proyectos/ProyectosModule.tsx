@@ -167,6 +167,9 @@ interface Proyecto {
     personal?: number
     documentos?: number
   }
+  // Vinculación con OT y SC creadas desde este proyecto
+  otsVinculadas?: string | null  // JSON: [{id, otNum, titulo, estado, createdAt}]
+  scsVinculadas?: string | null  // JSON: [{id, codigo, titulo, estado, createdAt}]
 }
 
 // ============================================
@@ -2176,6 +2179,8 @@ export function ProyectosModule() {
       } else {
         toast.success(`OT ${data.otNum} creada desde Proyecto ${codigoProy}`)
       }
+      // Recargar proyectos para mostrar la OT vinculada
+      fetchProyectos()
     } catch (error) {
       console.error('Error creando OT desde proyecto:', error)
       toast.error(error instanceof Error ? error.message : 'Error al crear la orden de trabajo')
@@ -2239,6 +2244,8 @@ export function ProyectosModule() {
         ? ' (SMTP no configurado)'
         : data?.emailEnviado ? ' y email enviado' : ''
       toast.success(`SC ${data.codigo} creada desde Proyecto ${codigoProy}${emailMsg}`)
+      // Recargar proyectos para mostrar la SC vinculada
+      fetchProyectos()
     } catch (error) {
       console.error('Error creando SC desde proyecto:', error)
       toast.error(error instanceof Error ? error.message : 'Error al crear la solicitud de compra')
@@ -2586,14 +2593,15 @@ export function ProyectosModule() {
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaInicio')}>Inicio <SortIcon field="fechaInicio" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaFin')}>Término <SortIcon field="fechaFin" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Adj.</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '100px' }}>OT/SC</th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '70px' }}>Acc.</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={14} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : !proyectosFiltrados || proyectosFiltrados.length === 0 ? (
-                  <tr><td colSpan={14} className="p-8 text-center text-slate-400">
+                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">
                     {vistaActiva === 'completados'
                       ? 'No hay proyectos completados en el histórico'
                       : vistaActiva === 'activos'
@@ -2632,6 +2640,33 @@ export function ProyectosModule() {
                               <Paperclip className="w-3 h-3" />{totalAdj}
                             </span>
                           ) : '–'}
+                        </td>
+                        {/* Mini-badges de OT/SC vinculadas */}
+                        <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex flex-wrap gap-1 justify-center">
+                            {(() => {
+                              const ots: any[] = proy.otsVinculadas ? JSON.parse(proy.otsVinculadas) : []
+                              const scs: any[] = proy.scsVinculadas ? JSON.parse(proy.scsVinculadas) : []
+                              return (
+                                <>
+                                  {ots.map((ot: any) => (
+                                    <a key={ot.id} href={`/ordenes-trabajo?ot=${ot.id}`}
+                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 no-underline transition-colors"
+                                       title={`OT: ${ot.titulo}`}>
+                                      <ClipboardList className="w-3 h-3" />{ot.otNum}
+                                    </a>
+                                  ))}
+                                  {scs.map((sc: any) => (
+                                    <a key={sc.id} href={`/solicitudes-compra?sc=${sc.id}`}
+                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 no-underline transition-colors"
+                                       title={`SC: ${sc.titulo}`}>
+                                      <ShoppingCart className="w-3 h-3" />{sc.codigo}
+                                    </a>
+                                  ))}
+                                </>
+                              )
+                            })()}
+                          </div>
                         </td>
                         <td className="p-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center gap-0.5">
@@ -2801,6 +2836,69 @@ export function ProyectosModule() {
                   Cotizaciones: {selectedProy.cotizacionesCount || 0}
                 </div>
               </div>
+
+              {/* ─── OTs y SCs vinculadas ─── */}
+              {(() => {
+                const ots: any[] = selectedProy.otsVinculadas ? JSON.parse(selectedProy.otsVinculadas) : []
+                const scs: any[] = selectedProy.scsVinculadas ? JSON.parse(selectedProy.scsVinculadas) : []
+                if (ots.length === 0 && scs.length === 0) return null
+                return (
+                  <div className="space-y-3">
+                    {/* OTs vinculadas */}
+                    {ots.length > 0 && (
+                      <div>
+                        <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
+                          <ClipboardList className="w-3 h-3" /> Órdenes de Trabajo vinculadas
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {ots.map((ot: any) => (
+                            <a
+                              key={ot.id}
+                              href={`/ordenes-trabajo?ot=${ot.id}`}
+                              className="flex items-center gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer group no-underline"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
+                                <ClipboardList className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-blue-800 group-hover:underline truncate">{ot.otNum}</div>
+                                <div className="text-xs text-blue-600 truncate">{ot.titulo}</div>
+                                <Badge className="mt-1 text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-700 border-blue-200">{ot.estado || 'Pendiente'}</Badge>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* SCs vinculadas */}
+                    {scs.length > 0 && (
+                      <div>
+                        <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
+                          <ShoppingCart className="w-3 h-3" /> Solicitudes de Compra vinculadas
+                        </Label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {scs.map((sc: any) => (
+                            <a
+                              key={sc.id}
+                              href={`/solicitudes-compra?sc=${sc.id}`}
+                              className="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer group no-underline"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                                <ShoppingCart className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-emerald-800 group-hover:underline truncate">{sc.codigo}</div>
+                                <div className="text-xs text-emerald-600 truncate">{sc.titulo}</div>
+                                <Badge className="mt-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 border-emerald-200">{sc.estado || 'Borrador'}</Badge>
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Documentos adjuntos */}
               {selectedProy.documentos && selectedProy.documentos.length > 0 && (

@@ -143,6 +143,20 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { createdAt: 'desc' },
       })
+      // Ensure otsVinculadas/scsVinculadas columns exist (auto-migrate)
+      try {
+        for (const col of ['otsVinculadas', 'scsVinculadas']) {
+          const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+            `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col}')`
+          )
+          if (!r[0]?.exists) {
+            await db.$executeRawUnsafe(`ALTER TABLE "Proyecto" ADD COLUMN "${col}" TEXT`)
+            console.log(`[Proyectos] Columna ${col} agregada a Proyecto`)
+          }
+        }
+      } catch (e) {
+        console.warn('[Proyectos] Error asegurando columnas otsVinculadas/scsVinculadas:', e)
+      }
       return NextResponse.json(proyectosRaw)
     }
 
@@ -186,6 +200,9 @@ export async function GET(request: NextRequest) {
         fotosAntes: true,
         fotosDespues: true,
         cotizaciones: true,
+        // Vinculación con OT y SC
+        otsVinculadas: true,
+        scsVinculadas: true,
         // Counts en lugar de datos completos de relaciones
         _count: {
           select: {
