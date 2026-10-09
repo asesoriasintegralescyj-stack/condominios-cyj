@@ -3792,6 +3792,38 @@ export function ProyectosModule() {
               }
               return (
                 <>
+                  {/* ── Botones de navegación directa a OT/SC vinculadas ── */}
+                  {(() => {
+                    const ots: any[] = editingProy?.otsVinculadas ? JSON.parse(editingProy.otsVinculadas) : []
+                    const scs: any[] = editingProy?.scsVinculadas ? JSON.parse(editingProy.scsVinculadas) : []
+                    if (ots.length === 0 && scs.length === 0) return null
+                    return (
+                      <div className="flex flex-wrap gap-1.5 mr-auto">
+                        {ots.map((ot: any) => (
+                          <a
+                            key={ot.id}
+                            href={`/ordenes-trabajo?ot=${ot.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-xs"
+                            title={`Ir a OT ${ot.otNum}: ${ot.titulo}`}
+                          >
+                            <ClipboardList className="w-3.5 h-3.5" />
+                            Ir a OT {ot.otNum}
+                          </a>
+                        ))}
+                        {scs.map((sc: any) => (
+                          <a
+                            key={sc.id}
+                            href={`/solicitudes-compra?sc=${sc.id}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-xs"
+                            title={`Ir a SC ${sc.codigo}: ${sc.titulo}`}
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            Ir a SC {sc.codigo}
+                          </a>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   <Button
                     variant="outline"
                     className="border-blue-300 text-blue-700 hover:bg-blue-50"
