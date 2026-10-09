@@ -146,38 +146,75 @@ export async function GET(request: NextRequest) {
 
     if (detail) {
       // Modo detalle: incluir todas las relaciones (para vista de detalle)
-      const proyectosRaw = await db.proyecto.findMany({
-        where,
-        include: {
-          materiales: true,
-          herramientas: true,
-          tareas: true,
-          personal: true,
-          documentos: true,
-          centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-      // Ensure otsVinculadas/scsVinculadas columns exist (auto-migrate)
+      // NOTA: usamos include, que trae TODOS los campos escalares incluyendo otsVinculadas/scsVinculadas
+      // Si las columnas no existen (migration fallida), usamos fallback sin vinculacion
+      let proyectosRaw: any[]
       try {
-        for (const col of ['otsVinculadas', 'scsVinculadas']) {
-          const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
-            `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col}')`
+        proyectosRaw = await db.proyecto.findMany({
+          where,
+          include: {
+            materiales: true,
+            herramientas: true,
+            tareas: true,
+            personal: true,
+            documentos: true,
+            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      } catch (detailErr: any) {
+        // Si falla por columnas faltantes, hacer query sin depender de ellas
+        console.warn('[Proyectos] Detail query failed, trying fallback:', detailErr?.message)
+        proyectosRaw = await db.proyecto.findMany({
+          where,
+          select: {
+            id: true, codigo: true, nombre: true, categoria: true, estado: true,
+            ubicacion: true, fechaInicio: true, fechaFin: true, presProg: true,
+            presUsado: true, avance: true, descripcion: true, notas: true,
+            createdAt: true, updatedAt: true, sector: true, tipoReparacion: true,
+            tipoTrabajo: true, prioridad: true, estadoAprobacion: true,
+            responsable: true, responsableExterno: true, tiempoEstimado: true,
+            monto: true, fechaInicioReal: true, fechaFinReal: true, comentarios: true,
+            centroCostoId: true, condominioId: true, fotosAntes: true, fotosDespues: true,
+            cotizaciones: true, driveFolderId: true, driveData: true,
+            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+            materiales: true, herramientas: true, tareas: true, personal: true, documentos: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      }
+
+      // Vinculacion OT/SC via raw SQL (nunca bloquea la consulta principal)
+      try {
+        const ids = proyectosRaw.map((p: any) => p.id)
+        if (ids.length > 0) {
+          const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
+            `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
+            ids
           )
-          if (!r[0]?.exists) {
-            await db.$executeRawUnsafe(`ALTER TABLE "Proyecto" ADD COLUMN "${col}" TEXT`)
-            console.log(`[Proyectos] Columna ${col} agregada a Proyecto`)
+          const vincMap = new Map(vincData.map(v => [v.id, v]))
+          for (const p of proyectosRaw) {
+            const v = vincMap.get(p.id)
+            p.otsVinculadas = v?.otsVinculadas ?? null
+            p.scsVinculadas = v?.scsVinculadas ?? null
           }
         }
-      } catch (e) {
-        console.warn('[Proyectos] Error asegurando columnas otsVinculadas/scsVinculadas:', e)
+      } catch (vincErr: any) {
+        console.warn('[Proyectos] No se pudo obtener vinculacion OT/SC (detail):', vincErr?.message)
+        for (const p of proyectosRaw) {
+          if (!('otsVinculadas' in p)) p.otsVinculadas = null
+          if (!('scsVinculadas' in p)) p.scsVinculadas = null
+        }
       }
+
       return NextResponse.json(proyectosRaw)
     }
 
     // Modo listado: NO incluir relaciones pesadas (optimización transferencia BD)
     // Pero SÍ incluir fotosAntes/fotosDespues/cotizaciones (son JSON strings livianos)
     // para que stripBase64 pueda contar los adjuntos
+    // IMPORTANTE: otsVinculadas/scsVinculadas se obtienen via raw SQL DESPUÉS
+    // para que la consulta principal NUNCA falle por columnas faltantes
     const proyectosRaw = await db.proyecto.findMany({
       where,
       select: {
@@ -215,9 +252,6 @@ export async function GET(request: NextRequest) {
         fotosAntes: true,
         fotosDespues: true,
         cotizaciones: true,
-        // Vinculación con OT y SC
-        otsVinculadas: true,
-        scsVinculadas: true,
         // Counts en lugar de datos completos de relaciones
         _count: {
           select: {
@@ -231,6 +265,29 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' },
     })
+
+    // Vinculacion OT/SC via raw SQL (nunca bloquea la consulta principal)
+    try {
+      const ids = proyectosRaw.map((p: any) => p.id)
+      if (ids.length > 0) {
+        const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
+          `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
+          ids
+        )
+        const vincMap = new Map(vincData.map(v => [v.id, v]))
+        for (const p of proyectosRaw as any[]) {
+          const v = vincMap.get(p.id)
+          p.otsVinculadas = v?.otsVinculadas ?? null
+          p.scsVinculadas = v?.scsVinculadas ?? null
+        }
+      }
+    } catch (vincErr: any) {
+      console.warn('[Proyectos] No se pudo obtener vinculacion OT/SC (list):', vincErr?.message)
+      for (const p of proyectosRaw as any[]) {
+        (p as any).otsVinculadas = null
+        ;(p as any).scsVinculadas = null
+      }
+    }
 
     // En la vista de lista, ocultamos base64 pesados
     const proyectos = proyectosRaw.map((p) => stripBase64(p))
