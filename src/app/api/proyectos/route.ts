@@ -110,6 +110,21 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
     const detail = searchParams.get('detail') === 'true'
 
+    // Ensure otsVinculadas/scsVinculadas columns exist BEFORE any query
+    try {
+      for (const col of ['otsVinculadas', 'scsVinculadas']) {
+        const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+          `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col}')`
+        )
+        if (!r[0]?.exists) {
+          await db.$executeRawUnsafe(`ALTER TABLE "Proyecto" ADD COLUMN "${col}" TEXT`)
+          console.log(`[Proyectos] Columna ${col} agregada a Proyecto`)
+        }
+      }
+    } catch (e) {
+      console.warn('[Proyectos] Error asegurando columnas otsVinculadas/scsVinculadas:', e)
+    }
+
     // Filtrar por condominio (incluye proyectos sin condominioId asignado)
     const where: any = {
       OR: [{ condominioId: CONDOMINIO_ID }, { condominioId: null }],
