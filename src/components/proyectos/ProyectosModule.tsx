@@ -2837,14 +2837,39 @@ export function ProyectosModule() {
                 </div>
               </div>
 
-              {/* ─── OTs y SCs vinculadas ─── */}
+              {/* ─── Botones de navegación directa a OT/SC ─── */}
               {(() => {
                 const ots: any[] = selectedProy.otsVinculadas ? JSON.parse(selectedProy.otsVinculadas) : []
                 const scs: any[] = selectedProy.scsVinculadas ? JSON.parse(selectedProy.scsVinculadas) : []
                 if (ots.length === 0 && scs.length === 0) return null
                 return (
                   <div className="space-y-3">
-                    {/* OTs vinculadas */}
+                    {/* ── Botones prominentes "Ir a OT" / "Ir a SC" ── */}
+                    <div className="flex flex-wrap gap-2">
+                      {ots.map((ot: any) => (
+                        <a
+                          key={ot.id}
+                          href={`/ordenes-trabajo?ot=${ot.id}`}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                        >
+                          <ClipboardList className="w-4 h-4" />
+                          Ir a OT {ot.otNum}
+                          <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-blue-700 text-blue-100 border-blue-800">{ot.estado || 'Pendiente'}</Badge>
+                        </a>
+                      ))}
+                      {scs.map((sc: any) => (
+                        <a
+                          key={sc.id}
+                          href={`/solicitudes-compra?sc=${sc.id}`}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                          Ir a SC {sc.codigo}
+                          <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-700 text-emerald-100 border-emerald-800">{sc.estado || 'Borrador'}</Badge>
+                        </a>
+                      ))}
+                    </div>
+                    {/* ── Detalle de OTs vinculadas (tarjetas expandibles) ── */}
                     {ots.length > 0 && (
                       <div>
                         <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
@@ -2870,7 +2895,7 @@ export function ProyectosModule() {
                         </div>
                       </div>
                     )}
-                    {/* SCs vinculadas */}
+                    {/* ── Detalle de SCs vinculadas ── */}
                     {scs.length > 0 && (
                       <div>
                         <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
