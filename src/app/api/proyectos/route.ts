@@ -184,19 +184,75 @@ export async function GET(request: NextRequest) {
         })
       }
 
-      // Vinculacion OT/SC via raw SQL (nunca bloquea la consulta principal)
+      // Vinculacion OT/SC: cache (otsVinculadas/scsVinculadas) + búsqueda en tiempo real
       try {
         const ids = proyectosRaw.map((p: any) => p.id)
         if (ids.length > 0) {
+          // 1. Leer cache de vinculacion
           const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
             `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
             ids
           )
           const vincMap = new Map(vincData.map(v => [v.id, v]))
+
+          // 2. Para proyectos sin cache, buscar OTs/SCs por origenTipo/origenId en tiempo real
+          const idsWithoutOTCache: string[] = []
+          const idsWithoutSCCache: string[] = []
           for (const p of proyectosRaw) {
             const v = vincMap.get(p.id)
+            const hasOTCache = v?.otsVinculadas && v.otsVinculadas !== '[]' && v.otsVinculadas !== 'null'
+            const hasSCCache = v?.scsVinculadas && v.scsVinculadas !== '[]' && v.scsVinculadas !== 'null'
             p.otsVinculadas = v?.otsVinculadas ?? null
             p.scsVinculadas = v?.scsVinculadas ?? null
+            if (!hasOTCache) idsWithoutOTCache.push(p.id)
+            if (!hasSCCache) idsWithoutSCCache.push(p.id)
+          }
+
+          // 3. Buscar OTs vinculadas por origenTipo='Proyecto' en OrdenTrabajo
+          if (idsWithoutOTCache.length > 0) {
+            try {
+              const otsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; otNum: string; titulo: string; estado: string; createdAt: string }[]>(
+                `SELECT "origenId", "id", "otNum", "titulo", "estado", "createdAt" FROM "OrdenTrabajo" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+                idsWithoutOTCache
+              )
+              // Agrupar por proyecto y actualizar
+              const otByProject = new Map<string, any[]>()
+              for (const ot of otsRealtime) {
+                if (!otByProject.has(ot.origenId)) otByProject.set(ot.origenId, [])
+                otByProject.get(ot.origenId)!.push({ id: ot.id, otNum: ot.otNum, titulo: ot.titulo, estado: ot.estado, createdAt: ot.createdAt })
+              }
+              for (const p of proyectosRaw) {
+                const ots = otByProject.get(p.id)
+                if (ots && ots.length > 0) {
+                  p.otsVinculadas = JSON.stringify(ots)
+                }
+              }
+            } catch (otErr: any) {
+              console.warn('[Proyectos] Búsqueda realtime OTs falló:', otErr?.message)
+            }
+          }
+
+          // 4. Buscar SCs vinculadas por origenTipo='Proyecto' en SolicitudCompra
+          if (idsWithoutSCCache.length > 0) {
+            try {
+              const scsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; codigo: string; titulo: string; estado: string; createdAt: string }[]>(
+                `SELECT "origenId", "id", "codigo", "titulo", "estado", "createdAt" FROM "SolicitudCompra" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+                idsWithoutSCCache
+              )
+              const scByProject = new Map<string, any[]>()
+              for (const sc of scsRealtime) {
+                if (!scByProject.has(sc.origenId)) scByProject.set(sc.origenId, [])
+                scByProject.get(sc.origenId)!.push({ id: sc.id, codigo: sc.codigo, titulo: sc.titulo, estado: sc.estado, createdAt: sc.createdAt })
+              }
+              for (const p of proyectosRaw) {
+                const scs = scByProject.get(p.id)
+                if (scs && scs.length > 0) {
+                  p.scsVinculadas = JSON.stringify(scs)
+                }
+              }
+            } catch (scErr: any) {
+              console.warn('[Proyectos] Búsqueda realtime SCs falló:', scErr?.message)
+            }
           }
         }
       } catch (vincErr: any) {
@@ -266,19 +322,77 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Vinculacion OT/SC via raw SQL (nunca bloquea la consulta principal)
+    // Vinculacion OT/SC: cache + búsqueda en tiempo real (nunca bloquea la consulta principal)
     try {
       const ids = proyectosRaw.map((p: any) => p.id)
       if (ids.length > 0) {
+        // 1. Leer cache
         const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
           `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
           ids
         )
         const vincMap = new Map(vincData.map(v => [v.id, v]))
+
+        // 2. Identificar proyectos sin cache
+        const idsWithoutOTCache: string[] = []
+        const idsWithoutSCCache: string[] = []
         for (const p of proyectosRaw as any[]) {
           const v = vincMap.get(p.id)
+          const hasOTCache = v?.otsVinculadas && v.otsVinculadas !== '[]' && v.otsVinculadas !== 'null'
+          const hasSCCache = v?.scsVinculadas && v.scsVinculadas !== '[]' && v.scsVinculadas !== 'null'
           p.otsVinculadas = v?.otsVinculadas ?? null
           p.scsVinculadas = v?.scsVinculadas ?? null
+          if (!hasOTCache) idsWithoutOTCache.push(p.id)
+          if (!hasSCCache) idsWithoutSCCache.push(p.id)
+        }
+
+        // 3. Buscar OTs en tiempo real
+        if (idsWithoutOTCache.length > 0) {
+          try {
+            const otsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; otNum: string; titulo: string; estado: string; createdAt: string }[]>(
+              `SELECT "origenId", "id", "otNum", "titulo", "estado", "createdAt" FROM "OrdenTrabajo" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+              idsWithoutOTCache
+            )
+            const otByProject = new Map<string, any[]>()
+            for (const ot of otsRealtime) {
+              if (!otByProject.has(ot.origenId)) otByProject.set(ot.origenId, [])
+              otByProject.get(ot.origenId)!.push({ id: ot.id, otNum: ot.otNum, titulo: ot.titulo, estado: ot.estado, createdAt: ot.createdAt })
+            }
+            for (const p of proyectosRaw as any[]) {
+              const ots = otByProject.get(p.id)
+              if (ots && ots.length > 0) {
+                p.otsVinculadas = JSON.stringify(ots)
+                // Backfill cache para próxima vez
+                try { await db.$executeRawUnsafe(`UPDATE "Proyecto" SET "otsVinculadas" = $1 WHERE "id" = $2`, JSON.stringify(ots), p.id) } catch {}
+              }
+            }
+          } catch (otErr: any) {
+            console.warn('[Proyectos] Búsqueda realtime OTs (list) falló:', otErr?.message)
+          }
+        }
+
+        // 4. Buscar SCs en tiempo real
+        if (idsWithoutSCCache.length > 0) {
+          try {
+            const scsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; codigo: string; titulo: string; estado: string; createdAt: string }[]>(
+              `SELECT "origenId", "id", "codigo", "titulo", "estado", "createdAt" FROM "SolicitudCompra" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+              idsWithoutSCCache
+            )
+            const scByProject = new Map<string, any[]>()
+            for (const sc of scsRealtime) {
+              if (!scByProject.has(sc.origenId)) scByProject.set(sc.origenId, [])
+              scByProject.get(sc.origenId)!.push({ id: sc.id, codigo: sc.codigo, titulo: sc.titulo, estado: sc.estado, createdAt: sc.createdAt })
+            }
+            for (const p of proyectosRaw as any[]) {
+              const scs = scByProject.get(p.id)
+              if (scs && scs.length > 0) {
+                p.scsVinculadas = JSON.stringify(scs)
+                try { await db.$executeRawUnsafe(`UPDATE "Proyecto" SET "scsVinculadas" = $1 WHERE "id" = $2`, JSON.stringify(scs), p.id) } catch {}
+              }
+            }
+          } catch (scErr: any) {
+            console.warn('[Proyectos] Búsqueda realtime SCs (list) falló:', scErr?.message)
+          }
         }
       }
     } catch (vincErr: any) {
