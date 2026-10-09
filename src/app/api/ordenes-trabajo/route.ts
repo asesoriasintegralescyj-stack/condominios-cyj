@@ -366,12 +366,13 @@ export async function POST(request: NextRequest) {
     // ─── Actualizar proyecto con la OT vinculada ───
     if (origenTipo === 'Proyecto' && origenId) {
       try {
-        const proyecto = await db.proyecto.findUnique({
-          where: { id: origenId },
-          select: { otsVinculadas: true },
-        })
-        if (proyecto) {
-          const existing: any[] = proyecto.otsVinculadas ? JSON.parse(proyecto.otsVinculadas) : []
+        // Usar raw SQL para leer otsVinculadas (Prisma select puede fallar si columna no existe)
+        const [proyectoRow] = await db.$queryRawUnsafe<{ otsVinculadas: string | null }[]>(
+          `SELECT "otsVinculadas" FROM "Proyecto" WHERE "id" = $1`,
+          origenId
+        )
+        if (proyectoRow) {
+          const existing: any[] = proyectoRow.otsVinculadas ? JSON.parse(proyectoRow.otsVinculadas) : []
           // Evitar duplicados
           if (!existing.find((o: any) => o.id === orden.id)) {
             existing.push({

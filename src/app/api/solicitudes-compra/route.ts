@@ -282,12 +282,13 @@ export async function POST(request: NextRequest) {
 
       // ─── Actualizar proyecto con la SC vinculada ───
       try {
-        const proyecto = await db.proyecto.findUnique({
-          where: { id: solicitud.origenId },
-          select: { scsVinculadas: true },
-        })
-        if (proyecto) {
-          const existing: any[] = proyecto.scsVinculadas ? JSON.parse(proyecto.scsVinculadas) : []
+        // Usar raw SQL para leer scsVinculadas (Prisma select puede fallar si columna no existe)
+        const [proyectoRow] = await db.$queryRawUnsafe<{ scsVinculadas: string | null }[]>(
+          `SELECT "scsVinculadas" FROM "Proyecto" WHERE "id" = $1`,
+          solicitud.origenId
+        )
+        if (proyectoRow) {
+          const existing: any[] = proyectoRow.scsVinculadas ? JSON.parse(proyectoRow.scsVinculadas) : []
           if (!existing.find((s: any) => s.id === solicitud.id)) {
             existing.push({
               id: solicitud.id,
