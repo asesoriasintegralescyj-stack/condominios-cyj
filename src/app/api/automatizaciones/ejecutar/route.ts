@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -88,8 +89,18 @@ export async function POST(request: NextRequest) {
         headers: {},
       }
 
+      // Pasar cookies de sesión del usuario actual para que los endpoints
+      // internos puedan autenticar con getCurrentSession()
+      try {
+        const cookieStore = await cookies()
+        const sessionCookie = cookieStore.get('condominio_session')
+        if (sessionCookie?.value) {
+          fetchOptions.headers['Cookie'] = `condominio_session=${sessionCookie.value}`
+        }
+      } catch {}
+
       if (auto.requiereAuth && session.user) {
-        // Agregar header de autorización interno
+        // Agregar header de autorización interno como fallback
         fetchOptions.headers['X-Internal-Auth'] = 'true'
         fetchOptions.headers['X-User-Id'] = session.user.id
         fetchOptions.headers['X-User-Rol'] = session.user.rol

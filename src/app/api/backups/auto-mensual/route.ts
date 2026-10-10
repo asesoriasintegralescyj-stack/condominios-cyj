@@ -74,8 +74,9 @@ const MAX_FOTOS_POR_ITEM = 10
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
+  const xInternalAuth = request.headers.get('x-internal-auth') === 'true'
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!xInternalAuth && cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     const { getCurrentSession } = await import('@/lib/auth')
     const session = await getCurrentSession()
     if (!session || session.user.rol !== 'admin') {

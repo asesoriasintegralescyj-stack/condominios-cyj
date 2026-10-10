@@ -26,9 +26,7 @@ function fechaSantiagoISO(d: Date): string {
 }
 
 export async function POST(request: NextRequest) {
-  // Verificar acceso: usuario autenticado admin/supervisor O cron de Vercel
-  // Vercel envía automáticamente Authorization: Bearer <CRON_SECRET> cuando
-  // la variable CRON_SECRET está configurada en el proyecto.
+  // Verificar acceso: usuario autenticado admin/supervisor O cron de Vercel O llamada interna
   const authHeader = request.headers.get('authorization') || ''
   const xCronSecret = request.headers.get('x-cron-secret') || ''
   const cronSecret = process.env.CRON_SECRET
@@ -40,13 +38,24 @@ export async function POST(request: NextRequest) {
   // Para llamadas GET de Vercel Cron (que no envían body), aceptar también
   const isVercelCron = request.headers.get('x-vercel-cron') === '1'
 
-  if (!isCron && !isVercelCron) {
+  // Llamada interna desde automatizaciones (con header X-Internal-Auth)
+  const xInternalAuth = request.headers.get('x-internal-auth') === 'true'
+  const xUserRole = request.headers.get('x-user-rol') || ''
+
+  if (!isCron && !isVercelCron && !xInternalAuth) {
     const session = await getCurrentSession()
     if (!session) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
     }
     if (session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
       return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
+  }
+
+  // Validar que el rol interno sea admin/supervisor
+  if (xInternalAuth && !isCron && !isVercelCron) {
+    if (xUserRole !== 'admin' && xUserRole !== 'supervisor') {
+      return NextResponse.json({ error: 'Sin permisos (rol interno)' }, { status: 403 })
     }
   }
 
