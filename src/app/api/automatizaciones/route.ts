@@ -1,6 +1,6 @@
 /**
  * API: /api/automatizaciones
- * GET  - Listar todas las automatizaciones
+ * GET  - Listar todas las automatizaciones (y crear tablas si no existen)
  * PATCH - Actualizar cualquier campo (activa, modoManual, correos, schedule, etc.)
  */
 
@@ -11,8 +11,9 @@ import { getCurrentSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-// Crear tablas si no existen (con todas las columnas nuevas)
+// Crear tablas y columnas si no existen
 async function ensureTables() {
+  // Crear tabla si no existe
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Automatizacion" (
       "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
@@ -50,26 +51,21 @@ async function ensureTables() {
       CONSTRAINT "Automatizacion_pkey" PRIMARY KEY ("id"),
       CONSTRAINT "Automatizacion_codigo_key" UNIQUE ("codigo")
     );
-  `)
+  `).catch((err) => console.error('CREATE TABLE Automatizacion error:', err))
 
-  // Agregar columnas nuevas si no existen (migración on-the-fly)
-  const newCols = [
-    { name: 'correos', type: 'TEXT' },
-    { name: 'fechaInicio', type: 'TIMESTAMP(3)' },
-    { name: 'fechaFin', type: 'TIMESTAMP(3)' },
-    { name: 'horaEjecucion', type: 'TEXT' },
-    { name: 'diasSemana', type: 'TEXT' },
+  // Migración: agregar columnas nuevas si no existen
+  const migrations = [
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "correos" TEXT`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaInicio" TIMESTAMP(3)`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaFin" TIMESTAMP(3)`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "horaEjecucion" TEXT`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "diasSemana" TEXT`,
   ]
-  for (const col of newCols) {
-    await db.$executeRawUnsafe(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Automatizacion' AND column_name = '${col.name}') THEN
-          ALTER TABLE "Automatizacion" ADD COLUMN "${col.name}" ${col.type};
-        END IF;
-      END $$;
-    `).catch(() => {})
+  for (const sql of migrations) {
+    await db.$executeRawUnsafe(sql).catch((err) => console.error('Migration error:', sql, err))
   }
 
+  // Tabla de logs
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
       "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
@@ -83,8 +79,9 @@ async function ensureTables() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
     );
-  `)
+  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
 
+  // Índices
   const indexes = [
     'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
     'CREATE INDEX IF NOT EXISTS "Automatizacion_activa_idx" ON "Automatizacion"("activa")',
@@ -124,13 +121,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
     }
 
-    await ensureTables()
-
     const body = await request.json()
     const { codigo } = body
 
     if (!codigo) {
       return NextResponse.json({ error: 'codigo es requerido' }, { status: 400 })
+    }
+
+    // Verificar que la automatización existe
+    const existing = await db.$queryRawUnsafe(
+      `SELECT "codigo" FROM "Automatizacion" WHERE "codigo" = $1 LIMIT 1`,
+      codigo
+    ) as any[]
+
+    if (existing.length === 0) {
+      return NextResponse.json({ error: 'Automatización no encontrada' }, { status: 404 })
     }
 
     // Construir SET dinámico con los campos permitidos
@@ -146,18 +151,24 @@ export async function PATCH(request: NextRequest) {
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
+        let value = body[field]
+
+        // Convertir arrays a JSON string
         if (field === 'correos' || field === 'diasSemana' || field === 'parametros') {
-          // Guardar como JSON string si es array
-          const val = Array.isArray(body[field]) ? JSON.stringify(body[field]) : body[field]
-          setClauses.push(`"${field}" = $${paramIdx}`)
-          values.push(val)
-        } else if (field === 'fechaInicio' || field === 'fechaFin') {
-          setClauses.push(`"${field}" = $${paramIdx}`)
-          values.push(body[field] ? new Date(body[field]) : null)
-        } else {
-          setClauses.push(`"${field}" = $${paramIdx}`)
-          values.push(body[field])
+          value = Array.isArray(value) ? JSON.stringify(value) : value
         }
+        // Convertir fechas a string ISO (para compatibilidad con $executeRawUnsafe)
+        else if (field === 'fechaInicio' || field === 'fechaFin') {
+          if (value) {
+            // Si es "2026-10-11", convertir a timestamp compatible
+            value = new Date(value).toISOString()
+          } else {
+            value = null
+          }
+        }
+
+        setClauses.push(`"${field}" = $${paramIdx}`)
+        values.push(value)
         paramIdx++
       }
     }
@@ -169,20 +180,26 @@ export async function PATCH(request: NextRequest) {
     setClauses.push(`"updatedAt" = CURRENT_TIMESTAMP`)
     values.push(codigo)
 
-    await db.$executeRawUnsafe(`
-      UPDATE "Automatizacion" SET ${setClauses.join(', ')} WHERE "codigo" = $${paramIdx}
-    `, ...values)
+    const sql = `UPDATE "Automatizacion" SET ${setClauses.join(', ')} WHERE "codigo" = $${paramIdx}`
+    console.log('PATCH SQL:', sql)
+    console.log('PATCH values:', JSON.stringify(values))
+
+    await db.$executeRawUnsafe(sql, ...values)
 
     // Log
     const changedFields = allowedFields.filter(f => body[f] !== undefined)
-    await db.$executeRawUnsafe(`
-      INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
-      VALUES ($1, 'configuracion', 'exitoso', $2, $3)
-    `, codigo, `Campos actualizados: ${changedFields.join(', ')}`, session.user.id)
+    try {
+      await db.$executeRawUnsafe(`
+        INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
+        VALUES ($1, 'configuracion', 'exitoso', $2, $3)
+      `, codigo, `Campos actualizados: ${changedFields.join(', ')}`, session.user.id)
+    } catch (logErr) {
+      console.error('Error writing config log (non-critical):', logErr)
+    }
 
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, updated: changedFields })
   } catch (error: any) {
     console.error('Error PATCH /api/automatizaciones:', error)
-    return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 })
+    return NextResponse.json({ error: error.message || 'Error interno', detail: error.code }, { status: 500 })
   }
 }

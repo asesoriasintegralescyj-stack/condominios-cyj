@@ -148,6 +148,7 @@ export function AutomatizacionesModule() {
   const [configReintentos, setConfigReintentos] = useState(1)
   const [configTimeout, setConfigTimeout] = useState(30)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const isAdmin = user?.rol === 'admin'
 
@@ -232,16 +233,37 @@ export function AutomatizacionesModule() {
     await fetchLogs(codigo)
   }
 
+  const parseCorreos = (correos: string | null): string[] => {
+    if (!correos) return []
+    try { const parsed = JSON.parse(correos); return Array.isArray(parsed) ? parsed : [] }
+    catch { return [] }
+  }
+
+  const parseDias = (dias: string | null): number[] => {
+    if (!dias) return [1, 2, 3, 4, 5]
+    try { const parsed = JSON.parse(dias); return Array.isArray(parsed) ? parsed : [1, 2, 3, 4, 5] }
+    catch { return [1, 2, 3, 4, 5] }
+  }
+
+  const formatDateInput = (dateStr: string | null): string => {
+    if (!dateStr) return ''
+    try {
+      const d = new Date(dateStr)
+      return d.toISOString().slice(0, 10) // YYYY-MM-DD
+    } catch { return '' }
+  }
+
   const openConfig = (auto: Automatizacion) => {
     setConfigAuto(auto)
-    setConfigCorreos(auto.correos ? JSON.parse(auto.correos) : [])
+    setConfigCorreos(parseCorreos(auto.correos))
     setConfigHora(auto.horaEjecucion || '10:00')
-    setConfigFechaInicio(auto.fechaInicio ? auto.fechaInicio.slice(0, 10) : '')
-    setConfigFechaFin(auto.fechaFin ? auto.fechaFin.slice(0, 10) : '')
-    setConfigDias(auto.diasSemana ? JSON.parse(auto.diasSemana) : [1, 2, 3, 4, 5])
+    setConfigFechaInicio(formatDateInput(auto.fechaInicio))
+    setConfigFechaFin(formatDateInput(auto.fechaFin))
+    setConfigDias(parseDias(auto.diasSemana))
     setConfigReintentos(auto.reintentos || 1)
     setConfigTimeout(Math.round((auto.timeoutMs || 30000) / 1000))
     setNewEmail('')
+    setSaveError(null)
     setShowConfig(true)
   }
 
@@ -285,27 +307,40 @@ export function AutomatizacionesModule() {
         }
       }
 
+      const payload = {
+        codigo: configAuto.codigo,
+        correos: configCorreos,
+        horaEjecucion: configHora,
+        fechaInicio: configFechaInicio || null,
+        fechaFin: configFechaFin || null,
+        diasSemana: configDias,
+        cronSchedule,
+        cronDescription: cronDesc,
+        reintentos: configReintentos,
+        timeoutMs: configTimeout * 1000,
+      }
+      console.log('Saving config:', configAuto.codigo, payload)
+
       const res = await fetch('/api/automatizaciones', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          codigo: configAuto.codigo,
-          correos: configCorreos,
-          horaEjecucion: configHora,
-          fechaInicio: configFechaInicio || null,
-          fechaFin: configFechaFin || null,
-          diasSemana: configDias,
-          cronSchedule,
-          cronDescription: cronDesc,
-          reintentos: configReintentos,
-          timeoutMs: configTimeout * 1000,
-        }),
+        body: JSON.stringify(payload),
       })
-      if (res.ok) {
+
+      const data = await res.json()
+      console.log('Save response:', res.status, data)
+
+      if (res.ok && data.ok) {
+        setSaveError(null)
         await fetchAutomatizaciones()
         setShowConfig(false)
+      } else {
+        setSaveError(data.error || `Error ${res.status}: No se pudo guardar la configuración`)
       }
-    } catch (err) { console.error('Error saving config:', err) }
+    } catch (err: any) {
+      console.error('Error saving config:', err)
+      setSaveError(err.message || 'Error de conexión al guardar')
+    }
     finally { setSaving(false) }
   }
 
@@ -416,8 +451,10 @@ export function AutomatizacionesModule() {
                 {items.map(auto => {
                   const color = auto.color || 'blue'
                   const isExecuting = executing === auto.codigo
-                  const correosList = auto.correos ? JSON.parse(auto.correos) : []
-                  const diasList = auto.diasSemana ? JSON.parse(auto.diasSemana) : []
+                  let correosList: string[] = []
+                  try { correosList = auto.correos ? JSON.parse(auto.correos) : [] } catch { correosList = [] }
+                  let diasList: number[] = []
+                  try { diasList = auto.diasSemana ? JSON.parse(auto.diasSemana) : [] } catch { diasList = [] }
 
                   return (
                     <Card key={auto.id} className={cn('border-l-4', colorBorderMap[color] || 'border-l-slate-400')}>
@@ -739,6 +776,20 @@ export function AutomatizacionesModule() {
                   <p><strong>Timeout:</strong> {configTimeout}s</p>
                 </div>
               </div>
+
+              {/* Error de guardado */}
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-700">Error al guardar</p>
+                    <p className="text-xs text-red-600 mt-0.5">{saveError}</p>
+                  </div>
+                  <button onClick={() => setSaveError(null)} className="ml-auto text-red-400 hover:text-red-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
 
               {/* ─── BOTONES GUARDAR/CANCELAR ─── */}
               <div className="flex items-center justify-end gap-2 pt-2 border-t">
