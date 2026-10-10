@@ -34,6 +34,7 @@ export type Module =
   | 'planificacion'
   | 'perfilesmoviles'
   | 'informesemanal'
+  | 'automatizaciones'
 
 interface CondominioInfo {
   id: string
