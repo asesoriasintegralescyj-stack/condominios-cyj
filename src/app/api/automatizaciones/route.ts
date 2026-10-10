@@ -1,7 +1,7 @@
 /**
  * API: /api/automatizaciones
  * GET  - Listar todas las automatizaciones
- * PATCH - Toggle activa/modoManual
+ * PATCH - Actualizar cualquier campo (activa, modoManual, correos, schedule, etc.)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,7 +11,7 @@ import { getCurrentSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-// Crear tablas si no existen
+// Crear tablas si no existen (con todas las columnas nuevas)
 async function ensureTables() {
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Automatizacion" (
@@ -31,6 +31,11 @@ async function ensureTables() {
       "reintentos" INTEGER NOT NULL DEFAULT 1,
       "timeoutMs" INTEGER NOT NULL DEFAULT 30000,
       "parametros" TEXT,
+      "correos" TEXT,
+      "fechaInicio" TIMESTAMP(3),
+      "fechaFin" TIMESTAMP(3),
+      "horaEjecucion" TEXT,
+      "diasSemana" TEXT,
       "icono" TEXT,
       "color" TEXT,
       "orden" INTEGER NOT NULL DEFAULT 0,
@@ -47,6 +52,24 @@ async function ensureTables() {
     );
   `)
 
+  // Agregar columnas nuevas si no existen (migración on-the-fly)
+  const newCols = [
+    { name: 'correos', type: 'TEXT' },
+    { name: 'fechaInicio', type: 'TIMESTAMP(3)' },
+    { name: 'fechaFin', type: 'TIMESTAMP(3)' },
+    { name: 'horaEjecucion', type: 'TEXT' },
+    { name: 'diasSemana', type: 'TEXT' },
+  ]
+  for (const col of newCols) {
+    await db.$executeRawUnsafe(`
+      DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'Automatizacion' AND column_name = '${col.name}') THEN
+          ALTER TABLE "Automatizacion" ADD COLUMN "${col.name}" ${col.type};
+        END IF;
+      END $$;
+    `).catch(() => {})
+  }
+
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
       "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
@@ -62,7 +85,6 @@ async function ensureTables() {
     );
   `)
 
-  // Crear índices si no existen
   const indexes = [
     'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
     'CREATE INDEX IF NOT EXISTS "Automatizacion_activa_idx" ON "Automatizacion"("activa")',
@@ -71,7 +93,7 @@ async function ensureTables() {
     'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_createdAt_idx" ON "AutomatizacionLog"("createdAt")',
   ]
   for (const sql of indexes) {
-    await db.$executeRawUnsafe(sql)
+    await db.$executeRawUnsafe(sql).catch(() => {})
   }
 }
 
@@ -105,44 +127,58 @@ export async function PATCH(request: NextRequest) {
     await ensureTables()
 
     const body = await request.json()
-    const { codigo, activa, modoManual } = body
+    const { codigo } = body
 
     if (!codigo) {
       return NextResponse.json({ error: 'codigo es requerido' }, { status: 400 })
     }
 
-    const updates: string[] = []
+    // Construir SET dinámico con los campos permitidos
+    const allowedFields = [
+      'activa', 'modoManual', 'correos', 'cronSchedule', 'cronDescription',
+      'fechaInicio', 'fechaFin', 'horaEjecucion', 'diasSemana',
+      'reintentos', 'timeoutMs', 'maxDuration', 'parametros',
+    ]
+
+    const setClauses: string[] = []
     const values: any[] = []
     let paramIdx = 1
 
-    if (activa !== undefined) {
-      updates.push(`"activa" = $${paramIdx}`)
-      values.push(activa)
-      paramIdx++
-    }
-    if (modoManual !== undefined) {
-      updates.push(`"modoManual" = $${paramIdx}`)
-      values.push(modoManual)
-      paramIdx++
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        if (field === 'correos' || field === 'diasSemana' || field === 'parametros') {
+          // Guardar como JSON string si es array
+          const val = Array.isArray(body[field]) ? JSON.stringify(body[field]) : body[field]
+          setClauses.push(`"${field}" = $${paramIdx}`)
+          values.push(val)
+        } else if (field === 'fechaInicio' || field === 'fechaFin') {
+          setClauses.push(`"${field}" = $${paramIdx}`)
+          values.push(body[field] ? new Date(body[field]) : null)
+        } else {
+          setClauses.push(`"${field}" = $${paramIdx}`)
+          values.push(body[field])
+        }
+        paramIdx++
+      }
     }
 
-    if (updates.length === 0) {
+    if (setClauses.length === 0) {
       return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 })
     }
 
-    updates.push(`"updatedAt" = CURRENT_TIMESTAMP`)
+    setClauses.push(`"updatedAt" = CURRENT_TIMESTAMP`)
     values.push(codigo)
 
     await db.$executeRawUnsafe(`
-      UPDATE "Automatizacion" SET ${updates.join(', ')} WHERE "codigo" = $${paramIdx}
+      UPDATE "Automatizacion" SET ${setClauses.join(', ')} WHERE "codigo" = $${paramIdx}
     `, ...values)
 
     // Log
-    const tipo = activa !== undefined ? (activa ? 'activar' : 'desactivar') : (modoManual !== undefined ? (modoManual ? 'modo_manual' : 'modo_auto') : 'toggle')
+    const changedFields = allowedFields.filter(f => body[f] !== undefined)
     await db.$executeRawUnsafe(`
-      INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "ejecutadoPor")
-      VALUES ($1, $2, 'exitoso', $3)
-    `, codigo, tipo, session.user.id)
+      INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
+      VALUES ($1, 'configuracion', 'exitoso', $2, $3)
+    `, codigo, `Campos actualizados: ${changedFields.join(', ')}`, session.user.id)
 
     return NextResponse.json({ ok: true })
   } catch (error: any) {
