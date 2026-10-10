@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Validar que el rol interno sea admin/supervisor
+  // Validar rol si es llamada interna
   if (xInternalAuth && !isCron && !isVercelCron) {
     if (xUserRole !== 'admin' && xUserRole !== 'supervisor') {
       return NextResponse.json({ error: 'Sin permisos (rol interno)' }, { status: 403 })
@@ -129,6 +129,14 @@ export async function POST(request: NextRequest) {
       lvsFaltantes: faltantes,
     })
 
+    // Incluir diagnóstico SMTP en la respuesta para debugging
+    const smtpDiag = {
+      host: process.env.SMTP_HOST || 'NO CONFIGURADO',
+      port: process.env.SMTP_PORT || '587',
+      user: process.env.SMTP_USER || 'NO CONFIGURADO',
+      passwordSet: Boolean(process.env.SMTP_PASSWORD || process.env.SMTP_PASS),
+    }
+
     return NextResponse.json({
       fecha: fechaISO,
       totalProgramadas,
@@ -138,6 +146,7 @@ export async function POST(request: NextRequest) {
       enviado: result.enviado,
       messageId: result.messageId,
       error: result.error,
+      smtp: smtpDiag,
     })
   } catch (error) {
     console.error('Error enviando alerta PMI:', error)
