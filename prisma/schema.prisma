@@ -1781,3 +1781,56 @@ model GoogleAccount {
   @@index([email])
 }
 
+// ============================================
+// AUTOMATIZACIONES
+// ============================================
+model Automatizacion {
+  id                  String    @id @default(cuid())
+  codigo              String    @unique                  // Ej: ALERTA_RONDA_NOCHE
+  nombre              String                             // Ej: Alerta Rondas Noche
+  descripcion         String?
+  categoria           String                             // alertas, reportes, rondas, backups
+  endpoint            String                             // Ej: /api/alertas/rondas-diario
+  metodo              String    @default("GET")          // GET, POST
+  activa              Boolean   @default(true)
+  modoManual          Boolean   @default(false)          // Si true, solo se ejecuta manualmente
+  cronSchedule        String?                            // Ej: "0 10 * * *" (cron expression)
+  cronDescription     String?                            // Ej: "Todos los días a las 10:00"
+  requiereAuth        Boolean   @default(true)
+  maxDuration         Int       @default(30000)          // Timeout en ms
+  reintentos          Int       @default(1)
+  timeoutMs           Int       @default(30000)
+  parametros          String?                            // JSON con parámetros adicionales
+  icono               String?                            // Nombre del icono (Bell, Database, etc.)
+  color               String?                            // Color (blue, amber, green, etc.)
+  orden               Int       @default(0)
+  ultimaEjecucion     DateTime?
+  ultimoResultado     String?                            // exitoso, error, timeout
+  ultimoError         String?
+  proximaEjecucion    DateTime?
+  ejecucionesExitosas Int       @default(0)
+  ejecucionesFallidas Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([categoria])
+  @@index([activa])
+  @@index([codigo])
+}
+
+model AutomatizacionLog {
+  id                    String   @id @default(cuid())
+  automatizacionCodigo  String
+  tipo                  String                            // ejecucion_manual, ejecucion_cron, toggle, seed
+  resultado             String                            // exitoso, error, timeout
+  mensaje               String?
+  error                 String?
+  duracionMs            Int?
+  ejecutadoPor          String?                           // userId o 'system'
+  createdAt             DateTime @default(now())
+
+  @@index([automatizacionCodigo])
+  @@index([createdAt])
+  @@index([tipo])
+}
+
