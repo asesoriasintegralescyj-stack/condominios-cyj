@@ -4,28 +4,38 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Crear tablas y columnas si no existen (misma lógica que route.ts principal)
+// Cache para ensureTables
+let tablesEnsured = false
+
 async function ensureTables() {
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
-      "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-      "automatizacionCodigo" TEXT NOT NULL,
-      "tipo" TEXT NOT NULL,
-      "resultado" TEXT NOT NULL,
-      "mensaje" TEXT,
-      "error" TEXT,
-      "duracionMs" INTEGER,
-      "ejecutadoPor" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
-    );
-  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
+  if (tablesEnsured) return
+
+  try {
+    await withRetry(() => db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "automatizacionCodigo" TEXT NOT NULL,
+        "tipo" TEXT NOT NULL,
+        "resultado" TEXT NOT NULL,
+        "mensaje" TEXT,
+        "error" TEXT,
+        "duracionMs" INTEGER,
+        "ejecutadoPor" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
+      );
+    `))
+    tablesEnsured = true
+  } catch (err) {
+    console.error('ensureTables error (non-fatal):', err)
+    tablesEnsured = true
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -45,10 +55,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Obtener la automatización
-    const autos = await db.$queryRawUnsafe(
+    const autos = await withRetry(() => db.$queryRawUnsafe(
       `SELECT * FROM "Automatizacion" WHERE "codigo" = $1 LIMIT 1`,
       codigo
-    ) as any[]
+    )) as any[]
 
     const auto = autos[0]
     if (!auto) {
@@ -131,26 +141,30 @@ export async function POST(request: NextRequest) {
     const duracionMs = Date.now() - startTime
 
     // Actualizar estadísticas
-    if (resultado === 'exitoso') {
-      await db.$executeRawUnsafe(`
-        UPDATE "Automatizacion" SET
-          "ultimaEjecucion" = CURRENT_TIMESTAMP,
-          "ultimoResultado" = $1,
-          "ultimoError" = NULL,
-          "ejecucionesExitosas" = "ejecucionesExitosas" + 1,
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "codigo" = $2
-      `, resultado, codigo)
-    } else {
-      await db.$executeRawUnsafe(`
-        UPDATE "Automatizacion" SET
-          "ultimaEjecucion" = CURRENT_TIMESTAMP,
-          "ultimoResultado" = $1,
-          "ultimoError" = $2,
-          "ejecucionesFallidas" = "ejecucionesFallidas" + 1,
-          "updatedAt" = CURRENT_TIMESTAMP
-        WHERE "codigo" = $3
-      `, resultado, errorMsj, codigo)
+    try {
+      if (resultado === 'exitoso') {
+        await withRetry(() => db.$executeRawUnsafe(`
+          UPDATE "Automatizacion" SET
+            "ultimaEjecucion" = CURRENT_TIMESTAMP,
+            "ultimoResultado" = $1,
+            "ultimoError" = NULL,
+            "ejecucionesExitosas" = "ejecucionesExitosas" + 1,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "codigo" = $2
+        `, resultado, codigo))
+      } else {
+        await withRetry(() => db.$executeRawUnsafe(`
+          UPDATE "Automatizacion" SET
+            "ultimaEjecucion" = CURRENT_TIMESTAMP,
+            "ultimoResultado" = $1,
+            "ultimoError" = $2,
+            "ejecucionesFallidas" = "ejecucionesFallidas" + 1,
+            "updatedAt" = CURRENT_TIMESTAMP
+          WHERE "codigo" = $3
+        `, resultado, errorMsj, codigo))
+      }
+    } catch (updateErr) {
+      console.error('Error updating stats (non-critical):', updateErr)
     }
 
     // Log - truncar valores para evitar exceder límites de columna
@@ -159,10 +173,10 @@ export async function POST(request: NextRequest) {
     const logCodigo = codigo || 'UNKNOWN'
 
     try {
-      await db.$executeRawUnsafe(`
+      await withRetry(() => db.$executeRawUnsafe(`
         INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "error", "duracionMs", "ejecutadoPor")
         VALUES ($1, 'ejecucion_manual', $2, $3, $4, $5, $6)
-      `, logCodigo, resultado, logMensaje, logError || null, duracionMs, session.user.id || 'system')
+      `, logCodigo, resultado, logMensaje, logError || null, duracionMs, session.user.id || 'system'))
     } catch (logErr) {
       console.error('Error writing execution log (non-critical):', logErr)
     }

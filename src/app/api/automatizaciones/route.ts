@@ -5,92 +5,108 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+// Cache para evitar re-ejecutar ensureTables en cada request
+// En serverless, esto se reinicia por cada cold start, pero evita
+// múltiples llamadas dentro de la misma instancia caliente
+let tablesEnsured = false
+
 // Crear tablas y columnas si no existen
 async function ensureTables() {
-  // Crear tabla si no existe
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "Automatizacion" (
-      "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-      "codigo" TEXT NOT NULL,
-      "nombre" TEXT NOT NULL,
-      "descripcion" TEXT,
-      "categoria" TEXT NOT NULL,
-      "endpoint" TEXT NOT NULL,
-      "metodo" TEXT NOT NULL DEFAULT 'GET',
-      "activa" BOOLEAN NOT NULL DEFAULT true,
-      "modoManual" BOOLEAN NOT NULL DEFAULT false,
-      "cronSchedule" TEXT,
-      "cronDescription" TEXT,
-      "requiereAuth" BOOLEAN NOT NULL DEFAULT true,
-      "maxDuration" INTEGER NOT NULL DEFAULT 30000,
-      "reintentos" INTEGER NOT NULL DEFAULT 1,
-      "timeoutMs" INTEGER NOT NULL DEFAULT 30000,
-      "parametros" TEXT,
-      "correos" TEXT,
-      "fechaInicio" TIMESTAMP(3),
-      "fechaFin" TIMESTAMP(3),
-      "horaEjecucion" TEXT,
-      "diasSemana" TEXT,
-      "icono" TEXT,
-      "color" TEXT,
-      "orden" INTEGER NOT NULL DEFAULT 0,
-      "ultimaEjecucion" TIMESTAMP(3),
-      "ultimoResultado" TEXT,
-      "ultimoError" TEXT,
-      "proximaEjecucion" TIMESTAMP(3),
-      "ejecucionesExitosas" INTEGER NOT NULL DEFAULT 0,
-      "ejecucionesFallidas" INTEGER NOT NULL DEFAULT 0,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "Automatizacion_pkey" PRIMARY KEY ("id"),
-      CONSTRAINT "Automatizacion_codigo_key" UNIQUE ("codigo")
-    );
-  `).catch((err) => console.error('CREATE TABLE Automatizacion error:', err))
+  if (tablesEnsured) return
 
-  // Migración: agregar columnas nuevas si no existen
-  const migrations = [
-    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "correos" TEXT`,
-    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaInicio" TIMESTAMP(3)`,
-    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaFin" TIMESTAMP(3)`,
-    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "horaEjecucion" TEXT`,
-    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "diasSemana" TEXT`,
-  ]
-  for (const sql of migrations) {
-    await db.$executeRawUnsafe(sql).catch((err) => console.error('Migration error:', sql, err))
-  }
+  try {
+    // Crear tabla si no existe
+    await withRetry(() => db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Automatizacion" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "codigo" TEXT NOT NULL,
+        "nombre" TEXT NOT NULL,
+        "descripcion" TEXT,
+        "categoria" TEXT NOT NULL,
+        "endpoint" TEXT NOT NULL,
+        "metodo" TEXT NOT NULL DEFAULT 'GET',
+        "activa" BOOLEAN NOT NULL DEFAULT true,
+        "modoManual" BOOLEAN NOT NULL DEFAULT false,
+        "cronSchedule" TEXT,
+        "cronDescription" TEXT,
+        "requiereAuth" BOOLEAN NOT NULL DEFAULT true,
+        "maxDuration" INTEGER NOT NULL DEFAULT 30000,
+        "reintentos" INTEGER NOT NULL DEFAULT 1,
+        "timeoutMs" INTEGER NOT NULL DEFAULT 30000,
+        "parametros" TEXT,
+        "correos" TEXT,
+        "fechaInicio" TIMESTAMP(3),
+        "fechaFin" TIMESTAMP(3),
+        "horaEjecucion" TEXT,
+        "diasSemana" TEXT,
+        "icono" TEXT,
+        "color" TEXT,
+        "orden" INTEGER NOT NULL DEFAULT 0,
+        "ultimaEjecucion" TIMESTAMP(3),
+        "ultimoResultado" TEXT,
+        "ultimoError" TEXT,
+        "proximaEjecucion" TIMESTAMP(3),
+        "ejecucionesExitosas" INTEGER NOT NULL DEFAULT 0,
+        "ejecucionesFallidas" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Automatizacion_pkey" PRIMARY KEY ("id"),
+        CONSTRAINT "Automatizacion_codigo_key" UNIQUE ("codigo")
+      );
+    `))
 
-  // Tabla de logs
-  await db.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
-      "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
-      "automatizacionCodigo" TEXT NOT NULL,
-      "tipo" TEXT NOT NULL,
-      "resultado" TEXT NOT NULL,
-      "mensaje" TEXT,
-      "error" TEXT,
-      "duracionMs" INTEGER,
-      "ejecutadoPor" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
-    );
-  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
+    // Migración: agregar columnas nuevas si no existen
+    const migrations = [
+      `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "correos" TEXT`,
+      `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaInicio" TIMESTAMP(3)`,
+      `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaFin" TIMESTAMP(3)`,
+      `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "horaEjecucion" TEXT`,
+      `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "diasSemana" TEXT`,
+    ]
+    for (const sql of migrations) {
+      await withRetry(() => db.$executeRawUnsafe(sql)).catch(() => {})
+    }
 
-  // Índices
-  const indexes = [
-    'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
-    'CREATE INDEX IF NOT EXISTS "Automatizacion_activa_idx" ON "Automatizacion"("activa")',
-    'CREATE INDEX IF NOT EXISTS "Automatizacion_codigo_idx" ON "Automatizacion"("codigo")',
-    'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_automatizacionCodigo_idx" ON "AutomatizacionLog"("automatizacionCodigo")',
-    'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_createdAt_idx" ON "AutomatizacionLog"("createdAt")',
-  ]
-  for (const sql of indexes) {
-    await db.$executeRawUnsafe(sql).catch(() => {})
+    // Tabla de logs
+    await withRetry(() => db.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
+        "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+        "automatizacionCodigo" TEXT NOT NULL,
+        "tipo" TEXT NOT NULL,
+        "resultado" TEXT NOT NULL,
+        "mensaje" TEXT,
+        "error" TEXT,
+        "duracionMs" INTEGER,
+        "ejecutadoPor" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
+      );
+    `))
+
+    // Índices
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
+      'CREATE INDEX IF NOT EXISTS "Automatizacion_activa_idx" ON "Automatizacion"("activa")',
+      'CREATE INDEX IF NOT EXISTS "Automatizacion_codigo_idx" ON "Automatizacion"("codigo")',
+      'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_automatizacionCodigo_idx" ON "AutomatizacionLog"("automatizacionCodigo")',
+      'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_createdAt_idx" ON "AutomatizacionLog"("createdAt")',
+    ]
+    for (const sql of indexes) {
+      await withRetry(() => db.$executeRawUnsafe(sql)).catch(() => {})
+    }
+
+    tablesEnsured = true
+  } catch (err) {
+    console.error('ensureTables error (non-fatal):', err)
+    // No bloquear la operación principal si ensureTables falla
+    // Las tablas probablemente ya existen
+    tablesEnsured = true
   }
 }
 
@@ -103,9 +119,9 @@ export async function GET() {
 
     await ensureTables()
 
-    const automatizaciones = await db.$queryRawUnsafe(`
+    const automatizaciones = await withRetry(() => db.$queryRawUnsafe(`
       SELECT * FROM "Automatizacion" ORDER BY "orden" ASC, "nombre" ASC
-    `) as any[]
+    `)) as any[]
 
     return NextResponse.json(automatizaciones)
   } catch (error: any) {
@@ -132,10 +148,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Verificar que la automatización existe
-    const existing = await db.$queryRawUnsafe(
+    const existing = await withRetry(() => db.$queryRawUnsafe(
       `SELECT "codigo" FROM "Automatizacion" WHERE "codigo" = $1 LIMIT 1`,
       codigo
-    ) as any[]
+    )) as any[]
 
     if (existing.length === 0) {
       return NextResponse.json({ error: 'Automatización no encontrada' }, { status: 404 })
@@ -187,15 +203,15 @@ export async function PATCH(request: NextRequest) {
     console.log('PATCH SQL:', sql)
     console.log('PATCH values:', JSON.stringify(values))
 
-    await db.$executeRawUnsafe(sql, ...values)
+    await withRetry(() => db.$executeRawUnsafe(sql, ...values))
 
     // Log
     const changedFields = allowedFields.filter(f => body[f] !== undefined)
     try {
-      await db.$executeRawUnsafe(`
+      await withRetry(() => db.$executeRawUnsafe(`
         INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
         VALUES ($1, 'configuracion', 'exitoso', $2, $3)
-      `, codigo, `Campos actualizados: ${changedFields.join(', ')}`, session.user.id)
+      `, codigo, `Campos actualizados: ${changedFields.join(', ')}`, session.user.id))
     } catch (logErr) {
       console.error('Error writing config log (non-critical):', logErr)
     }

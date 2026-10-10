@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, withRetry } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
@@ -127,7 +127,7 @@ const AUTOMATIZACIONES_DEFAULT = [
 
 // Crear tablas y columnas si no existen
 async function ensureTables() {
-  await db.$executeRawUnsafe(`
+  await withRetry(() => db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Automatizacion" (
       "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
       "codigo" TEXT NOT NULL,
@@ -164,7 +164,7 @@ async function ensureTables() {
       CONSTRAINT "Automatizacion_pkey" PRIMARY KEY ("id"),
       CONSTRAINT "Automatizacion_codigo_key" UNIQUE ("codigo")
     );
-  `).catch((err) => console.error('CREATE TABLE Automatizacion error:', err))
+  `)).catch((err) => console.error('CREATE TABLE Automatizacion error:', err))
 
   // Migración: agregar columnas nuevas si no existen
   const migrations = [
@@ -175,10 +175,10 @@ async function ensureTables() {
     `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "diasSemana" TEXT`,
   ]
   for (const sql of migrations) {
-    await db.$executeRawUnsafe(sql).catch((err) => console.error('Migration error:', sql, err))
+    await withRetry(() => db.$executeRawUnsafe(sql)).catch(() => {})
   }
 
-  await db.$executeRawUnsafe(`
+  await withRetry(() => db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
       "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
       "automatizacionCodigo" TEXT NOT NULL,
@@ -191,7 +191,7 @@ async function ensureTables() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
     );
-  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
+  `)).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
 
   const indexes = [
     'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
@@ -201,7 +201,7 @@ async function ensureTables() {
     'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_createdAt_idx" ON "AutomatizacionLog"("createdAt")',
   ]
   for (const sql of indexes) {
-    await db.$executeRawUnsafe(sql).catch(() => {})
+    await withRetry(() => db.$executeRawUnsafe(sql)).catch(() => {})
   }
 }
 
@@ -219,14 +219,14 @@ export async function POST(request: NextRequest) {
 
     for (const auto of AUTOMATIZACIONES_DEFAULT) {
       // Verificar si ya existe
-      const existing = await db.$queryRawUnsafe(
+      const existing = await withRetry(() => db.$queryRawUnsafe(
         `SELECT "id" FROM "Automatizacion" WHERE "codigo" = $1 LIMIT 1`,
         auto.codigo
-      ) as any[]
+      )) as any[]
 
       if (existing.length > 0) {
         // Actualizar datos estáticos (no sobreescribir activa/modoManual/estadísticas)
-        await db.$executeRawUnsafe(`
+        await withRetry(() => db.$executeRawUnsafe(`
           UPDATE "Automatizacion" SET
             "nombre" = $1,
             "descripcion" = $2,
@@ -241,11 +241,11 @@ export async function POST(request: NextRequest) {
             "updatedAt" = CURRENT_TIMESTAMP
           WHERE "codigo" = $11
         `, auto.nombre, auto.descripcion, auto.categoria, auto.endpoint, auto.metodo,
-           auto.cronSchedule, auto.cronDescription, auto.icono, auto.color, auto.orden, auto.codigo)
+           auto.cronSchedule, auto.cronDescription, auto.icono, auto.color, auto.orden, auto.codigo))
         actualizadas++
       } else {
         // Crear nueva
-        await db.$executeRawUnsafe(`
+        await withRetry(() => db.$executeRawUnsafe(`
           INSERT INTO "Automatizacion" (
             "codigo", "nombre", "descripcion", "categoria", "endpoint", "metodo",
             "activa", "modoManual", "cronSchedule", "cronDescription",
@@ -253,16 +253,20 @@ export async function POST(request: NextRequest) {
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         `, auto.codigo, auto.nombre, auto.descripcion, auto.categoria, auto.endpoint, auto.metodo,
            auto.activa, auto.modoManual, auto.cronSchedule, auto.cronDescription,
-           auto.requiereAuth, auto.icono, auto.color, auto.orden)
+           auto.requiereAuth, auto.icono, auto.color, auto.orden))
         creadas++
       }
     }
 
     // Log
-    await db.$executeRawUnsafe(`
-      INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
-      VALUES ('SYSTEM', 'seed', 'exitoso', $1, $2)
-    `, `Seed: ${creadas} creadas, ${actualizadas} actualizadas`, session.user.id)
+    try {
+      await withRetry(() => db.$executeRawUnsafe(`
+        INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "ejecutadoPor")
+        VALUES ('SYSTEM', 'seed', 'exitoso', $1, $2)
+      `, `Seed: ${creadas} creadas, ${actualizadas} actualizadas`, session.user.id))
+    } catch (logErr) {
+      console.error('Error writing seed log (non-critical):', logErr)
+    }
 
     return NextResponse.json({
       ok: true,
