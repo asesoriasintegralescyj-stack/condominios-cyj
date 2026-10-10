@@ -121,6 +121,9 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
     }
 
+    // Asegurar que las tablas y columnas existen antes de operar
+    await ensureTables()
+
     const body = await request.json()
     const { codigo } = body
 

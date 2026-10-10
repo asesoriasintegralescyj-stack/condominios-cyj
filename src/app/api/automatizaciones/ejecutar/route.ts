@@ -10,12 +10,32 @@ import { getCurrentSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+// Crear tablas y columnas si no existen (misma lógica que route.ts principal)
+async function ensureTables() {
+  await db.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
+      "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+      "automatizacionCodigo" TEXT NOT NULL,
+      "tipo" TEXT NOT NULL,
+      "resultado" TEXT NOT NULL,
+      "mensaje" TEXT,
+      "error" TEXT,
+      "duracionMs" INTEGER,
+      "ejecutadoPor" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
+    );
+  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession()
     if (!session?.user || session.user.rol !== 'admin') {
       return NextResponse.json({ error: 'Solo admin' }, { status: 403 })
     }
+
+    await ensureTables()
 
     const body = await request.json()
     const { codigo } = body
@@ -75,14 +95,26 @@ export async function POST(request: NextRequest) {
       const res = await fetch(url, fetchOptions)
       clearTimeout(timeoutId)
 
-      const data = await res.json()
-
-      if (res.ok) {
-        mensaje = typeof data === 'object' ? JSON.stringify(data).slice(0, 500) : String(data).slice(0, 500)
-      } else {
+      // Leer respuesta como texto primero para evitar error de JSON parse en HTML
+      const resText = await res.text()
+      let data: any = null
+      try {
+        data = JSON.parse(resText)
+      } catch {
+        // La respuesta no es JSON (ej: HTML 404 page)
         resultado = 'error'
-        errorMsj = data.error || `HTTP ${res.status}`
+        errorMsj = `Endpoint ${auto.endpoint} retornó HTML (status ${res.status}). El endpoint no existe o no retorna JSON.`
         mensaje = errorMsj
+      }
+
+      if (resultado !== 'error') {
+        if (res.ok) {
+          mensaje = typeof data === 'object' ? JSON.stringify(data).slice(0, 500) : String(data).slice(0, 500)
+        } else {
+          resultado = 'error'
+          errorMsj = (data && data.error) ? String(data.error).slice(0, 500) : `HTTP ${res.status}`
+          mensaje = errorMsj
+        }
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
@@ -121,11 +153,19 @@ export async function POST(request: NextRequest) {
       `, resultado, errorMsj, codigo)
     }
 
-    // Log
-    await db.$executeRawUnsafe(`
-      INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "error", "duracionMs", "ejecutadoPor")
-      VALUES ($1, 'ejecucion_manual', $2, $3, $4, $5, $6)
-    `, codigo, resultado, mensaje?.slice(0, 500), errorMsj || null, duracionMs, session.user.id)
+    // Log - truncar valores para evitar exceder límites de columna
+    const logMensaje = (mensaje || '').slice(0, 500)
+    const logError = (errorMsj || '').slice(0, 500)
+    const logCodigo = codigo || 'UNKNOWN'
+
+    try {
+      await db.$executeRawUnsafe(`
+        INSERT INTO "AutomatizacionLog" ("automatizacionCodigo", "tipo", "resultado", "mensaje", "error", "duracionMs", "ejecutadoPor")
+        VALUES ($1, 'ejecucion_manual', $2, $3, $4, $5, $6)
+      `, logCodigo, resultado, logMensaje, logError || null, duracionMs, session.user.id || 'system')
+    } catch (logErr) {
+      console.error('Error writing execution log (non-critical):', logErr)
+    }
 
     return NextResponse.json({
       ok: resultado === 'exitoso',

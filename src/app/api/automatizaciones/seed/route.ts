@@ -125,7 +125,7 @@ const AUTOMATIZACIONES_DEFAULT = [
   },
 ]
 
-// Crear tablas si no existen
+// Crear tablas y columnas si no existen
 async function ensureTables() {
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "Automatizacion" (
@@ -145,6 +145,11 @@ async function ensureTables() {
       "reintentos" INTEGER NOT NULL DEFAULT 1,
       "timeoutMs" INTEGER NOT NULL DEFAULT 30000,
       "parametros" TEXT,
+      "correos" TEXT,
+      "fechaInicio" TIMESTAMP(3),
+      "fechaFin" TIMESTAMP(3),
+      "horaEjecucion" TEXT,
+      "diasSemana" TEXT,
       "icono" TEXT,
       "color" TEXT,
       "orden" INTEGER NOT NULL DEFAULT 0,
@@ -159,7 +164,19 @@ async function ensureTables() {
       CONSTRAINT "Automatizacion_pkey" PRIMARY KEY ("id"),
       CONSTRAINT "Automatizacion_codigo_key" UNIQUE ("codigo")
     );
-  `)
+  `).catch((err) => console.error('CREATE TABLE Automatizacion error:', err))
+
+  // Migración: agregar columnas nuevas si no existen
+  const migrations = [
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "correos" TEXT`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaInicio" TIMESTAMP(3)`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "fechaFin" TIMESTAMP(3)`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "horaEjecucion" TEXT`,
+    `ALTER TABLE "Automatizacion" ADD COLUMN IF NOT EXISTS "diasSemana" TEXT`,
+  ]
+  for (const sql of migrations) {
+    await db.$executeRawUnsafe(sql).catch((err) => console.error('Migration error:', sql, err))
+  }
 
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "AutomatizacionLog" (
@@ -174,7 +191,7 @@ async function ensureTables() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "AutomatizacionLog_pkey" PRIMARY KEY ("id")
     );
-  `)
+  `).catch((err) => console.error('CREATE TABLE AutomatizacionLog error:', err))
 
   const indexes = [
     'CREATE INDEX IF NOT EXISTS "Automatizacion_categoria_idx" ON "Automatizacion"("categoria")',
@@ -184,7 +201,7 @@ async function ensureTables() {
     'CREATE INDEX IF NOT EXISTS "AutomatizacionLog_createdAt_idx" ON "AutomatizacionLog"("createdAt")',
   ]
   for (const sql of indexes) {
-    await db.$executeRawUnsafe(sql)
+    await db.$executeRawUnsafe(sql).catch(() => {})
   }
 }
 
