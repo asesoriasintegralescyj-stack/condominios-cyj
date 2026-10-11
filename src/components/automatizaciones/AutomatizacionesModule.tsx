@@ -106,6 +106,7 @@ const iconMap: Record<string, React.ReactNode> = {
 const colorBorderMap: Record<string, string> = {
   blue: 'border-l-blue-500', amber: 'border-l-amber-500', green: 'border-l-green-500',
   purple: 'border-l-purple-500', indigo: 'border-l-indigo-500', orange: 'border-l-orange-500', slate: 'border-l-slate-500',
+  red: 'border-l-red-500',
 }
 
 const colorMap: Record<string, string> = {
@@ -113,12 +114,13 @@ const colorMap: Record<string, string> = {
   green: 'bg-green-100 text-green-700 border-green-200', purple: 'bg-purple-100 text-purple-700 border-purple-200',
   indigo: 'bg-indigo-100 text-indigo-700 border-indigo-200', orange: 'bg-orange-100 text-orange-700 border-orange-200',
   slate: 'bg-slate-100 text-slate-700 border-slate-200',
+  red: 'bg-red-100 text-red-700 border-red-200',
 }
 
 const categoriaLabels: Record<string, string> = {
-  alertas: 'Alertas', reportes: 'Reportes', rondas: 'Rondas', backups: 'Respaldos',
+  alertas: 'Alertas', reportes: 'Reportes', rondas: 'Rondas', backups: 'Respaldos', pmi: 'PMI',
 }
-const categoriaOrder = ['alertas', 'reportes', 'rondas', 'backups']
+const categoriaOrder = ['alertas', 'pmi', 'reportes', 'rondas', 'backups']
 
 const DIAS_LABELS: Record<number, string> = {
   1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom',
@@ -184,9 +186,16 @@ export function AutomatizacionesModule() {
   const handleSeed = async () => {
     setSeeding(true)
     try {
-      const res = await fetch('/api/automatizaciones/seed')
+      const res = await fetch('/api/automatizaciones/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
       const data = await res.json()
-      if (data.ok) await fetchAutomatizaciones()
+      if (data.ok) {
+        await fetchAutomatizaciones()
+      } else {
+        console.error('Seed error:', data.error)
+      }
     } catch (err) { console.error('Error seeding:', err) }
     finally { setSeeding(false) }
   }
