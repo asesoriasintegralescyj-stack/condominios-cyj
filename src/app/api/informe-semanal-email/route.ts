@@ -4,8 +4,10 @@ import { getCurrentSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const EMAIL_USER = 'asesoriasintegralescyj@gmail.com'
-const EMAIL_PASS = process.env.EMAIL_PASSWORD || ''
+const SMTP_USER = process.env.SMTP_USER || 'asesoriasintegralescyj@gmail.com'
+const SMTP_PASS = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || ''
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com'
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10)
 
 export async function POST(request: Request) {
   const session = await getCurrentSession()
@@ -39,13 +41,15 @@ export async function POST(request: Request) {
     // Enviar email con nodemailer
     const nodemailer = await import('nodemailer')
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
     })
 
     await transporter.sendMail({
-      from: `"Sistema CYJ" <${EMAIL_USER}>`,
-      to: EMAIL_USER,
+      from: `"Sistema CYJ" <${SMTP_USER}>`,
+      to: SMTP_USER,
       subject: `📋 Informe Semanal - Condominio Laguna Norte (${informeData.periodo.desde} al ${informeData.periodo.hasta})`,
       html: generateEmailHTML(informeData),
       attachments: [{

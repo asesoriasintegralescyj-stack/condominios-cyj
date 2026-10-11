@@ -18,11 +18,16 @@ import { enviarAlertaPmiCumplimiento, type LvFaltante } from '@/lib/email-pmi-cu
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 function fechaSantiagoISO(d: Date): string {
-  const tzOffset = -4 * 60
-  const local = new Date(d.getTime() + tzOffset * 60 * 1000)
-  return local.toISOString().slice(0, 10)
+  // Usar Intl.DateTimeFormat para manejar DST dinámicamente
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
 }
 
 export async function POST(request: NextRequest) {

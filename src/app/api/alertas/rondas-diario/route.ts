@@ -18,6 +18,7 @@ import { sendEmail, emailWrap, escapeHtml } from '@/lib/email'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const maxDuration = 30
 
 // Prisma dedicado para este endpoint (connect/disconnect explicito)
 // para no competir con el pool global del PrismaClient
@@ -263,6 +264,24 @@ function buildReporteHtml(
 // ─── GET — Generar y enviar reporte ───
 
 export async function GET(request: NextRequest) {
+  // Verificar acceso: Vercel Cron, CRON_SECRET, X-Internal-Auth o sesión
+  const cronSecret = process.env.CRON_SECRET
+  const isVercelCron = request.headers.get('x-vercel-cron') === '1'
+  const isCronSecret = cronSecret && (
+    request.headers.get('authorization') === `Bearer ${cronSecret}` ||
+    request.headers.get('x-cron-secret') === cronSecret
+  )
+  const isInternalAuth = request.headers.get('x-internal-auth') === 'true'
+
+  if (!isVercelCron && !isCronSecret && !isInternalAuth) {
+    // Permitir también si tiene sesión válida (para ejecución manual desde UI)
+    const { getCurrentSession } = await import('@/lib/auth')
+    const session = await getCurrentSession()
+    if (!session) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    }
+  }
+
   const db = createIsolatedDb()
   try {
     await db.$connect()

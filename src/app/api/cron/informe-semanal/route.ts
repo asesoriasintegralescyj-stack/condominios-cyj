@@ -1,18 +1,35 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const EMAIL_USER = 'asesoriasintegralescyj@gmail.com'
-const EMAIL_PASS = process.env.EMAIL_PASSWORD || ''
+const SMTP_USER = process.env.SMTP_USER || 'asesoriasintegralescyj@gmail.com'
+const SMTP_PASS = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || ''
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com'
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10)
 
 // CRON: Se ejecuta cada martes a las 08:00 AM (America/Santiago)
 // Vercel: vercel.json → "0 11 * * 2" (UTC)
-export async function GET() {
-  // Validación de token CRON (Vercel envía este header)
-  const cronSecret = process.env.CRON_SECRET || ''
-  const authHeader = process.env.CRON_AUTH_HEADER || ''
+export async function GET(request: NextRequest) {
+  // Verificar acceso: Vercel Cron, CRON_SECRET o X-Internal-Auth
+  const cronSecret = process.env.CRON_SECRET
+  const isVercelCron = request.headers.get('x-vercel-cron') === '1'
+  const isCronSecret = cronSecret && (
+    request.headers.get('authorization') === `Bearer ${cronSecret}` ||
+    request.headers.get('x-cron-secret') === cronSecret
+  )
+  const isInternalAuth = request.headers.get('x-internal-auth') === 'true'
+
+  if (!isVercelCron && !isCronSecret && !isInternalAuth) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  }
+
+  // Validar SMTP
+  if (!SMTP_USER || !SMTP_PASS) {
+    console.error('[CRON Informe Semanal] Credenciales SMTP faltantes (SMTP_USER/SMTP_PASSWORD)')
+    return NextResponse.json({ error: 'Credenciales SMTP faltantes' }, { status: 500 })
+  }
 
   try {
     console.log('[CRON Informe Semanal] Iniciando generación...')
@@ -165,15 +182,17 @@ export async function GET() {
     // ─── ENVIAR EMAIL ───
     const nodemailer = await import('nodemailer')
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465,
+      auth: { user: SMTP_USER, pass: SMTP_PASS },
     })
 
     const filename = `informe-semanal-${new Date().toISOString().slice(0, 10)}.docx`
 
     await transporter.sendMail({
-      from: `"Sistema CYJ" <${EMAIL_USER}>`,
-      to: EMAIL_USER,
+      from: `"Sistema CYJ" <${SMTP_USER}>`,
+      to: SMTP_USER,
       subject: `📋 Informe Semanal - Laguna Norte (${fmtDate(lunes)} al ${fmtDate(domingo)})`,
       html: `<!DOCTYPE html><html><body style="font-family:Arial;max-width:600px;margin:0 auto;padding:20px">
         <div style="background:#0F2044;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center">
