@@ -6,11 +6,64 @@ import {
   sendSolicitudCompraEmail,
   type MaterialSolicitud,
 } from '@/lib/email-solicitud-compra'
+import { backupSolicitudToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const CONDOMINIO_LAGUNA_NORTE = 'cmo9f3x7j0000ktyeb0rzhwt9'
+
+/**
+ * Auto-migra la tabla SolicitudCompra agregando columnas faltantes.
+ * Esto es necesario cuando el Prisma schema se actualiza pero la BD no.
+ * Se ejecuta una sola vez (las columnas se verifican antes de agregar).
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string; default?: string }[] = [
+    { name: 'moneda', type: 'TEXT', default: "'CLP'" },
+    { name: 'proyectoId', type: 'TEXT' },
+    { name: 'proyectoNombre', type: 'TEXT' },
+    { name: 'otId', type: 'TEXT' },
+    { name: 'otCodigo', type: 'TEXT' },
+    { name: 'centroCostoId', type: 'TEXT' },
+    { name: 'submittedAt', type: 'TIMESTAMPTZ' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SolicitudCompra' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        const def = col.default ? ` DEFAULT ${col.default}` : ''
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "SolicitudCompra" ADD COLUMN "${col.name}" ${col.type}${def}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+  // Índices
+  const idxs = [
+    { name: 'SolicitudCompra_proyectoId_idx', on: '"SolicitudCompra"("proyectoId")' },
+    { name: 'SolicitudCompra_otId_idx', on: '"SolicitudCompra"("otId")' },
+    { name: 'SolicitudCompra_centroCostoId_idx', on: '"SolicitudCompra"("centroCostoId")' },
+  ]
+  for (const idx of idxs) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='${idx.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(`CREATE INDEX "${idx.name}" ON ${idx.on}`)
+        console.log(`[ensureColumns] Índice ${idx.name} creado`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con índice ${idx.name}:`, e)
+    }
+  }
+}
 
 // GET - Listar solicitudes de compra con filtros
 // Para roles no-admin: solo ven las que ellos crearon (solicitadoPorId = session.userId)
@@ -20,11 +73,19 @@ export async function GET(request: NextRequest) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const estado = searchParams.get('estado') || ''
     const prioridad = searchParams.get('prioridad') || ''
     const origenTipo = searchParams.get('origenTipo') || ''
+    const proyectoId = searchParams.get('proyectoId') || ''
+    const otId = searchParams.get('otId') || ''
+    const centroCostoId = searchParams.get('centroCostoId') || ''
+    const fechaDesde = searchParams.get('fechaDesde') || ''
+    const fechaHasta = searchParams.get('fechaHasta') || ''
 
     const where: any = {
       condominioId: CONDOMINIO_LAGUNA_NORTE,
@@ -40,6 +101,16 @@ export async function GET(request: NextRequest) {
     if (estado) where.estado = estado
     if (prioridad) where.prioridad = prioridad
     if (origenTipo) where.origenTipo = origenTipo
+    if (proyectoId) where.proyectoId = proyectoId
+    if (otId) where.otId = otId
+    if (centroCostoId) where.centroCostoId = centroCostoId
+
+    // Filtro por rango de fechas
+    if (fechaDesde || fechaHasta) {
+      where.fechaSolicitud = {}
+      if (fechaDesde) where.fechaSolicitud.gte = new Date(fechaDesde)
+      if (fechaHasta) where.fechaSolicitud.lte = new Date(fechaHasta + 'T23:59:59.999Z')
+    }
 
     if (search) {
       where.OR = [
@@ -47,6 +118,8 @@ export async function GET(request: NextRequest) {
         { titulo: { contains: search, mode: 'insensitive' } },
         { descripcion: { contains: search, mode: 'insensitive' } },
         { solicitadoPor: { contains: search, mode: 'insensitive' } },
+        { proyectoNombre: { contains: search, mode: 'insensitive' } },
+        { otCodigo: { contains: search, mode: 'insensitive' } },
       ]
     }
 
@@ -75,6 +148,9 @@ export async function POST(request: NextRequest) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const body = await request.json()
 
     // Generar codigo SC-XXXX usando tabla de secuencias
@@ -103,15 +179,29 @@ export async function POST(request: NextRequest) {
         ? `${session.user.nombre}${session.user.apellido ? ' ' + session.user.apellido : ''}`.trim()
         : null)
 
+    // Si viene de OT/Proyecto con origenTipo, se crea directo en "Solicitado" (comportamiento original).
+    // Si es creación manual sin origen, se crea en "Borrador".
+    const isFromOrigen = body.origenTipo && body.origenId
+    const initialEstado = isFromOrigen ? 'Solicitado' : (body.estado || 'Borrador')
+
     const data = {
       codigo,
       titulo: String(body.titulo || '').trim(),
       descripcion: body.descripcion ? String(body.descripcion) : null,
-      estado: 'Solicitado',
+      estado: initialEstado,
       prioridad: body.prioridad || 'Media',
+      moneda: body.moneda || 'CLP',
       origenTipo: body.origenTipo || null,
       origenId: body.origenId || null,
       origenCodigo: body.origenCodigo || null,
+      // Asociación a Proyecto/OT
+      proyectoId: body.proyectoId || null,
+      proyectoNombre: body.proyectoNombre || null,
+      otId: body.otId || null,
+      otCodigo: body.otCodigo || null,
+      // Centro de costos
+      centroCostoId: body.centroCostoId || null,
+      // Materiales
       materiales: materialesRaw.length > 0 ? JSON.stringify(materialesRaw) : null,
       totalEstimado,
       solicitadoPor,
@@ -124,10 +214,33 @@ export async function POST(request: NextRequest) {
         : null,
       emailEnviado: false,
       condominioId: CONDOMINIO_LAGUNA_NORTE,
+      // Si viene de origen, ya se envió a revisión
+      submittedAt: isFromOrigen ? new Date() : null,
+      // Si viene de origen, arrancar en etapa de aprobación
+      etapaAprobacion: isFromOrigen ? 'Pendiente Supervisor' : 'Sin etapa',
     }
 
     if (!data.titulo) {
       return apiError('El título es obligatorio', 400)
+    }
+
+    // Si no es de origen y el estado es Solicitado (envío a revisión), validar valorización
+    if (!isFromOrigen && initialEstado === 'Solicitado') {
+      const cleanItems = materialesRaw.filter((m) => m.nombre && m.nombre.trim() !== '')
+      if (cleanItems.length === 0) {
+        return apiError('Debe agregar al menos un material con nombre para enviar a revisión', 400)
+      }
+      for (const item of cleanItems) {
+        if (!item.cantidad || item.cantidad <= 0) {
+          return apiError(`Cantidad inválida en ítem "${item.nombre}". Debe ser mayor a 0.`, 400)
+        }
+        if (!item.precioEstimado || item.precioEstimado <= 0) {
+          return apiError(`Precio unitario inválido en ítem "${item.nombre}". Debe ser mayor a 0.`, 400)
+        }
+      }
+      if (!totalEstimado || totalEstimado <= 0) {
+        return apiError('La valorización total debe ser mayor a 0', 400)
+      }
     }
 
     const solicitud = await db.solicitudCompra.create({ data })
@@ -165,6 +278,34 @@ export async function POST(request: NextRequest) {
           `[SolicitudCompra ${codigo}] No se pudo obtener fotos/cotizaciones del proyecto origen:`,
           e
         )
+      }
+
+      // ─── Actualizar proyecto con la SC vinculada ───
+      try {
+        // Usar raw SQL para leer scsVinculadas (Prisma select puede fallar si columna no existe)
+        const [proyectoRow] = await db.$queryRawUnsafe<{ scsVinculadas: string | null }[]>(
+          `SELECT "scsVinculadas" FROM "Proyecto" WHERE "id" = $1`,
+          solicitud.origenId
+        )
+        if (proyectoRow) {
+          const existing: any[] = proyectoRow.scsVinculadas ? JSON.parse(proyectoRow.scsVinculadas) : []
+          if (!existing.find((s: any) => s.id === solicitud.id)) {
+            existing.push({
+              id: solicitud.id,
+              codigo: solicitud.codigo,
+              titulo: solicitud.titulo,
+              estado: solicitud.estado,
+              createdAt: new Date().toISOString(),
+            })
+            await db.$executeRawUnsafe(
+              `UPDATE "Proyecto" SET "scsVinculadas" = $1 WHERE "id" = $2`,
+              JSON.stringify(existing), solicitud.origenId
+            )
+            console.log(`[SC POST] Proyecto actualizado con SC ${solicitud.codigo}`)
+          }
+        }
+      } catch (proyErr: any) {
+        console.warn(`[SC POST] No se pudo actualizar proyecto con SC vinculada: ${proyErr?.message || proyErr}`)
       }
     }
 
@@ -224,6 +365,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Respaldo automático a Google Drive (fire-and-forget)
+    void backupSolicitudToDrive(updated.id)
+
     return NextResponse.json(
       {
         ...updated,
@@ -239,6 +383,7 @@ export async function POST(request: NextRequest) {
     return handlePrismaError(error)
   }
 }
+
 
 function safeParseMateriales(raw: string): MaterialSolicitud[] {
   try {

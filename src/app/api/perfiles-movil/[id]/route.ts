@@ -27,7 +27,17 @@ export async function GET(
       })
     }
 
-    return NextResponse.json({ ...perfil, personal })
+    // Lookup usuario vinculado
+    let user = null
+    if (perfil.userId) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, nombre, apellido, email, rol, activo FROM "User" WHERE id = $1`,
+        perfil.userId
+      ) as any[]
+      user = users[0] || null
+    }
+
+    return NextResponse.json({ ...perfil, password: undefined, personal, user })
   } catch (error) {
     console.error('Error fetching perfil móvil:', error)
     return NextResponse.json({ error: 'Error al obtener perfil' }, { status: 500 })
@@ -41,13 +51,16 @@ export async function PUT(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'usuarios.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'usuarios.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
     const { id } = await params
     const data = await request.json()
-    const { personal, ...updateData } = data
+    const { personal, user, ...updateData } = data
+    // Convertir strings vacías a null para campos opcionales de Prisma
+    if (updateData.personalId === '') updateData.personalId = null
+    if (updateData.userId === '') updateData.userId = null
     const perfil = await db.movilProfile.update({
       where: { id },
       data: updateData,
@@ -62,7 +75,17 @@ export async function PUT(
       })
     }
 
-    return NextResponse.json({ ...perfil, personal: personalLinked })
+    // Lookup usuario vinculado
+    let userLinked = null
+    if (perfil.userId) {
+      const users = await db.$queryRawUnsafe(
+        `SELECT id, nombre, apellido, email, rol, activo FROM "User" WHERE id = $1`,
+        perfil.userId
+      ) as any[]
+      userLinked = users[0] || null
+    }
+
+    return NextResponse.json({ ...perfil, password: undefined, personal: personalLinked, user: userLinked })
   } catch (error) {
     console.error('Error updating perfil móvil:', error)
     return NextResponse.json({ error: 'Error al actualizar perfil' }, { status: 500 })
@@ -76,7 +99,7 @@ export async function DELETE(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'usuarios.eliminar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'usuarios.eliminar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

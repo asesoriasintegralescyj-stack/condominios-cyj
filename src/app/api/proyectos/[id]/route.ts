@@ -2,9 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
+import { backupProyectoToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
+
+/**
+ * Auto-migra la tabla Proyecto agregando columnas faltantes.
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'driveFolderId', type: 'TEXT' },
+    { name: 'driveData', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "Proyecto" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada a Proyecto`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+}
 
 // Tipos para los recursos relacionados
 type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number; linkCompra?: string }
@@ -31,10 +57,12 @@ export async function GET(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
     const proyecto = await db.proyecto.findUnique({
       where: { id },
@@ -66,10 +94,12 @@ export async function PUT(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
     const data = await request.json()
 
@@ -304,12 +334,18 @@ export async function PUT(
       }
     }
 
+    // ─── Backup a Google Drive (fire-and-forget) ───
+    if (updatedProyecto) {
+      void backupProyectoToDrive(id)
+    }
+
     return NextResponse.json(updatedProyecto)
   } catch (error) {
     console.error('Error updating proyecto:', error)
     return handlePrismaError(error)
   }
 }
+
 
 // DELETE - Delete proyecto
 export async function DELETE(
@@ -318,10 +354,12 @@ export async function DELETE(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.eliminar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.eliminar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
+    await ensureColumns()
+
     const { id } = await params
 
     await db.proyectoMaterial.deleteMany({ where: { proyectoId: id } })

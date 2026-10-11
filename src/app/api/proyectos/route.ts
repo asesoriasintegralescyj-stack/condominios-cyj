@@ -3,11 +3,50 @@ import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import { generarCorrelativo } from '@/lib/utils'
+import { backupProyectoToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
 const CONDOMINIO_ID = 'cmo9f3x7j0000ktyeb0rzhwt9'
+
+/**
+ * Auto-migra la tabla Proyecto agregando columnas faltantes.
+ * Se ejecuta una sola vez (las columnas se verifican antes de agregar).
+ */
+async function ensureColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'driveFolderId', type: 'TEXT' },
+    { name: 'driveData', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "Proyecto" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureColumns] Columna ${col.name} agregada a Proyecto`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] Error con ${col.name}:`, e)
+    }
+  }
+  // Índice
+  try {
+    const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='Proyecto_driveFolderId_idx')`
+    )
+    if (!r[0]?.exists) {
+      await db.$executeRawUnsafe(`CREATE INDEX "Proyecto_driveFolderId_idx" ON "Proyecto"("driveFolderId")`)
+      console.log(`[ensureColumns] Índice Proyecto_driveFolderId_idx creado`)
+    }
+  } catch (e) {
+    console.warn(`[ensureColumns] Error con índice:`, e)
+  }
+}
 
 // Tipo para los recursos relacionados
 type MaterialInput = { descripcion: string; cantidad: number; unidad: string; precioUnit: number; total: number; linkCompra?: string }
@@ -60,13 +99,31 @@ function stripBase64(proyecto: any) {
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const detail = searchParams.get('detail') === 'true'
+
+    // Ensure otsVinculadas/scsVinculadas columns exist BEFORE any query
+    try {
+      for (const col of ['otsVinculadas', 'scsVinculadas']) {
+        const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+          `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Proyecto' AND column_name='${col}')`
+        )
+        if (!r[0]?.exists) {
+          await db.$executeRawUnsafe(`ALTER TABLE "Proyecto" ADD COLUMN "${col}" TEXT`)
+          console.log(`[Proyectos] Columna ${col} agregada a Proyecto`)
+        }
+      }
+    } catch (e) {
+      console.warn('[Proyectos] Error asegurando columnas otsVinculadas/scsVinculadas:', e)
+    }
 
     // Filtrar por condominio (incluye proyectos sin condominioId asignado)
     const where: any = {
@@ -89,24 +146,131 @@ export async function GET(request: NextRequest) {
 
     if (detail) {
       // Modo detalle: incluir todas las relaciones (para vista de detalle)
-      const proyectosRaw = await db.proyecto.findMany({
-        where,
-        include: {
-          materiales: true,
-          herramientas: true,
-          tareas: true,
-          personal: true,
-          documentos: true,
-          centroCosto: { select: { id: true, codigo: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-      })
+      // NOTA: usamos include, que trae TODOS los campos escalares incluyendo otsVinculadas/scsVinculadas
+      // Si las columnas no existen (migration fallida), usamos fallback sin vinculacion
+      let proyectosRaw: any[]
+      try {
+        proyectosRaw = await db.proyecto.findMany({
+          where,
+          include: {
+            materiales: true,
+            herramientas: true,
+            tareas: true,
+            personal: true,
+            documentos: true,
+            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      } catch (detailErr: any) {
+        // Si falla por columnas faltantes, hacer query sin depender de ellas
+        console.warn('[Proyectos] Detail query failed, trying fallback:', detailErr?.message)
+        proyectosRaw = await db.proyecto.findMany({
+          where,
+          select: {
+            id: true, codigo: true, nombre: true, categoria: true, estado: true,
+            ubicacion: true, fechaInicio: true, fechaFin: true, presProg: true,
+            presUsado: true, avance: true, descripcion: true, notas: true,
+            createdAt: true, updatedAt: true, sector: true, tipoReparacion: true,
+            tipoTrabajo: true, prioridad: true, estadoAprobacion: true,
+            responsable: true, responsableExterno: true, tiempoEstimado: true,
+            monto: true, fechaInicioReal: true, fechaFinReal: true, comentarios: true,
+            centroCostoId: true, condominioId: true, fotosAntes: true, fotosDespues: true,
+            cotizaciones: true, driveFolderId: true, driveData: true,
+            centroCosto: { select: { id: true, codigo: true, nombre: true } },
+            materiales: true, herramientas: true, tareas: true, personal: true, documentos: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      }
+
+      // Vinculacion OT/SC: cache (otsVinculadas/scsVinculadas) + búsqueda en tiempo real
+      try {
+        const ids = proyectosRaw.map((p: any) => p.id)
+        if (ids.length > 0) {
+          // 1. Leer cache de vinculacion
+          const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
+            `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
+            ids
+          )
+          const vincMap = new Map(vincData.map(v => [v.id, v]))
+
+          // 2. Para proyectos sin cache, buscar OTs/SCs por origenTipo/origenId en tiempo real
+          const idsWithoutOTCache: string[] = []
+          const idsWithoutSCCache: string[] = []
+          for (const p of proyectosRaw) {
+            const v = vincMap.get(p.id)
+            const hasOTCache = v?.otsVinculadas && v.otsVinculadas !== '[]' && v.otsVinculadas !== 'null'
+            const hasSCCache = v?.scsVinculadas && v.scsVinculadas !== '[]' && v.scsVinculadas !== 'null'
+            p.otsVinculadas = v?.otsVinculadas ?? null
+            p.scsVinculadas = v?.scsVinculadas ?? null
+            if (!hasOTCache) idsWithoutOTCache.push(p.id)
+            if (!hasSCCache) idsWithoutSCCache.push(p.id)
+          }
+
+          // 3. Buscar OTs vinculadas por origenTipo='Proyecto' en OrdenTrabajo
+          if (idsWithoutOTCache.length > 0) {
+            try {
+              const otsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; otNum: string; titulo: string; estado: string; createdAt: string }[]>(
+                `SELECT "origenId", "id", "otNum", "titulo", "estado", "createdAt" FROM "OrdenTrabajo" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+                idsWithoutOTCache
+              )
+              // Agrupar por proyecto y actualizar
+              const otByProject = new Map<string, any[]>()
+              for (const ot of otsRealtime) {
+                if (!otByProject.has(ot.origenId)) otByProject.set(ot.origenId, [])
+                otByProject.get(ot.origenId)!.push({ id: ot.id, otNum: ot.otNum, titulo: ot.titulo, estado: ot.estado, createdAt: ot.createdAt })
+              }
+              for (const p of proyectosRaw) {
+                const ots = otByProject.get(p.id)
+                if (ots && ots.length > 0) {
+                  p.otsVinculadas = JSON.stringify(ots)
+                }
+              }
+            } catch (otErr: any) {
+              console.warn('[Proyectos] Búsqueda realtime OTs falló:', otErr?.message)
+            }
+          }
+
+          // 4. Buscar SCs vinculadas por origenTipo='Proyecto' en SolicitudCompra
+          if (idsWithoutSCCache.length > 0) {
+            try {
+              const scsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; codigo: string; titulo: string; estado: string; createdAt: string }[]>(
+                `SELECT "origenId", "id", "codigo", "titulo", "estado", "createdAt" FROM "SolicitudCompra" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+                idsWithoutSCCache
+              )
+              const scByProject = new Map<string, any[]>()
+              for (const sc of scsRealtime) {
+                if (!scByProject.has(sc.origenId)) scByProject.set(sc.origenId, [])
+                scByProject.get(sc.origenId)!.push({ id: sc.id, codigo: sc.codigo, titulo: sc.titulo, estado: sc.estado, createdAt: sc.createdAt })
+              }
+              for (const p of proyectosRaw) {
+                const scs = scByProject.get(p.id)
+                if (scs && scs.length > 0) {
+                  p.scsVinculadas = JSON.stringify(scs)
+                }
+              }
+            } catch (scErr: any) {
+              console.warn('[Proyectos] Búsqueda realtime SCs falló:', scErr?.message)
+            }
+          }
+        }
+      } catch (vincErr: any) {
+        console.warn('[Proyectos] No se pudo obtener vinculacion OT/SC (detail):', vincErr?.message)
+        for (const p of proyectosRaw) {
+          if (!('otsVinculadas' in p)) p.otsVinculadas = null
+          if (!('scsVinculadas' in p)) p.scsVinculadas = null
+        }
+      }
+
       return NextResponse.json(proyectosRaw)
     }
 
     // Modo listado: NO incluir relaciones pesadas (optimización transferencia BD)
     // Pero SÍ incluir fotosAntes/fotosDespues/cotizaciones (son JSON strings livianos)
     // para que stripBase64 pueda contar los adjuntos
+    // IMPORTANTE: otsVinculadas/scsVinculadas se obtienen via raw SQL DESPUÉS
+    // para que la consulta principal NUNCA falle por columnas faltantes
     const proyectosRaw = await db.proyecto.findMany({
       where,
       select: {
@@ -158,6 +322,87 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
+    // Vinculacion OT/SC: cache + búsqueda en tiempo real (nunca bloquea la consulta principal)
+    try {
+      const ids = proyectosRaw.map((p: any) => p.id)
+      if (ids.length > 0) {
+        // 1. Leer cache
+        const vincData = await db.$queryRawUnsafe<{ id: string; otsVinculadas: string | null; scsVinculadas: string | null }[]>(
+          `SELECT id, otsVinculadas, scsVinculadas FROM "Proyecto" WHERE id = ANY($1::text[])`,
+          ids
+        )
+        const vincMap = new Map(vincData.map(v => [v.id, v]))
+
+        // 2. Identificar proyectos sin cache
+        const idsWithoutOTCache: string[] = []
+        const idsWithoutSCCache: string[] = []
+        for (const p of proyectosRaw as any[]) {
+          const v = vincMap.get(p.id)
+          const hasOTCache = v?.otsVinculadas && v.otsVinculadas !== '[]' && v.otsVinculadas !== 'null'
+          const hasSCCache = v?.scsVinculadas && v.scsVinculadas !== '[]' && v.scsVinculadas !== 'null'
+          p.otsVinculadas = v?.otsVinculadas ?? null
+          p.scsVinculadas = v?.scsVinculadas ?? null
+          if (!hasOTCache) idsWithoutOTCache.push(p.id)
+          if (!hasSCCache) idsWithoutSCCache.push(p.id)
+        }
+
+        // 3. Buscar OTs en tiempo real
+        if (idsWithoutOTCache.length > 0) {
+          try {
+            const otsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; otNum: string; titulo: string; estado: string; createdAt: string }[]>(
+              `SELECT "origenId", "id", "otNum", "titulo", "estado", "createdAt" FROM "OrdenTrabajo" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+              idsWithoutOTCache
+            )
+            const otByProject = new Map<string, any[]>()
+            for (const ot of otsRealtime) {
+              if (!otByProject.has(ot.origenId)) otByProject.set(ot.origenId, [])
+              otByProject.get(ot.origenId)!.push({ id: ot.id, otNum: ot.otNum, titulo: ot.titulo, estado: ot.estado, createdAt: ot.createdAt })
+            }
+            for (const p of proyectosRaw as any[]) {
+              const ots = otByProject.get(p.id)
+              if (ots && ots.length > 0) {
+                p.otsVinculadas = JSON.stringify(ots)
+                // Backfill cache para próxima vez
+                try { await db.$executeRawUnsafe(`UPDATE "Proyecto" SET "otsVinculadas" = $1 WHERE "id" = $2`, JSON.stringify(ots), p.id) } catch {}
+              }
+            }
+          } catch (otErr: any) {
+            console.warn('[Proyectos] Búsqueda realtime OTs (list) falló:', otErr?.message)
+          }
+        }
+
+        // 4. Buscar SCs en tiempo real
+        if (idsWithoutSCCache.length > 0) {
+          try {
+            const scsRealtime = await db.$queryRawUnsafe<{ origenId: string; id: string; codigo: string; titulo: string; estado: string; createdAt: string }[]>(
+              `SELECT "origenId", "id", "codigo", "titulo", "estado", "createdAt" FROM "SolicitudCompra" WHERE "origenTipo" = 'Proyecto' AND "origenId" = ANY($1::text[])`,
+              idsWithoutSCCache
+            )
+            const scByProject = new Map<string, any[]>()
+            for (const sc of scsRealtime) {
+              if (!scByProject.has(sc.origenId)) scByProject.set(sc.origenId, [])
+              scByProject.get(sc.origenId)!.push({ id: sc.id, codigo: sc.codigo, titulo: sc.titulo, estado: sc.estado, createdAt: sc.createdAt })
+            }
+            for (const p of proyectosRaw as any[]) {
+              const scs = scByProject.get(p.id)
+              if (scs && scs.length > 0) {
+                p.scsVinculadas = JSON.stringify(scs)
+                try { await db.$executeRawUnsafe(`UPDATE "Proyecto" SET "scsVinculadas" = $1 WHERE "id" = $2`, JSON.stringify(scs), p.id) } catch {}
+              }
+            }
+          } catch (scErr: any) {
+            console.warn('[Proyectos] Búsqueda realtime SCs (list) falló:', scErr?.message)
+          }
+        }
+      }
+    } catch (vincErr: any) {
+      console.warn('[Proyectos] No se pudo obtener vinculacion OT/SC (list):', vincErr?.message)
+      for (const p of proyectosRaw as any[]) {
+        (p as any).otsVinculadas = null
+        ;(p as any).scsVinculadas = null
+      }
+    }
+
     // En la vista de lista, ocultamos base64 pesados
     const proyectos = proyectosRaw.map((p) => stripBase64(p))
     return NextResponse.json(proyectos)
@@ -171,10 +416,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.crear')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'proyectos.crear', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const data = await request.json()
 
     // Extract resources from data
@@ -319,9 +567,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // --- Backup a Google Drive (fire-and-forget) ---
+    void backupProyectoToDrive(proyecto.id)
+
     return NextResponse.json(proyecto)
   } catch (error) {
     console.error('Error creating proyecto:', error)
     return handlePrismaError(error)
   }
 }
+

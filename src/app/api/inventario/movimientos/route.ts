@@ -10,7 +10,7 @@ export const maxDuration = 30
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'inventario.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

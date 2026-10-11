@@ -291,13 +291,34 @@ export async function deleteSession(token: string): Promise<void> {
 /**
  * Obtiene la sesión actual desde las cookies
  */
-export async function getCurrentSession(): Promise<{ userId: string; user: SafeUser } | null> {
+/**
+ * Tipo de sesión con permisos personalizados del usuario
+ */
+export type SessionWithPermisos = {
+  userId: string;
+  user: SafeUser;
+  userPermisos: string | null; // Campo `permisos` del DB (JSON con agregar/quitar)
+};
+
+export async function getCurrentSession(): Promise<SessionWithPermisos | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   
   if (!token) return null;
   
-  return verifySession(token);
+  const result = await verifySession(token);
+  if (!result) return null;
+  
+  // Obtener los permisos personalizados del usuario desde DB
+  const userRecord = await db.user.findUnique({
+    where: { id: result.userId },
+    select: { permisos: true },
+  });
+  
+  return {
+    ...result,
+    userPermisos: userRecord?.permisos || null,
+  };
 }
 
 /**
@@ -567,6 +588,8 @@ export async function updateUser(
     password: string;
     passwordChangeMotivo?: string;
     clearPasswordTemp?: boolean;
+    cambiarPasswordProximoLogin?: boolean;
+    passwordTemp?: string | null;
   }>,
   updatedBy?: string
 ) {
@@ -587,8 +610,14 @@ export async function updateUser(
     updateData.password = await hashPassword(data.password);
     updateData.lastPasswordChange = new Date();
     updateData.lastPasswordChangeMotivo = data.passwordChangeMotivo || 'cambio_voluntario';
-    updateData.cambiarPasswordProximoLogin = false;
-    updateData.passwordTemp = null; // limpiar la temp
+    // Solo sobreescribir cambiarPasswordProximoLogin y passwordTemp si el caller
+    // no los pasó explícitamente (ej: admin forzando reset de contraseña)
+    if (data.cambiarPasswordProximoLogin === undefined) {
+      updateData.cambiarPasswordProximoLogin = false;
+    }
+    if (data.passwordTemp === undefined) {
+      updateData.passwordTemp = null; // limpiar la temp
+    }
   }
   
   // Limpiar explícitamente la contraseña temporal si se solicita
@@ -655,10 +684,8 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar', 'rondas.crear', 'rondas.editar', 'rondas.eliminar',
-    // Solicitudes de Compra — admin solo gestiona en 2da etapa (NO aprueba como supervisor)
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
-    // Rendición de Gastos
-    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar', 'rendiciongastos.eliminar',
+    // Solicitudes de Compra — admin tiene TODOS los permisos (ver, crear, editar, eliminar, aprobar ambas etapas, gestionar)
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.eliminar', 'solicitudescompra.aprobar_supervisor', 'solicitudescompra.aprobar_admin', 'solicitudescompra.gestionar',
   ],
   supervisor: [
     // Acceso de supervisión
@@ -681,9 +708,7 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     // Rondas (Control de Rondas)
     'rondas.ver', 'rondas.registrar',
     // Solicitudes de Compra — supervisor aprueba en primera etapa
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
-    // Rendición de Gastos
-    'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.revisar',
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     // Acceso básico
@@ -697,16 +722,14 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
     'inventario.ver',
     // Rendicion de Gastos
     'rendiciongastos.ver', 'rendiciongastos.crear', 'rendiciongastos.editar', 'rendiciongastos.eliminar',
-    // Solicitudes de Compra — todos pueden crear
-    'solicitudescompra.ver', 'solicitudescompra.crear',
-    // Rendición de Gastos
-    'rendiciongastos.ver', 'rendiciongastos.crear',
+    // Solicitudes de Compra — puede crear y editar
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar',
   ],
   personal: [
     // Solo puede ver OT y modificar progreso
     'ots.ver', 'ots.progreso',
-    // Solicitudes de Compra — todos pueden crear
-    'solicitudescompra.ver', 'solicitudescompra.crear',
+    // Solicitudes de Compra — puede crear y editar
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar',
     // Catálogos (para ver manuales de herramientas)
     'catalogos.ver',
   ],
@@ -745,16 +768,59 @@ export const PERMISOS_POR_ROL: Record<Rol, string[]> = {
 };
 
 /**
- * Verifica si un usuario tiene un permiso específico
+ * Obtiene todos los permisos de un rol, combinados con overrides personalizados del usuario.
+ * El campo `permisos` del usuario en DB tiene formato:
+ *   { "agregar": ["modulo.ver", ...], "quitar": ["modulo.editar", ...] }
+ *
+ * Lógica: permisos del rol base + permisos agregados individualmente - permisos quitados individualmente.
  */
-export function hasPermission(rol: string, permiso: string): boolean {
-  const permisos = PERMISOS_POR_ROL[rol as Rol] || [];
-  return permisos.includes(permiso);
+export function getPermissions(rol: string, userPermisosOverride?: string | null): string[] {
+  const base = PERMISOS_POR_ROL[rol as Rol] || [];
+  if (!userPermisosOverride) return [...base];
+
+  try {
+    const override = JSON.parse(userPermisosOverride);
+
+    // Formato 1: { agregar: [...], quitar: [...] } — overrides relativos al rol
+    if (!Array.isArray(override) && (override.agregar || override.quitar)) {
+      const agregar: string[] = Array.isArray(override.agregar) ? override.agregar : [];
+      const quitar: string[] = Array.isArray(override.quitar) ? override.quitar : [];
+      const combined = [...base, ...agregar];
+      const removeSet = new Set(quitar);
+      return combined.filter(p => !removeSet.has(p));
+    }
+
+    // Formato 2: ["modulo.permiso", ...] — lista explícita de permisos activos (desde UsuariosModule)
+    // Compara con los permisos base del rol: los que están en base pero NO en la lista se quitan,
+    // los que están en la lista pero NO en base se agregan.
+    if (Array.isArray(override)) {
+      const overrideSet = new Set(override as string[]);
+      // Permisos base que siguen activos + permisos adicionales que no están en base
+      const result: string[] = [];
+      // Primero: permisos base que el usuario NO ha desactivado
+      for (const p of base) {
+        if (overrideSet.has(p)) result.push(p);
+      }
+      // Segundo: permisos adicionales que no están en el rol base
+      for (const p of override as string[]) {
+        if (!base.includes(p)) result.push(p);
+      }
+      return result;
+    }
+
+    // Formato 3: { "modulo.permiso": true/false } — objeto booleano (legacy init-admin)
+    // Ignorar y usar permisos del rol base
+    return [...base];
+  } catch {
+    return [...base];
+  }
 }
 
 /**
- * Obtiene todos los permisos de un rol
+ * Verifica si un usuario tiene un permiso específico.
+ * Soporta overrides personalizados por usuario.
  */
-export function getPermissions(rol: string): string[] {
-  return PERMISOS_POR_ROL[rol as Rol] || [];
+export function hasPermission(rol: string, permiso: string, userPermisosOverride?: string | null): boolean {
+  const permisos = getPermissions(rol, userPermisosOverride);
+  return permisos.includes(permiso);
 }

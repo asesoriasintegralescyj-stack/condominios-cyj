@@ -10,7 +10,7 @@ export const maxDuration = 30
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.crear')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'personal.crear', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

@@ -37,7 +37,7 @@ export async function GET(
     }
     
     // Solo admin puede ver otros usuarios, o el mismo usuario
-    if (session.userId !== id && !hasPermission(session.user.rol, 'usuarios.ver')) {
+    if (session.userId !== id && !hasPermission(session.user.rol, 'usuarios.ver', session.userPermisos)) {
       return NextResponse.json(
         { error: 'No tiene permisos para ver este usuario' },
         { status: 403 }
@@ -54,7 +54,7 @@ export async function GET(
     }
     
     // Si es admin, devolver también info de contraseña
-    if (hasPermission(session.user.rol, 'usuarios.ver')) {
+    if (hasPermission(session.user.rol, 'usuarios.ver', session.userPermisos)) {
       const userExtra = await db.user.findUnique({
         where: { id },
         select: {
@@ -103,7 +103,7 @@ export async function PUT(
     
     // Solo admin puede editar otros usuarios, o el mismo usuario
     const isOwnProfile = session.userId === id;
-    const isAdmin = hasPermission(session.user.rol, 'usuarios.editar');
+    const isAdmin = hasPermission(session.user.rol, 'usuarios.editar', session.userPermisos);
     
     if (!isOwnProfile && !isAdmin) {
       return NextResponse.json(
@@ -146,13 +146,10 @@ export async function PUT(
       if (!isOwnProfile && isAdmin) {
         updateData.passwordChangeMotivo = 'cambio_forzado';
         updateData.cambiarPasswordProximoLogin = true;
-        // Volver a encriptar el password temporal para mostrarlo al admin
-        if (password) {
-          const { encrypt } = await import('@/lib/auth');
-          updateData.passwordTemp = encrypt(password);
-        }
+        updateData.passwordTemp = encrypt(password);
       } else {
         updateData.passwordChangeMotivo = 'cambio_voluntario';
+        updateData.passwordTemp = encrypt(password);
       }
     }
     
@@ -230,7 +227,7 @@ export async function DELETE(
     }
     
     // Solo admin puede eliminar usuarios
-    if (!hasPermission(session.user.rol, 'usuarios.eliminar')) {
+    if (!hasPermission(session.user.rol, 'usuarios.eliminar', session.userPermisos)) {
       return NextResponse.json(
         { error: 'No tiene permisos para eliminar usuarios' },
         { status: 403 }

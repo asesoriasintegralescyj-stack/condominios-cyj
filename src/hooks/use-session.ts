@@ -88,7 +88,7 @@ export function useSession() {
 
   const hasPermission = (permission: string): boolean => {
     if (!session.user) return false;
-    return session.user.permisos.includes(permission);
+    return Array.isArray(session.user.permisos) && session.user.permisos.includes(permission);
   };
 
   const isAdmin = (): boolean => {

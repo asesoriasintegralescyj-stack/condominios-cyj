@@ -1,8 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getCurrentSession } from '@/lib/auth'
+import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError, handlePrismaError } from '@/lib/api-helpers'
 import type { MaterialSolicitud } from '@/lib/email-solicitud-compra'
+import { backupSolicitudToDrive } from '@/lib/backup-helpers'
+
+/** Auto-migra columnas faltantes en SolicitudCompra (idempotente) */
+async function ensureColumns() {
+  const cols: { name: string; type: string; default?: string }[] = [
+    { name: 'moneda', type: 'TEXT', default: "'CLP'" },
+    { name: 'proyectoId', type: 'TEXT' },
+    { name: 'proyectoNombre', type: 'TEXT' },
+    { name: 'otId', type: 'TEXT' },
+    { name: 'otCodigo', type: 'TEXT' },
+    { name: 'centroCostoId', type: 'TEXT' },
+    { name: 'submittedAt', type: 'TIMESTAMPTZ' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SolicitudCompra' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        const def = col.default ? ` DEFAULT ${col.default}` : ''
+        await db.$executeRawUnsafe(`ALTER TABLE "SolicitudCompra" ADD COLUMN "${col.name}" ${col.type}${def}`)
+      }
+    } catch (e) {
+      console.warn(`[ensureColumns] ${col.name}:`, e)
+    }
+  }
+}
+
+// Transiciones válidas de estado
+const ESTADO_TRANSITIONS: Record<string, string[]> = {
+  Borrador: ['Solicitado', 'Anulada'],
+  Solicitado: ['Borrador', 'En Proceso', 'Rechazado', 'Anulada'],  // Borrador: para devolver a borrador
+  'En Proceso': ['Borrador', 'Comprado', 'Anulada'],  // Borrador: admin puede devolver
+  Comprado: ['Anulada'],
+  Rechazado: [],
+  Anulada: [],
+}
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -64,13 +101,52 @@ export async function PUT(request: NextRequest, { params }: Context) {
   if (!session) return apiError('No autenticado', 401)
 
   try {
+    // Auto-migrar columnas faltantes (idempotente)
+    await ensureColumns()
+
     const { id } = await params
     const body = await request.json()
 
     const existing = await db.solicitudCompra.findUnique({ where: { id } })
     if (!existing) return apiError('Solicitud no encontrada', 404)
 
-    // Validación de seguridad: solo admin puede cambiar etapaAprobacion
+    // Permiso de edición: solo admin, supervisor o el creador pueden editar
+    const isOwner = existing.solicitadoPorId === session.userId
+    const canEdit = session.user.rol === 'admin' || session.user.rol === 'supervisor' || isOwner
+    if (!canEdit) {
+      return apiError('Sin permisos para editar esta solicitud', 403)
+    }
+
+    // BLOQUEO DE EDICIÓN POST-ENVÍO: Solo se puede editar en estado Borrador.
+    // El admin puede hacer edición de emergencia en cualquier estado.
+    if (session.user.rol !== 'admin') {
+      if (existing.estado !== 'Borrador') {
+        // Notificar al admin sobre el intento de edición post-envío
+        try {
+          // Notificar a todos los admins sobre el intento de edición post-envío
+          const admins = await db.user.findMany({ where: { rol: 'admin' } })
+          for (const admin of admins) {
+            await db.notificacion.create({
+              data: {
+                titulo: 'Intento de edición post-envío bloqueado',
+                mensaje: `El usuario ${session.user.nombre} (${session.user.email}) intentó editar la solicitud ${existing.codigo} en estado "${existing.estado}". Solo el administrador puede editar solicitudes enviadas.`,
+                tipo: 'Alerta',
+                categoria: 'General',
+                destino: 'Usuario específico',
+                destinoId: admin.id,
+                leido: false,
+                condominioId: existing.condominioId,
+              },
+            })
+          }
+        } catch (notifErr) {
+          console.error('Error al notificar intento de edición:', notifErr)
+        }
+        return apiError(`No se puede editar una solicitud en estado "${existing.estado}". Solo el administrador puede realizar ediciones de emergencia.`, 403)
+      }
+    }
+
+    // Validación de cambio de etapa: solo admin puede cambiar etapaAprobacion
     if (body.etapaAprobacion !== undefined && session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
       return apiError('Sin permisos para cambiar etapa', 403)
     }
@@ -98,7 +174,18 @@ export async function PUT(request: NextRequest, { params }: Context) {
     const data: any = {}
     if (body.titulo !== undefined) data.titulo = String(body.titulo).trim()
     if (body.descripcion !== undefined) data.descripcion = body.descripcion ? String(body.descripcion) : null
-    if (body.estado !== undefined) data.estado = String(body.estado)
+    // Validar transición de estado (solo si se intenta cambiar)
+    if (body.estado !== undefined && body.estado !== existing.estado) {
+      const allowed = ESTADO_TRANSITIONS[existing.estado]
+      if (!allowed || !allowed.includes(String(body.estado))) {
+        return apiError(`No se puede cambiar de "${existing.estado}" a "${body.estado}". Transiciones permitidas: ${allowed ? allowed.join(', ') : 'ninguna'}`, 400)
+      }
+      data.estado = String(body.estado)
+      // Si se devuelve a Borrador, resetear etapaAprobacion para permitir re-envío
+      if (String(body.estado) === 'Borrador') {
+        data.etapaAprobacion = null
+      }
+    }
     if (body.prioridad !== undefined) data.prioridad = String(body.prioridad)
     if (body.fechaEspera !== undefined) data.fechaEspera = body.fechaEspera ? String(body.fechaEspera) : null
     if (body.proveedorSugerido !== undefined)
@@ -118,8 +205,17 @@ export async function PUT(request: NextRequest, { params }: Context) {
     }
     if (totalEstimado !== undefined) data.totalEstimado = totalEstimado
     if (body.etapaAprobacion !== undefined) data.etapaAprobacion = body.etapaAprobacion || null
+    if (body.moneda !== undefined) data.moneda = String(body.moneda)
+    if (body.proyectoId !== undefined) data.proyectoId = body.proyectoId || null
+    if (body.proyectoNombre !== undefined) data.proyectoNombre = body.proyectoNombre || null
+    if (body.otId !== undefined) data.otId = body.otId || null
+    if (body.otCodigo !== undefined) data.otCodigo = body.otCodigo || null
+    if (body.centroCostoId !== undefined) data.centroCostoId = body.centroCostoId || null
 
     const updated = await db.solicitudCompra.update({ where: { id }, data })
+
+    // --- Backup actualizacion SC a Google Drive (fire-and-forget) ---
+    void backupSolicitudToDrive(id)
 
     return NextResponse.json({
       ...updated,
@@ -142,6 +238,16 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
     const existing = await db.solicitudCompra.findUnique({ where: { id } })
     if (!existing) return apiError('Solicitud no encontrada', 404)
 
+    // Solo admin puede eliminar solicitudes que no sean propias y estén en flujo
+    const isOwner = existing.solicitadoPorId === session.userId
+    if (session.user.rol !== 'admin' && !isOwner) {
+      return apiError('Sin permisos para eliminar esta solicitud', 403)
+    }
+    // No eliminar si está aprobada o comprada
+    if (existing.estado === 'Comprado' || existing.etapaAprobacion === 'Aprobada Admin') {
+      return apiError('No se puede eliminar una solicitud aprobada o comprada', 400)
+    }
+
     await db.solicitudCompra.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -149,3 +255,4 @@ export async function DELETE(_request: NextRequest, { params }: Context) {
     return handlePrismaError(error)
   }
 }
+

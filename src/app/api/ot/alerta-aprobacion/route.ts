@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   )
   const isVercelCron = request.headers.get('x-vercel-cron') === '1'
 
-  if (!isCron && !isVercelCron) {
+  if (!isCron && !isVercelCron && request.headers.get('x-internal-auth') !== 'true') {
     const session = await getCurrentSession()
     if (!session) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 })

@@ -235,7 +235,7 @@ function daysAgoCL(days: number): string {
 // ─── Componente principal ───
 
 export function QrRondasModule() {
-  const { user, isAdmin } = useSession()
+  const { user, isAdmin, isSupervisor } = useSession()
   const isConserje = user?.rol === 'conserje'
   // Conserje siempre empieza en lecturas; admin en ubicaciones
   const [tab, setTab] = useState<'ubicaciones' | 'lecturas' | 'patentes' | 'ruta'>(isConserje ? 'lecturas' : 'ubicaciones')
@@ -1559,7 +1559,7 @@ export function QrRondasModule() {
           <TabsTrigger value="patentes">
             <Car className="w-4 h-4 mr-1" /> Patentes ({patentesTotal})
           </TabsTrigger>
-          {isAdmin() && (
+          {(isAdmin() || isSupervisor()) && (
             <TabsTrigger value="ruta">
               <MapPinned className="w-4 h-4 mr-1" /> Ruta Guardia
             </TabsTrigger>
@@ -2005,8 +2005,8 @@ export function QrRondasModule() {
           )}
         </TabsContent>
 
-        {/* ─── Pestaña Ruta Guardia (solo admin) ─── */}
-        {isAdmin() && (
+        {/* ─── Pestaña Ruta Guardia (admin y supervisor) ─── */}
+        {(isAdmin() || isSupervisor()) && (
         <TabsContent value="ruta" className="space-y-4">
           <RutaGuardiaMap scans={scans} />
         </TabsContent>

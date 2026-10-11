@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, withRetry } from '@/lib/db'
+import { getCurrentSession } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -10,6 +11,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const session = await getCurrentSession()
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    if (session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
+      return NextResponse.json({ error: 'Solo administradores o supervisores' }, { status: 403 })
+    }
+
     const { id } = await params
     const body = await request.json()
 
@@ -25,6 +32,9 @@ export async function PUT(
     if (body.workAreaIds !== undefined) updateData.workAreaIds = body.workAreaIds
     if (body.permissions !== undefined) updateData.permissions = body.permissions
     if (body.personalId !== undefined) updateData.personalId = body.personalId
+    if (body.userId !== undefined) {
+      updateData.userId = body.userId === '' ? null : body.userId
+    }
 
     const profile = await withRetry(() =>
       db.movilProfile.update({ where: { id }, data: updateData }),
@@ -38,10 +48,16 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const session = await getCurrentSession()
+    if (!session) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    if (session.user.rol !== 'admin' && session.user.rol !== 'supervisor') {
+      return NextResponse.json({ error: 'Solo administradores o supervisores' }, { status: 403 })
+    }
+
     const { id } = await params
     await withRetry(() => db.movilProfile.delete({ where: { id } }))
     return NextResponse.json({ success: true })

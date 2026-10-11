@@ -107,7 +107,7 @@ function calcularPorcentajePorTipo(documentos: any[], tipo: string): number {
 export async function POST(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -273,7 +273,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'configuracion.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {

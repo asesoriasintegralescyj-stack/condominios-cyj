@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
+import { backupOTToDrive } from '@/lib/backup-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -17,7 +18,7 @@ export async function GET(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.ver')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.ver', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -96,7 +97,7 @@ export async function PUT(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.editar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.editar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -399,6 +400,9 @@ export async function PUT(
       }
     }
 
+    // ─── Backup actualización OT a Google Drive (fire-and-forget) ───
+    void backupOTToDrive(id)
+
     return NextResponse.json(orden)
   } catch (error: any) {
     console.error('Error updating orden:', error)
@@ -420,7 +424,7 @@ export async function DELETE(
 ) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.eliminar')) {
+  if (session.user.rol !== 'admin' && !hasPermission(session.user.rol, 'ots.eliminar', session.userPermisos)) {
     return apiError('Sin permisos', 403)
   }
   try {
@@ -443,3 +447,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'Error deleting orden' }, { status: 500 })
   }
 }
+

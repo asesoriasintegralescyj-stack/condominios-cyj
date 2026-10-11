@@ -219,6 +219,8 @@ const CATEGORIAS_PERMISOS = {
     permisos: [
       { id: 'solicitudescompra.ver', label: 'Ver' },
       { id: 'solicitudescompra.crear', label: 'Crear' },
+      { id: 'solicitudescompra.editar', label: 'Editar' },
+      { id: 'solicitudescompra.eliminar', label: 'Eliminar' },
       { id: 'solicitudescompra.aprobar_supervisor', label: 'Aprobar (Sup.)' },
       { id: 'solicitudescompra.aprobar_admin', label: 'Aprobar (Admin)' },
       { id: 'solicitudescompra.gestionar', label: 'Gestionar' },
@@ -264,7 +266,7 @@ const PERMISOS_DEFAULT_ROL: Record<string, string[]> = {
     'centros-costo.ver',
     'reportes.ver', 'reportes.exportar',
     'inventario.ver', 'inventario.editar',
-    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.aprobar_supervisor',
+    'solicitudescompra.ver', 'solicitudescompra.crear', 'solicitudescompra.editar', 'solicitudescompra.aprobar_supervisor',
   ],
   usuario: [
     'residentes.ver',
@@ -464,9 +466,15 @@ export function UsuariosModule() {
       return;
     }
     setFormData({
-      ...formData,
+      nombre: '',
+      apellido: '',
+      email: '',
+      rut: '',
+      rol: 'usuario',
+      activo: true,
       password: '',
       confirmPassword: '',
+      permisos: getDefaultPermisos(),
     });
     setSelectedUser(usuario);
     setDialogMode('password');
@@ -522,8 +530,8 @@ export function UsuariosModule() {
   };
 
   const handleSave = async () => {
-    // Validaciones
-    if (!formData.nombre || !formData.email) {
+    // Validaciones (no aplican cuando solo se cambia contraseña)
+    if (dialogMode !== 'password' && (!formData.nombre || !formData.email)) {
       toast.error('Nombre y email son requeridos');
       return;
     }
@@ -647,8 +655,12 @@ export function UsuariosModule() {
           }
           fetchUsuarios();
         } else {
-          const data = await response.json();
-          toast.error(data.error || 'Error al actualizar contraseña');
+          try {
+            const data = await response.json();
+            toast.error(data.error || 'Error al actualizar contraseña');
+          } catch {
+            toast.error(`Error del servidor (${response.status})`);
+          }
         }
       }
     } catch (error) {
@@ -873,17 +885,15 @@ export function UsuariosModule() {
                             <Key className="w-4 h-4 mr-2" />
                             Restablecer Contraseña
                           </DropdownMenuItem>
-                          {usuario.passwordTemp && (
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setViewPasswordUser(usuario);
-                                setViewPasswordDialogOpen(true);
-                              }}
-                            >
-                              <Eye className="w-4 h-4 mr-2" />
-                              Ver contraseña temporal
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setViewPasswordUser(usuario);
+                              setViewPasswordDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver contraseña
+                          </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => handleToggleActive(usuario)}
                             disabled={usuario.id === currentUser?.id}
@@ -930,6 +940,20 @@ export function UsuariosModule() {
           <div className="space-y-4 py-4">
             {dialogMode === 'password' ? (
               <>
+                {/* Info del usuario seleccionado */}
+                {selectedUser && (
+                  <div className="bg-slate-50 border rounded-lg p-3 flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-[#0A1172] text-white text-sm">
+                        {selectedUser.nombre?.[0] || '?'}{selectedUser.apellido?.[0] || ''}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm truncate">{selectedUser.nombre} {selectedUser.apellido || ''}</div>
+                      <div className="text-xs text-slate-500 font-mono truncate">{selectedUser.email}</div>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Nueva Contraseña</Label>
                   <Input
@@ -1219,16 +1243,16 @@ export function UsuariosModule() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo: Ver contraseña temporal de un usuario existente */}
+      {/* Diálogo: Ver contraseña de un usuario */}
       <Dialog open={viewPasswordDialogOpen} onOpenChange={setViewPasswordDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-[#0A1172]" />
-              Contraseña temporal
+              Contraseña del usuario
             </DialogTitle>
             <DialogDescription>
-              Esta contraseña aún no ha sido cambiada por el usuario.
+              Contraseña actual registrada en el sistema para este usuario.
             </DialogDescription>
           </DialogHeader>
           {viewPasswordUser && (
@@ -1245,7 +1269,7 @@ export function UsuariosModule() {
                   <div className="font-mono text-sm">{viewPasswordUser.email}</div>
                 </div>
                 <div>
-                  <Label className="text-xs text-gray-500">Contraseña temporal</Label>
+                  <Label className="text-xs text-gray-500">Contraseña actual</Label>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 bg-gray-100 px-3 py-2 rounded font-mono text-sm border">
                       {viewPasswordUser.passwordTemp || 'No disponible'}
@@ -1266,11 +1290,35 @@ export function UsuariosModule() {
                     </Button>
                   </div>
                 </div>
+                {viewPasswordUser.lastPasswordChange && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
+                    Último cambio: {new Date(viewPasswordUser.lastPasswordChange).toLocaleString('es-CL')}
+                    {viewPasswordUser.lastPasswordChangeMotivo && (
+                      <span> — Motivo: <strong>{viewPasswordUser.lastPasswordChangeMotivo.replace(/_/g, ' ')}</strong></span>
+                    )}
+                  </div>
+                )}
                 {viewPasswordUser.cambiarPasswordProximoLogin && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
                     ⚠️ Este usuario debe cambiar su contraseña en el próximo inicio de sesión.
                   </div>
                 )}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+                  <strong>Copiar todo:</strong> Nombre, email, contraseña y URL de acceso
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const text = `Credenciales de acceso - Laguna Norte\n\nNombre: ${viewPasswordUser.nombre} ${viewPasswordUser.apellido || ''}\nEmail: ${viewPasswordUser.email}\nContraseña: ${viewPasswordUser.passwordTemp || 'No disponible'}\nURL: https://condominios-cyj.vercel.app/login`;
+                    navigator.clipboard.writeText(text);
+                    toast.success('Credenciales copiadas al portapapeles');
+                  }}
+                  disabled={!viewPasswordUser.passwordTemp}
+                >
+                  Copiar credenciales completas
+                </Button>
               </div>
             </div>
           )}

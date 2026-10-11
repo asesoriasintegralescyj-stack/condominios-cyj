@@ -36,8 +36,54 @@ import {
   Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
   Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
-  AlertTriangle, CheckCircle, FileText, Eye
+  AlertTriangle, CheckCircle, FileText, Eye, UserCircle
 } from 'lucide-react'
+
+// ─── Utilidad: comprimir imagen antes de enviar al servidor ───
+const MAX_PHOTO_DIMENSION = 1280
+const MAX_PHOTO_SIZE_BYTES = 300_000 // ~300 KB por foto
+
+async function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let { width, height } = img
+
+        // Reducir dimensiones si exceden el máximo
+        if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
+          if (width > height) {
+            height = Math.round((height * MAX_PHOTO_DIMENSION) / width)
+            width = MAX_PHOTO_DIMENSION
+          } else {
+            width = Math.round((width * MAX_PHOTO_DIMENSION) / height)
+            height = MAX_PHOTO_DIMENSION
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+
+        // Comprimir con calidad decreciente hasta que quede bajo el límite
+        let quality = 0.7
+        let dataUrl = canvas.toDataURL('image/jpeg', quality)
+        while (dataUrl.length > MAX_PHOTO_SIZE_BYTES * 1.37 && quality > 0.2) {
+          quality -= 0.1
+          dataUrl = canvas.toDataURL('image/jpeg', quality)
+        }
+        resolve(dataUrl)
+      }
+      img.onerror = reject
+      img.src = reader.result as string
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 // Interfaces
 interface OTMaterial {
@@ -111,6 +157,10 @@ interface OrdenTrabajo {
   propiedad: { id: string; nombre: string } | null
   fotosAntes?: string[]
   fotosDespues?: string[]
+  creadoPorNombre?: string | null
+  origenTipo?: string | null
+  origenId?: string | null
+  origenCodigo?: string | null
 }
 
 interface Personal {
@@ -216,7 +266,7 @@ const estadoColors: Record<string, string> = {
 }
 
 export function OrdenesTrabajoModule() {
-  const { isPersonal, canEditProgress } = useSession()
+  const { isPersonal, canEditProgress, hasPermission, isReadOnly } = useSession()
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([])
   const [personal, setPersonal] = useState<Personal[]>([])
   // Personal filtrado para asignación de OT: excluye conserjes, guardias y encargados de cámaras
@@ -456,16 +506,25 @@ export function OrdenesTrabajoModule() {
   }
 
   const openDetailDialog = async (ot: OrdenTrabajo) => {
-    // Cargar detalle completo (con relaciones) para mostrar en el dialog
+    // Cargar detalle completo (con relaciones y fotos) para mostrar en el dialog
     try {
-      const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
+      const res = await fetch(`/api/ordenes-trabajo/${ot.id}?fotos=true`)
       if (res.ok) {
         setSelectedOT(await res.json())
       } else {
-        setSelectedOT(ot)
+        // Fallback: asegurar que todas las relaciones tengan arrays vacíos
+        setSelectedOT({
+          ...ot,
+          materiales: [], herramientas: [], tareas: [], personalOT: [],
+          fotosAntes: [], fotosDespues: [],
+        })
       }
     } catch (e) {
-      setSelectedOT(ot)
+      setSelectedOT({
+        ...ot,
+        materiales: [], herramientas: [], tareas: [], personalOT: [],
+        fotosAntes: [], fotosDespues: [],
+      })
     }
     setDetailDialogOpen(true)
   }
@@ -566,6 +625,16 @@ export function OrdenesTrabajoModule() {
       fotosDespues,
     }
 
+    // Verificar tamaño del payload antes de enviar (Vercel Hobby límite ~4.5 MB)
+    const payloadSize = new Blob([JSON.stringify(dataToSend)]).size
+    const MAX_PAYLOAD = 4 * 1024 * 1024 // 4 MB con margen
+    if (payloadSize > MAX_PAYLOAD) {
+      const mb = (payloadSize / 1024 / 1024).toFixed(1)
+      toast.error(`Las fotos son muy grandes (${mb} MB). Reduce la cantidad o usa imágenes más pequeñas.`)
+      setSavingOT(false)
+      return
+    }
+
     try {
       if (editingOT) {
         const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
@@ -574,7 +643,10 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify(dataToSend),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
+          const err = await res.json().catch(() => {
+            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
+            return {}
+          })
           throw new Error(err.details || err.error || 'Error al guardar OT')
         }
       } else {
@@ -584,7 +656,10 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify({ ...dataToSend, _clientIdempotency: idempotencyToken }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
+          const err = await res.json().catch(() => {
+            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
+            return {}
+          })
           throw new Error(err.details || err.error || 'Error al crear OT')
         }
         const result = await res.json()
@@ -1050,9 +1125,11 @@ export function OrdenesTrabajoModule() {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualizar OTs
         </Button>
-        <Button onClick={() => openDialog()}>
-          <Plus className="w-4 h-4 mr-1" /> Nueva OT
-        </Button>
+        {hasPermission('ots.crear') && (
+          <Button onClick={() => openDialog()}>
+            <Plus className="w-4 h-4 mr-1" /> Nueva OT
+          </Button>
+        )}
       </div>
 
       {/* Catalog status */}
@@ -1078,6 +1155,7 @@ export function OrdenesTrabajoModule() {
                 <tr className="border-b bg-slate-50">
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">N° OT</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Título</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Creado por</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tipo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
@@ -1090,9 +1168,9 @@ export function OrdenesTrabajoModule() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Cargando...</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Cargando...</td></tr>
                 ) : ordenes.length === 0 ? (
-                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
+                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
                 ) : (
                   ordenes.map((ot) => (
                     <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
@@ -1101,6 +1179,9 @@ export function OrdenesTrabajoModule() {
                         {ot.esRecurrente && <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />}
                       </td>
                       <td className="p-3 font-semibold">{ot.titulo}</td>
+                      <td className="p-3 text-xs text-slate-600" title={ot.creadoPorNombre || undefined}>
+                        {ot.creadoPorNombre ? <span className="flex items-center gap-1"><UserCircle className="w-3 h-3 shrink-0" />{ot.creadoPorNombre.length > 15 ? ot.creadoPorNombre.slice(0, 15) + '…' : ot.creadoPorNombre}</span> : <span className="text-slate-400">–</span>}
+                      </td>
                       <td className="p-3">
                         <Badge className={tipoColors[ot.tipo] || 'bg-slate-100'}>{ot.tipo}</Badge>
                       </td>
@@ -1144,7 +1225,7 @@ export function OrdenesTrabajoModule() {
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
-                          {isPersonal() ? (
+                          {hasPermission('ots.progreso') && (
                             <Button 
                               size="icon" 
                               variant="ghost" 
@@ -1155,15 +1236,16 @@ export function OrdenesTrabajoModule() {
                             >
                               <CheckSquare className="w-3.5 h-3.5" />
                             </Button>
-                          ) : (
-                            <>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </>
+                          )}
+                          {hasPermission('ots.editar') && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {hasPermission('ots.eliminar') && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -1897,11 +1979,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              const reader = new FileReader()
-                              reader.onloadend = () => {
-                                setFotosAntes(prev => [...prev, reader.result as string])
-                              }
-                              reader.readAsDataURL(file)
+                              compressImage(file).then(compressed => {
+                                setFotosAntes(prev => [...prev, compressed])
+                              }).catch(() => {
+                                toast.error('Error al comprimir imagen')
+                              })
                             })
                           }
                           e.target.value = ''
@@ -1973,11 +2055,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              const reader = new FileReader()
-                              reader.onloadend = () => {
-                                setFotosDespues(prev => [...prev, reader.result as string])
-                              }
-                              reader.readAsDataURL(file)
+                              compressImage(file).then(compressed => {
+                                setFotosDespues(prev => [...prev, compressed])
+                              }).catch(() => {
+                                toast.error('Error al comprimir imagen')
+                              })
                             })
                           }
                           e.target.value = ''
@@ -2152,6 +2234,14 @@ export function OrdenesTrabajoModule() {
               </DialogHeader>
               
               <div className="space-y-4">
+                {/* Creador */}
+                {selectedOT.creadoPorNombre && (
+                  <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
+                    <UserCircle className="w-4 h-4" />
+                    <span className="text-xs text-slate-500">Creado por:</span>
+                    <span className="font-medium">{selectedOT.creadoPorNombre}</span>
+                  </div>
+                )}
                 {/* General info */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                   <div className="min-w-0"><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
@@ -2193,7 +2283,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Materials */}
-                {selectedOT.materiales.length > 0 && (
+                {(selectedOT.materiales?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Package className="w-4 h-4" /> Materiales ({selectedOT.materiales.length})
@@ -2232,7 +2322,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tools */}
-                {selectedOT.herramientas.length > 0 && (
+                {(selectedOT.herramientas?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Wrench className="w-4 h-4" /> Herramientas ({selectedOT.herramientas.length})
@@ -2246,7 +2336,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tasks */}
-                {selectedOT.tareas.length > 0 && (
+                {(selectedOT.tareas?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <CheckSquare className="w-4 h-4" /> Tareas ({selectedOT.tareas.length})
@@ -2295,7 +2385,7 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Personnel */}
-                {selectedOT.personalOT.length > 0 && (
+                {(selectedOT.personalOT?.length ?? 0) > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                       <Users className="w-4 h-4" /> Personal ({selectedOT.personalOT.length})
@@ -2377,8 +2467,8 @@ export function OrdenesTrabajoModule() {
                   <span className="text-lg font-bold">TOTAL OT: </span>
                   <span className="text-xl font-bold text-red-600">
                     {formatCLP(selectedOT.costoReal || 
-                      selectedOT.materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
-                      selectedOT.personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+                      (selectedOT.materiales || []).reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
+                      (selectedOT.personalOT || []).reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
                     )}
                   </span>
                 </div>
@@ -2396,9 +2486,11 @@ export function OrdenesTrabajoModule() {
                 <Button variant="outline" onClick={() => imprimirChecklist(selectedOT)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir Checklist
                 </Button>
-                <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
-                  <Pencil className="w-4 h-4 mr-1" /> Editar
-                </Button>
+                {hasPermission('ots.editar') && (
+                  <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
+                    <Pencil className="w-4 h-4 mr-1" /> Editar
+                  </Button>
+                )}
               </DialogFooter>
             </>
           )}

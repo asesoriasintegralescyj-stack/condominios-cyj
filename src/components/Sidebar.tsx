@@ -31,6 +31,7 @@ import {
   CalendarDays,
   Smartphone,
   BarChart3,
+  Zap,
 } from 'lucide-react'
 import { useAppStore, type Module } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -66,6 +67,7 @@ const modulePermissions: Partial<Record<Module, string>> = {
   notificaciones: 'usuarios.ver',
   auditoria: 'logs.ver',
   backups: 'configuracion.editar',
+  automatizaciones: 'configuracion.editar',
   cumplimiento: 'configuracion.ver',
   qrrondas: 'rondas.ver',
   solicitudescompra: 'solicitudescompra.ver',
@@ -121,6 +123,7 @@ const menuItems: { section: string; items: { id: Module; label: string; icon: Re
     section: 'Sistema',
     items: [
       { id: 'auditoria', label: 'Auditoría', icon: <Shield className="w-4 h-4" /> },
+      { id: 'automatizaciones', label: 'Automatizaciones', icon: <Zap className="w-4 h-4" /> },
       { id: 'backups', label: 'Respaldos', icon: <Database className="w-4 h-4" /> },
       { id: 'reportes', label: 'Reportes', icon: <FileText className="w-4 h-4" /> },
       { id: 'usuarios', label: 'Usuarios', icon: <Users className="w-4 h-4" /> },

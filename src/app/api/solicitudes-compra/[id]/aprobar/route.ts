@@ -28,15 +28,19 @@ export const maxDuration = 30
 const ETAPAS = {
   aprobar_supervisor: 'Aprobada Supervisor',
   rechazar_supervisor: 'Rechazada Supervisor',
+  devolver_supervisor: 'Devuelta Borrador',
   aprobar_admin: 'Aprobada Admin',
   rechazar_admin: 'Rechazada Admin',
+  devolver_admin: 'Devuelta Borrador',
 } as const
 
 const PERMISOS_POR_ACCION = {
   aprobar_supervisor: 'solicitudescompra.aprobar_supervisor',
   rechazar_supervisor: 'solicitudescompra.aprobar_supervisor',
+  devolver_supervisor: 'solicitudescompra.aprobar_supervisor',
   aprobar_admin: 'solicitudescompra.aprobar_admin',
   rechazar_admin: 'solicitudescompra.aprobar_admin',
+  devolver_admin: 'solicitudescompra.aprobar_admin',
 } as const
 
 type Accion = keyof typeof ETAPAS
@@ -53,7 +57,7 @@ export async function POST(
   const { accion, observaciones } = body as { accion: Accion; observaciones?: string }
 
   if (!accion || !ETAPAS[accion]) {
-    return apiError('Acción inválida. Debe ser: aprobar_supervisor, rechazar_supervisor, aprobar_admin o rechazar_admin', 400)
+    return apiError('Acción inválida. Debe ser: aprobar_supervisor, rechazar_supervisor, devolver_supervisor, aprobar_admin, rechazar_admin o devolver_admin', 400)
   }
 
   // El admin SOLO interviene en la 2da etapa (aprobar_admin / rechazar_admin).
@@ -64,16 +68,16 @@ export async function POST(
   const permisoRequerido = PERMISOS_POR_ACCION[accion]
 
   // Validación por rol:
-  // - acciones *_supervisor → solo rol supervisor (explícito)
+  // - acciones *_supervisor → rol supervisor o admin (admin puede intervenir en cualquier etapa)
   // - acciones *_admin → solo rol admin
-  if (accion.endsWith('_supervisor') && !isSupervisor) {
-    return apiError('Solo el Supervisor puede realizar esta acción. El Administrador interviene en la segunda etapa del flujo.', 403)
+  if (accion.endsWith('_supervisor') && !isSupervisor && !isAdmin) {
+    return apiError('Solo el Supervisor o Administrador puede realizar esta acción.', 403)
   }
   if (accion.endsWith('_admin') && !isAdmin) {
     return apiError('Solo el Administrador puede realizar esta acción.', 403)
   }
   // Doble validación por permiso (por si el rol tiene permisos personalizados)
-  if (!hasPermission(session.user.rol, permisoRequerido)) {
+  if (!hasPermission(session.user.rol, permisoRequerido, session.userPermisos)) {
     return apiError(`No tiene permisos para realizar esta acción (${accion})`, 403)
   }
 
@@ -85,7 +89,21 @@ export async function POST(
 
     // Validar secuencia del flujo
     const etapaActual = solicitud.etapaAprobacion
-    if ((accion === 'aprobar_supervisor' || accion === 'rechazar_supervisor') && etapaActual !== 'Pendiente Supervisor') {
+    const isDevolver = accion.startsWith('devolver_')
+    if (isDevolver) {
+      // La devolución requiere observaciones obligatorias
+      if (!observaciones || !observaciones.trim()) {
+        return apiError('Para devolver una solicitud debe indicar las correcciones necesarias', 400)
+      }
+      // Supervisor puede devolver desde Pendiente Supervisor (re-abrir para edición)
+      if (accion === 'devolver_supervisor' && etapaActual !== 'Pendiente Supervisor') {
+        return apiError(`Solo se puede devolver una solicitud en etapa Pendiente Supervisor (etapa actual: ${etapaActual})`, 400)
+      }
+      // Admin puede devolver desde Aprobada Supervisor
+      if (accion === 'devolver_admin' && etapaActual !== 'Aprobada Supervisor') {
+        return apiError(`Solo se puede devolver una solicitud en etapa Aprobada Supervisor (etapa actual: ${etapaActual})`, 400)
+      }
+    } else if ((accion === 'aprobar_supervisor' || accion === 'rechazar_supervisor') && etapaActual !== 'Pendiente Supervisor') {
       return apiError(`La solicitud no está pendiente de aprobación del supervisor (etapa actual: ${etapaActual})`, 400)
     }
     if ((accion === 'aprobar_admin' || accion === 'rechazar_admin') && etapaActual !== 'Aprobada Supervisor') {
@@ -125,6 +143,15 @@ export async function POST(
       updateData.adminFechaAprobacion = now
       updateData.adminObservaciones = observaciones || null
       updateData.estado = 'Rechazada'
+    } else if (accion === 'devolver_supervisor') {
+      // Devolver: la solicitud vuelve a Borrador con observaciones
+      // para que el solicitante corrija y reenvíe
+      updateData.estado = 'Borrador'
+      updateData.etapaAprobacion = null
+    } else if (accion === 'devolver_admin') {
+      // Devolver desde admin: vuelve a Borrador para correcciones
+      updateData.estado = 'Borrador'
+      updateData.etapaAprobacion = null
     }
 
     // Transacción: actualizar SC + crear historial + crear notificaciones
@@ -168,6 +195,16 @@ export async function POST(
           rechazar_admin: {
             titulo: 'Solicitud rechazada por Administrador',
             mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue rechazada por el administrador ${aprobadorNombre}.${observaciones ? ` Motivo: ${observaciones}` : ''}`,
+            tipo: 'Alerta',
+          },
+          devolver_supervisor: {
+            titulo: 'Solicitud devuelta por Supervisor',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue devuelta para correcciones por el supervisor ${aprobadorNombre}.${observaciones ? ` Correcciones: ${observaciones}` : ''}`,
+            tipo: 'Alerta',
+          },
+          devolver_admin: {
+            titulo: 'Solicitud devuelta por Administrador',
+            mensaje: `Tu solicitud ${solicitud.codigo} - "${solicitud.titulo}" fue devuelta para correcciones por el administrador ${aprobadorNombre}.${observaciones ? ` Correcciones: ${observaciones}` : ''}`,
             tipo: 'Alerta',
           },
         }
@@ -256,7 +293,7 @@ export async function POST(
       success: true,
       solicitud: updated,
       etapaNueva,
-      message: `Solicitud ${accion.includes('aprobar') ? 'aprobada' : 'rechazada'} correctamente`,
+      message: `Solicitud ${accion.includes('aprobar') ? 'aprobada' : accion.includes('rechazar') ? 'rechazada' : 'devuelta para correcciones'} correctamente`,
     })
   } catch (error) {
     console.error('Error procesando aprobación SC:', error)

@@ -371,10 +371,19 @@ model OrdenTrabajo {
   creadoPorNombre   String?  // nombre legible del creador
   perfilMovilId     String?  // ID del MovilProfile que creó la OT desde la app móvil
   
+  // Origen: permite enlazar OT a Proyecto u otra entidad
+  origenTipo        String?  // "Proyecto", "Manual", etc.
+  origenId          String?  // ID de la entidad origen
+  origenCodigo      String?  // Codigo legible: "PROY-001", etc.
+
   // Fotos antes y después
   fotosAntes      String?  // JSON array de fotos antes del trabajo
   fotosDespues    String?  // JSON array de fotos después del trabajo
-  
+
+  // Google Drive
+  driveFolderId  String?  // ID de la carpeta de la OT en Drive
+
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -408,6 +417,8 @@ model OrdenTrabajo {
   @@index([perfilMovilId])
   @@index([createdAt])
   @@index([fechaInicio])
+  @@index([origenTipo, origenId])
+  @@index([driveFolderId])
 }
 
 model OTMaterial {
@@ -507,6 +518,14 @@ model Proyecto {
   fotosDespues      String?
   cotizaciones      String?
 
+  // Google Drive
+  driveFolderId  String?  // ID de la carpeta raíz del proyecto en Drive
+  driveData      String?  // JSON con IDs de subcarpetas
+
+  // Vinculación con OT y SC creadas desde este proyecto
+  otsVinculadas  String?  // JSON array: [{id, otNum, titulo, estado, createdAt}]
+  scsVinculadas  String?  // JSON array: [{id, codigo, titulo, estado, createdAt}]
+
   // Relación con Condominio
   condominioId  String?
   condominio    Condominio? @relation(fields: [condominioId], references: [id])
@@ -522,6 +541,7 @@ model Proyecto {
   documentos    ProyectoDocumento[]
   @@index([condominioId, estado])
   @@index([centroCostoId])
+  @@index([driveFolderId])
 }
 
 model ProyectoMaterial {
@@ -1458,17 +1478,27 @@ model SolicitudCompra {
   codigo          String   @unique // SC-0001, SC-0002, etc.
   titulo          String
   descripcion     String?
-  estado          String   @default("Solicitado") // Solicitado, En Proceso, Comprado, Rechazado, Anulada
+  estado          String   @default("Borrador") // Borrador, Solicitado, En Proceso, Comprado, Rechazado, Anulada
   prioridad       String   @default("Media") // Baja, Media, Alta, Urgente
-  origenTipo      String?  // OT, Manual
-  origenId        String?  // ID de la OT si vino de ahí
-  origenCodigo    String?  // OT-0001 etc
+  moneda          String   @default("CLP") // CLP, USD
+  origenTipo      String?  // OT, Proyecto, Manual
+  origenId        String?  // ID de la OT/Proyecto si vino de ahí
+  origenCodigo    String?  // OT-0001, PRJ-0001 etc
+  // Asociación a Proyecto/OT (selector predictivo)
+  proyectoId      String?  // FK a Proyecto
+  proyectoNombre  String?  // Nombre denormalizado del proyecto
+  otId            String?  // FK a OrdenTrabajo
+  otCodigo        String?  // Código denormalizado de la OT
+  // Centro de costos
+  centroCostoId   String?
+  // Materiales
   materiales      String?  // JSON array con [{nombre, cantidad, unidad, precioEstimado, total}]
   totalEstimado   Float    @default(0)
   solicitadoPor   String?  // Nombre del usuario
   solicitadoPorId String?  // ID del usuario
   fechaSolicitud  DateTime @default(now())
   fechaEspera     String?  // Fecha esperada de entrega
+  submittedAt     DateTime? // Fecha en que se envió a revisión (de Borrador → Solicitado)
   proveedorSugerido String?
   observaciones   String?
   // Links de compra (JSON array de URLs)
@@ -1482,9 +1512,6 @@ model SolicitudCompra {
   condominio      Condominio? @relation(fields: [condominioId], references: [id])
 
   // ===== Campos del flujo de aprobación =====
-  // Etapa del flujo: 'Pendiente Supervisor' → 'Aprobada Supervisor' → 'Aprobada Admin' (lista para gestionar)
-  //                                              ↘ 'Rechazada Supervisor'
-  //                                                  ↘ 'Rechazada Admin'
   etapaAprobacion String   @default("Pendiente Supervisor") // Pendiente Supervisor, Aprobada Supervisor, Aprobada Admin, Rechazada Supervisor, Rechazada Admin
   // Supervisor
   supervisorAprobadorId   String?
@@ -1506,6 +1533,9 @@ model SolicitudCompra {
   @@index([condominioId])
   @@index([origenTipo, origenId])
   @@index([etapaAprobacion])
+  @@index([proyectoId])
+  @@index([otId])
+  @@index([centroCostoId])
 }
 
 // ============================================
@@ -1608,7 +1638,7 @@ model MovilProfile {
   id          String   @id @default(cuid())
   name        String
   password    String   @default("")
-  accessCode  String   @default("")
+  accessCode  String   @default("") @unique
   color       String   @default("")
   icon        String   @default("")
   workAreaIds String[] @default([])
@@ -1749,5 +1779,63 @@ model GoogleAccount {
 
   @@index([userId])
   @@index([email])
+}
+
+// ============================================
+// AUTOMATIZACIONES
+// ============================================
+model Automatizacion {
+  id                  String    @id @default(cuid())
+  codigo              String    @unique                  // Ej: ALERTA_RONDA_NOCHE
+  nombre              String                             // Ej: Alerta Rondas Noche
+  descripcion         String?
+  categoria           String                             // alertas, reportes, rondas, backups
+  endpoint            String                             // Ej: /api/alertas/rondas-diario
+  metodo              String    @default("GET")          // GET, POST
+  activa              Boolean   @default(true)
+  modoManual          Boolean   @default(false)          // Si true, solo se ejecuta manualmente
+  cronSchedule        String?                            // Ej: "0 10 * * *" (cron expression)
+  cronDescription     String?                            // Ej: "Todos los días a las 10:00"
+  requiereAuth        Boolean   @default(true)
+  maxDuration         Int       @default(30000)          // Timeout en ms
+  reintentos          Int       @default(1)
+  timeoutMs           Int       @default(30000)
+  parametros          String?                            // JSON con parámetros adicionales
+  correos             String?                            // JSON array de emails destinatarios
+  fechaInicio         DateTime?                          // Fecha de inicio de la programación
+  fechaFin            DateTime?                          // Fecha de fin de la programación
+  horaEjecucion       String?                            // HH:mm - hora de ejecución
+  diasSemana          String?                            // JSON array de días: [1,2,3,4,5] (lun=1, dom=7)
+  icono               String?                            // Nombre del icono (Bell, Database, etc.)
+  color               String?                            // Color (blue, amber, green, etc.)
+  orden               Int       @default(0)
+  ultimaEjecucion     DateTime?
+  ultimoResultado     String?                            // exitoso, error, timeout
+  ultimoError         String?
+  proximaEjecucion    DateTime?
+  ejecucionesExitosas Int       @default(0)
+  ejecucionesFallidas Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([categoria])
+  @@index([activa])
+  @@index([codigo])
+}
+
+model AutomatizacionLog {
+  id                    String   @id @default(cuid())
+  automatizacionCodigo  String
+  tipo                  String                            // ejecucion_manual, ejecucion_cron, toggle, seed
+  resultado             String                            // exitoso, error, timeout
+  mensaje               String?
+  error                 String?
+  duracionMs            Int?
+  ejecutadoPor          String?                           // userId o 'system'
+  createdAt             DateTime @default(now())
+
+  @@index([automatizacionCodigo])
+  @@index([createdAt])
+  @@index([tipo])
 }
 
