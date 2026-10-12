@@ -2198,6 +2198,7 @@ export function ProyectosModule() {
         origenTipo: 'Proyecto',
         origenId: proy.id,
         origenCodigo: codigoProy,
+        proyectoId: proy.id,
         totalEstimado,
       }
 
@@ -2234,33 +2235,48 @@ export function ProyectosModule() {
     setRelatedOTs([])
     setRelatedSCs([])
     try {
-      // Fetch OTs related to this project
-      const otRes = await fetch('/api/ordenes-trabajo?search=')
+      // Fetch OTs related to this project using API filter
+      const otRes = await fetch(`/api/ordenes-trabajo?proyectoId=${encodeURIComponent(proyectoId)}`)
       if (otRes.ok) {
-        const allOTs = await otRes.json()
-        const related = allOTs.filter((ot: any) => ot.proyectoId === proyectoId)
-        setRelatedOTs(related.map((ot: any) => ({
+        const otData = await otRes.json()
+        const ots = Array.isArray(otData) ? otData : []
+        setRelatedOTs(ots.map((ot: any) => ({
           id: ot.id,
           otNum: ot.otNum,
           titulo: ot.titulo,
           estado: ot.estado,
           prioridad: ot.prioridad,
         })))
+      } else {
+        console.warn('Error fetching OTs:', otRes.status)
       }
 
-      // Fetch SCs related to this project
-      const scRes = await fetch('/api/solicitudes-compra?origenTipo=Proyecto')
-      if (scRes.ok) {
-        const allSCs = await scRes.json()
-        const related = allSCs.filter((sc: any) => sc.origenId === proyectoId)
-        setRelatedSCs(related.map((sc: any) => ({
-          id: sc.id,
-          codigo: sc.codigo,
-          titulo: sc.titulo,
-          estado: sc.estado,
-          prioridad: sc.prioridad,
-        })))
+      // Fetch SCs related to this project using both filters
+      // Try proyectoId first (newer SCs), then origenId (older SCs created via origenTipo)
+      const [scRes1, scRes2] = await Promise.all([
+        fetch(`/api/solicitudes-compra?proyectoId=${encodeURIComponent(proyectoId)}`).catch(() => null),
+        fetch(`/api/solicitudes-compra?origenTipo=Proyecto`).catch(() => null),
+      ])
+      const scSet = new Map<string, any>()
+      // SCs linked via proyectoId
+      if (scRes1?.ok) {
+        const scData1 = await scRes1.json()
+        const scs1 = Array.isArray(scData1) ? scData1 : []
+        scs1.forEach((sc: any) => scSet.set(sc.id, sc))
       }
+      // SCs linked via origenTipo=Proyecto + origenId
+      if (scRes2?.ok) {
+        const scData2 = await scRes2.json()
+        const scs2 = Array.isArray(scData2) ? scData2 : []
+        scs2.filter((sc: any) => sc.origenId === proyectoId).forEach((sc: any) => scSet.set(sc.id, sc))
+      }
+      setRelatedSCs(Array.from(scSet.values()).map((sc: any) => ({
+        id: sc.id,
+        codigo: sc.codigo,
+        titulo: sc.titulo,
+        estado: sc.estado,
+        prioridad: sc.prioridad,
+      })))
     } catch (error) {
       console.error('Error fetching related records:', error)
     } finally {
@@ -2964,27 +2980,33 @@ export function ProyectosModule() {
               <Separator />
 
               {/* Órdenes de Trabajo y Solicitudes de Compra relacionadas */}
-              <div>
-                <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
-                  <Link2 className="w-3 h-3" /> Registros vinculados a este Proyecto
+              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <Label className="text-sm font-semibold text-slate-700 mb-3 block flex items-center gap-2">
+                  <Link2 className="w-4 h-4" /> Registros vinculados a este Proyecto
                 </Label>
                 {loadingRelated ? (
-                  <p className="text-xs text-slate-400">Cargando registros vinculados...</p>
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <div className="animate-spin w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full" />
+                    <span className="text-sm">Cargando registros vinculados...</span>
+                  </div>
                 ) : relatedOTs.length === 0 && relatedSCs.length === 0 ? (
-                  <p className="text-xs text-slate-400">No hay OT ni SC vinculadas a este proyecto aún.</p>
+                  <div className="text-center py-3">
+                    <p className="text-sm text-slate-500">No hay OT ni SC vinculadas a este proyecto aún.</p>
+                    <p className="text-xs text-slate-400 mt-1">Usa los botones "Crear OT" o "Crear SC" abajo para vincular registros.</p>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {relatedOTs.length > 0 && (
                       <div>
-                        <p className="text-xs font-medium text-blue-700 mb-1 flex items-center gap-1">
-                          <ClipboardList className="w-3 h-3" /> Órdenes de Trabajo ({relatedOTs.length})
+                        <p className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
+                          <ClipboardList className="w-4 h-4" /> Órdenes de Trabajo ({relatedOTs.length})
                         </p>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           {relatedOTs.map((ot) => (
                             <button
                               key={ot.id}
                               onClick={() => setCurrentModule('ot')}
-                              className="w-full flex items-center justify-between bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 text-left transition-colors group"
+                              className="w-full flex items-center justify-between bg-white hover:bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm"
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-bold text-blue-800 shrink-0">{ot.otNum}</span>
@@ -3001,15 +3023,15 @@ export function ProyectosModule() {
                     )}
                     {relatedSCs.length > 0 && (
                       <div>
-                        <p className="text-xs font-medium text-emerald-700 mb-1 flex items-center gap-1">
-                          <ShoppingCart className="w-3 h-3" /> Solicitudes de Compra ({relatedSCs.length})
+                        <p className="text-sm font-medium text-emerald-700 mb-2 flex items-center gap-1">
+                          <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra ({relatedSCs.length})
                         </p>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           {relatedSCs.map((sc) => (
                             <button
                               key={sc.id}
                               onClick={() => setCurrentModule('solicitudescompra')}
-                              className="w-full flex items-center justify-between bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-3 py-2 text-left transition-colors group"
+                              className="w-full flex items-center justify-between bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm"
                             >
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="text-sm font-bold text-emerald-800 shrink-0">{sc.codigo}</span>
