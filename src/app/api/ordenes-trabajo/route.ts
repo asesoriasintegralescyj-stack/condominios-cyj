@@ -144,6 +144,8 @@ export async function GET(request: NextRequest) {
         costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
         tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
         creadoPorNombre: true,
+        proyectoId: true,
+        proyecto: { select: { id: true, codigo: true, nombre: true } },
         propiedad: { select: { id: true, nombre: true } },
         asignado: { select: { id: true, nombre: true, cargo: true } },
         centroCosto: { select: { id: true, codigo: true, nombre: true } },
@@ -238,7 +240,7 @@ export async function POST(request: NextRequest) {
     console.log(`[OT POST] Correlativo generado: ${nextNum}`)
 
     // Extract resources from data
-    const { materiales, herramientas, tareas, personalOT, centroCostoId, origenTipo, origenId, origenCodigo, _clientIdempotency: _idem, ...otData } = data
+    const { materiales, herramientas, tareas, personalOT, centroCostoId, proyectoId, origenTipo, origenId, origenCodigo, _clientIdempotency: _idem, ...otData } = data
 
     // ─── VALIDAR FKs: Asegurar que los IDs referenciados existan en la BD ───
     // Si un ID no existe (ej: centroCostoMaster eliminado), se setea a null en vez de fallar
@@ -291,6 +293,7 @@ export async function POST(request: NextRequest) {
       asignadoId: validatedAsignadoId,
       activoId: validatedActivoId,
       centroCostoId: validatedCentroCostoId,
+      proyectoId: proyectoId || null,  // Referencia al Proyecto origen
       esRecurrente: otData.esRecurrente || false,
       formaPago: otData.formaPago || null,
       creadoPor: session.user.id,

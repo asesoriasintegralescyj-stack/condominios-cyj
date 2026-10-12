@@ -408,6 +408,11 @@ model OrdenTrabajo {
   personalOT      OTPersonal[]
   documentos      OTDocumento[]
   historialAprobaciones HistorialAprobacionOT[]
+
+  // Relación con Proyecto (OT creada desde un proyecto)
+  proyectoId      String?
+  proyecto        Proyecto?  @relation(fields: [proyectoId], references: [id])
+
   @@index([condominioId, estado])
   @@index([estadoAprobacion])
   @@index([asignadoId])
@@ -419,6 +424,7 @@ model OrdenTrabajo {
   @@index([fechaInicio])
   @@index([origenTipo, origenId])
   @@index([driveFolderId])
+  @@index([proyectoId])
 }
 
 model OTMaterial {
@@ -539,6 +545,10 @@ model Proyecto {
   tareas        ProyectoTarea[]
   personal      ProyectoPersonal[]
   documentos    ProyectoDocumento[]
+
+  // Relación inversa: OTs creadas desde este proyecto
+  ordenesTrabajo  OrdenTrabajo[]
+
   @@index([condominioId, estado])
   @@index([centroCostoId])
   @@index([driveFolderId])

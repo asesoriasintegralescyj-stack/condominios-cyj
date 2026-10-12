@@ -1159,6 +1159,7 @@ export function OrdenesTrabajoModule() {
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tipo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
+                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Proyecto</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Centro Costo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tiempo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Costo Real</th>
@@ -1190,6 +1191,11 @@ export function OrdenesTrabajoModule() {
                       </td>
                       <td className="p-3">
                         <Badge className={estadoColors[ot.estado] || 'bg-slate-100'}>{ot.estado}</Badge>
+                      </td>
+                      <td className="p-3 text-xs text-slate-600">
+                        {(ot as any).proyecto ? (
+                          <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] cursor-pointer" title={`Proyecto: ${(ot as any).proyecto.nombre}`} onClick={(e: any) => { e.stopPropagation(); }}>{(ot as any).proyecto.codigo || 'PROY'}</Badge>
+                        ) : '–'}
                       </td>
                       <td className="p-3 text-xs font-mono">
                         {ot.centroCosto ? (

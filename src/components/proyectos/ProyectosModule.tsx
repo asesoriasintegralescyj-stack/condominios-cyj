@@ -29,12 +29,13 @@ import {
   CheckSquare, Users, FileText, Upload, Eye, X, Paperclip,
   FileSpreadsheet, FileDown, Camera, Image as ImageIcon,
   ShoppingCart, Link2, FolderKanban, HardHat, CheckCircle, XCircle,
-  BarChart3, ClipboardList,
+  BarChart3, ClipboardList, ArrowRight, ExternalLink,
 } from 'lucide-react'
 import { useSession } from '@/hooks/use-session'
 import { toast } from 'sonner'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { verDocumentoEnVentana } from '@/lib/utils'
+import { useAppStore } from '@/lib/store'
 
 // ============================================
 // Interfaces
@@ -434,8 +435,15 @@ export function ProyectosModule() {
   const [fotosDespues, setFotosDespues] = useState<string[]>([])
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([])
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false)
-  const [creandoOT, setCreandoOT] = useState(false)
-  const [creandoSC, setCreandoSC] = useState(false)
+  // Quick-create: OT y SC desde listado de proyectos
+  const [quickCreating, setQuickCreating] = useState<'ot' | 'sc' | null>(null)
+
+  // Related OTs and SCs for the selected project (detail dialog)
+  const [relatedOTs, setRelatedOTs] = useState<{ id: string; otNum: string; titulo: string; estado: string; prioridad: string }[]>([])
+  const [relatedSCs, setRelatedSCs] = useState<{ id: string; codigo: string; titulo: string; estado: string; prioridad: string }[]>([])
+  const [loadingRelated, setLoadingRelated] = useState(false)
+
+  const { setCurrentModule } = useAppStore()
 
   // ============================================
   // Fetchers
@@ -1022,6 +1030,8 @@ export function ProyectosModule() {
       })
     }
     setDetailDialogOpen(true)
+    // Fetch related OTs and SCs in parallel
+    fetchRelatedRecords(proy.id)
   }
 
   // ============================================
@@ -2097,71 +2107,27 @@ export function ProyectosModule() {
   }
 
   // ============================================
-  // Crear OT y SC desde Proyecto (enlazadas)
+  // Quick-create: OT rápida desde un proyecto
   // ============================================
-  const crearOTDesdeProyecto = async (proy: Proyecto) => {
-    setCreandoOT(true)
+  const quickCreateOT = async (proy: Proyecto) => {
+    setQuickCreating('ot')
     try {
       const codigoProy = proy.codigo || extraerCodigoProyecto(proy.nombre)
       const descripcionProy = extraerDescripcion(proy.nombre)
 
-      const materialesOT = (proy.materiales || [])
-        .filter((m) => (m.descripcion || '').trim() !== '')
-        .map((m) => ({
-          descripcion: (m.descripcion || '').trim(),
-          cantidad: Number(m.cantidad) || 1,
-          unidad: m.unidad || 'unidad',
-          precioUnit: Number(m.precioUnit) || 0,
-          total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
-        }))
-
-      const herramientasOT = (proy.herramientas || [])
-        .filter((h) => (h.nombre || '').trim() !== '')
-        .map((h) => ({
-          nombre: h.nombre.trim(),
-          cantidad: Number(h.cantidad) || 1,
-        }))
-
-      const tareasOT = (proy.tareas || [])
-        .filter((t) => (t.descripcion || '').trim() !== '')
-        .map((t) => ({
-          descripcion: t.descripcion.trim(),
-          cantidad: Number(t.cantidad) || 1,
-          estado: t.estado || 'Pendiente',
-        }))
-
-      const personalOT = (proy.personal || [])
-        .filter((p) => (p.nombre || '').trim() !== '')
-        .map((p) => ({
-          nombre: p.nombre.trim(),
-          tipo: p.tipo || 'Interno',
-          cantidad: Number(p.cantidad) || 1,
-          precioUnit: Number(p.precioUnit) || 0,
-          total: Number(p.total) || 0,
-        }))
-
-      const idempotencyToken = `OT-PROY-${proy.id}-${Date.now()}`
-
       const payload = {
         titulo: `OT desde Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
-        tipo: proy.tipoTrabajo || 'Correctivo',
-        prioridad: proy.prioridad || 'Media',
-        estado: 'Pendiente',
-        ubicacion: proy.ubicacion || null,
-        descripcion: proy.descripcion || `Orden de trabajo generada desde Proyecto ${proy.nombre} (${codigoProy}).`,
-        costoEstimado: proy.monto || proy.presProg || 0,
-        fechaInicio: proy.fechaInicio || null,
-        fechaLimite: proy.fechaFin || null,
+        tipo: proy.tipoReparacion === 'Electricidad' ? 'Correctivo'
+          : proy.tipoReparacion === 'Plomería' ? 'Correctivo'
+          : proy.tipoTrabajo?.includes('Preventiva') ? 'Preventivo'
+          : proy.tipoTrabajo?.includes('Mejora') ? 'Mejora'
+          : 'Correctivo',
+        prioridad: (proy.prioridad === 'Urgente' ? 'Urgente' : proy.prioridad === 'Alta' ? 'Alta' : proy.prioridad === 'Baja' ? 'Baja' : 'Media') as 'Urgente' | 'Alta' | 'Media' | 'Baja',
+        ubicacion: proy.sector || proy.ubicacion || null,
+        descripcion: `Orden de Trabajo generada desde el Proyecto ${proy.nombre}. ${proy.descripcion || ''}`.slice(0, 500),
         centroCostoId: proy.centroCostoId || null,
-        origenTipo: 'Proyecto',
-        origenId: proy.id,
-        origenCodigo: codigoProy,
-        materiales: materialesOT,
-        herramientas: herramientasOT,
-        tareas: tareasOT,
-        personalOT,
-        notas: `Creada desde Proyecto: ${proy.nombre} (${codigoProy})`,
-        _clientIdempotency: idempotencyToken,
+        proyectoId: proy.id,
+        _clientIdempotency: `quick-ot-proy-${proy.id}-${Date.now()}`,
       }
 
       const res = await fetch('/api/ordenes-trabajo', {
@@ -2182,53 +2148,61 @@ export function ProyectosModule() {
       // Recargar proyectos para mostrar la OT vinculada
       fetchProyectos()
     } catch (error) {
-      console.error('Error creando OT desde proyecto:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al crear la orden de trabajo')
+      console.error('Error creando OT rápida:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al crear OT')
     } finally {
-      setCreandoOT(false)
+      setQuickCreating(null)
     }
   }
 
-  const crearSCDesdeProyecto = async (proy: Proyecto) => {
-    setCreandoSC(true)
+  // ============================================
+  // Quick-create: SC rápida desde un proyecto
+  // ============================================
+  const quickCreateSC = async (proy: Proyecto) => {
+    setQuickCreating('sc')
     try {
       const codigoProy = proy.codigo || extraerCodigoProyecto(proy.nombre)
-      const descripcionProy = extraerDescripcion(proy.nombre)
+      const descripcionProy: string = extraerDescripcion(proy.nombre)
 
-      const materialesSolicitud = (proy.materiales || [])
-        .filter((m) => (m.descripcion || '').trim() !== '')
-        .map((m) => ({
-          nombre: (m.descripcion || '').trim(),
-          cantidad: Number(m.cantidad) || 0,
-          unidad: m.unidad || 'unidad',
-          precioEstimado: Number(m.precioUnit) || 0,
-          total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
-          linkCompra: m.linkCompra || '',
-        }))
+      // Try to get materials from project detail
+      let projectMaterials: ProyectoMaterial[] = []
+      try {
+        const detailRes = await fetch(`/api/proyectos/${proy.id}`)
+        if (detailRes.ok) {
+          const fullProy = await detailRes.json()
+          if (fullProy?.materiales) {
+            projectMaterials = fullProy.materiales
+          }
+        }
+      } catch { /* proceed without materials */ }
 
-      if (materialesSolicitud.length === 0) {
-        toast.error('El proyecto no tiene materiales para solicitar')
-        setCreandoSC(false)
-        return
-      }
+      const materialesSolicitud = projectMaterials.length > 0
+        ? projectMaterials
+            .filter((m) => (m.descripcion || '').trim() !== '')
+            .map((m) => ({
+              nombre: (m.descripcion || '').trim(),
+              cantidad: Number(m.cantidad) || 0,
+              unidad: m.unidad || 'unidad',
+              precioEstimado: Number(m.precioUnit) || 0,
+              total: Number(m.total) || (Number(m.cantidad) || 0) * (Number(m.precioUnit) || 0),
+              linkCompra: m.linkCompra || '',
+            }))
+        : []
 
-      const links = (proy.materiales || [])
-        .map((m) => (m.linkCompra || '').trim())
-        .filter((l) => l !== '')
+      const totalEstimado = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
 
-      const total = materialesSolicitud.reduce((acc, m) => acc + (m.total || 0), 0)
-
-      const payload = {
+      const payload: Record<string, any> = {
         titulo: `SC desde Proyecto ${codigoProy} - ${descripcionProy}`.slice(0, 200).trim(),
-        descripcion: proy.descripcion || `Solicitud generada desde Proyecto ${proy.nombre} (${codigoProy}).`,
-        prioridad: (proy.prioridad === 'Urgente' ? 'Alta' : proy.prioridad) || 'Media',
-        materiales: materialesSolicitud,
-        totalEstimado: total,
+        descripcion: proy.descripcion || `Solicitud generada desde el Proyecto ${proy.nombre}.`,
+        prioridad: proy.prioridad === 'Urgente' ? 'Alta' : (proy.prioridad || 'Media'),
         origenTipo: 'Proyecto',
         origenId: proy.id,
         origenCodigo: codigoProy,
-        links,
-        centroCostoId: proy.centroCostoId || null,
+        totalEstimado,
+      }
+
+      if (materialesSolicitud.length > 0) {
+        payload.materiales = materialesSolicitud
       }
 
       const res = await fetch('/api/solicitudes-compra', {
@@ -2238,19 +2212,59 @@ export function ProyectosModule() {
       })
       const data = await res.json()
       if (!res.ok) {
-        throw new Error(data?.details || data?.error || 'Error al crear la solicitud de compra')
+        throw new Error(data?.details || data?.error || 'Error al crear la Solicitud de Compra')
       }
       const emailMsg = data?.emailSkipped
         ? ' (SMTP no configurado)'
-        : data?.emailEnviado ? ' y email enviado' : ''
+        : data?.emailEnviado ? ' — email enviado' : ''
       toast.success(`SC ${data.codigo} creada desde Proyecto ${codigoProy}${emailMsg}`)
-      // Recargar proyectos para mostrar la SC vinculada
-      fetchProyectos()
     } catch (error) {
-      console.error('Error creando SC desde proyecto:', error)
-      toast.error(error instanceof Error ? error.message : 'Error al crear la solicitud de compra')
+      console.error('Error creando SC rápida:', error)
+      toast.error(error instanceof Error ? error.message : 'Error al crear Solicitud de Compra')
     } finally {
-      setCreandoSC(false)
+      setQuickCreating(null)
+    }
+  }
+
+  // ============================================
+  // Fetch related OTs and SCs for a project
+  // ============================================
+  const fetchRelatedRecords = async (proyectoId: string) => {
+    setLoadingRelated(true)
+    setRelatedOTs([])
+    setRelatedSCs([])
+    try {
+      // Fetch OTs related to this project
+      const otRes = await fetch('/api/ordenes-trabajo?search=')
+      if (otRes.ok) {
+        const allOTs = await otRes.json()
+        const related = allOTs.filter((ot: any) => ot.proyectoId === proyectoId)
+        setRelatedOTs(related.map((ot: any) => ({
+          id: ot.id,
+          otNum: ot.otNum,
+          titulo: ot.titulo,
+          estado: ot.estado,
+          prioridad: ot.prioridad,
+        })))
+      }
+
+      // Fetch SCs related to this project
+      const scRes = await fetch('/api/solicitudes-compra?origenTipo=Proyecto')
+      if (scRes.ok) {
+        const allSCs = await scRes.json()
+        const related = allSCs.filter((sc: any) => sc.origenId === proyectoId)
+        setRelatedSCs(related.map((sc: any) => ({
+          id: sc.id,
+          codigo: sc.codigo,
+          titulo: sc.titulo,
+          estado: sc.estado,
+          prioridad: sc.prioridad,
+        })))
+      }
+    } catch (error) {
+      console.error('Error fetching related records:', error)
+    } finally {
+      setLoadingRelated(false)
     }
   }
 
@@ -2593,8 +2607,7 @@ export function ProyectosModule() {
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaInicio')}>Inicio <SortIcon field="fechaInicio" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaFin')}>Término <SortIcon field="fechaFin" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Adj.</th>
-                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '100px' }}>OT/SC</th>
-                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '70px' }}>Acc.</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '120px' }}>Acc.</th>
                 </tr>
               </thead>
               <tbody>
@@ -2670,10 +2683,10 @@ export function ProyectosModule() {
                         </td>
                         <td className="p-2" onClick={(e) => e.stopPropagation()}>
                           <div className="flex justify-center gap-0.5">
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700" title="Crear OT desde este Proyecto" aria-label="Crear OT" onClick={() => void crearOTDesdeProyecto(proy)} disabled={creandoOT}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Crear OT desde este proyecto" aria-label="Crear OT" onClick={() => quickCreateOT(proy)} disabled={quickCreating !== null}>
                               <ClipboardList className="w-3.5 h-3.5" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:text-emerald-700" title="Crear Solicitud de Compra" aria-label="Crear SC" onClick={() => void crearSCDesdeProyecto(proy)} disabled={creandoSC}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" title="Crear SC desde este proyecto" aria-label="Crear SC" onClick={() => quickCreateSC(proy)} disabled={quickCreating !== null}>
                               <ShoppingCart className="w-3.5 h-3.5" />
                             </Button>
                             <Button size="icon" variant="ghost" className="h-7 w-7" title="Exportar proyecto a PDF" aria-label="PDF" onClick={() => void exportProyectoToPdf(proy)}>
@@ -2947,6 +2960,73 @@ export function ProyectosModule() {
                   </div>
                 </div>
               )}
+
+              <Separator />
+
+              {/* Órdenes de Trabajo y Solicitudes de Compra relacionadas */}
+              <div>
+                <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
+                  <Link2 className="w-3 h-3" /> Registros vinculados a este Proyecto
+                </Label>
+                {loadingRelated ? (
+                  <p className="text-xs text-slate-400">Cargando registros vinculados...</p>
+                ) : relatedOTs.length === 0 && relatedSCs.length === 0 ? (
+                  <p className="text-xs text-slate-400">No hay OT ni SC vinculadas a este proyecto aún.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {relatedOTs.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-blue-700 mb-1 flex items-center gap-1">
+                          <ClipboardList className="w-3 h-3" /> Órdenes de Trabajo ({relatedOTs.length})
+                        </p>
+                        <div className="space-y-1">
+                          {relatedOTs.map((ot) => (
+                            <button
+                              key={ot.id}
+                              onClick={() => setCurrentModule('ot')}
+                              className="w-full flex items-center justify-between bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded px-3 py-2 text-left transition-colors group"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-bold text-blue-800 shrink-0">{ot.otNum}</span>
+                                <span className="text-xs text-slate-600 truncate">{ot.titulo}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Badge className={`text-[10px] ${estadoColors[ot.estado] || 'bg-slate-100 text-slate-600'}`}>{ot.estado}</Badge>
+                                <ExternalLink className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {relatedSCs.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-emerald-700 mb-1 flex items-center gap-1">
+                          <ShoppingCart className="w-3 h-3" /> Solicitudes de Compra ({relatedSCs.length})
+                        </p>
+                        <div className="space-y-1">
+                          {relatedSCs.map((sc) => (
+                            <button
+                              key={sc.id}
+                              onClick={() => setCurrentModule('solicitudescompra')}
+                              className="w-full flex items-center justify-between bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-3 py-2 text-left transition-colors group"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-bold text-emerald-800 shrink-0">{sc.codigo}</span>
+                                <span className="text-xs text-slate-600 truncate">{sc.titulo}</span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Badge className={`text-[10px] ${estadoColors[sc.estado] || 'bg-slate-100 text-slate-600'}`}>{sc.estado}</Badge>
+                                <ExternalLink className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           <DialogFooter className="flex gap-2 flex-wrap">
@@ -2955,24 +3035,24 @@ export function ProyectosModule() {
               <Button
                 variant="outline"
                 className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                onClick={() => void crearOTDesdeProyecto(selectedProy)}
-                disabled={creandoOT}
-                title="Crea una Orden de Trabajo con todos los datos del proyecto"
+                onClick={() => quickCreateOT(selectedProy)}
+                disabled={quickCreating !== null}
+                title="Crea una Orden de Trabajo vinculada a este proyecto"
               >
                 <ClipboardList className="w-4 h-4 mr-1" />
-                {creandoOT ? 'Creando...' : 'Crear OT'}
+                {quickCreating === 'ot' ? 'Creando...' : 'Crear OT'}
               </Button>
             )}
-            {selectedProy && (selectedProy.materiales?.length || 0) > 0 && (
+            {selectedProy && (
               <Button
                 variant="secondary"
                 className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => void crearSCDesdeProyecto(selectedProy)}
-                disabled={creandoSC}
-                title="Crea una Solicitud de Compra con los materiales del proyecto"
+                onClick={() => quickCreateSC(selectedProy)}
+                disabled={quickCreating !== null}
+                title="Crea una Solicitud de Compra vinculada a este proyecto"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
-                {creandoSC ? 'Creando...' : 'Crear SC'}
+                {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
               </Button>
             )}
             {selectedProy && (
@@ -2982,6 +3062,30 @@ export function ProyectosModule() {
                 title="Exportar este proyecto a PDF con todos los datos"
               >
                 <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
+              </Button>
+            )}
+            {selectedProy && (
+              <Button
+                variant="secondary"
+                onClick={() => quickCreateOT(selectedProy)}
+                disabled={quickCreating !== null}
+                title="Crea una Orden de Trabajo vinculada a este proyecto"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <ClipboardList className="w-4 h-4 mr-1" />
+                {quickCreating === 'ot' ? 'Creando...' : 'Crear OT'}
+              </Button>
+            )}
+            {selectedProy && (
+              <Button
+                variant="secondary"
+                onClick={() => quickCreateSC(selectedProy)}
+                disabled={quickCreating !== null}
+                title="Crea una Solicitud de Compra vinculada a este proyecto"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
               </Button>
             )}
             {hasPermission('proyectos.editar') && (
@@ -3827,25 +3931,23 @@ export function ProyectosModule() {
                   <Button
                     variant="outline"
                     className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                    onClick={() => void crearOTDesdeProyecto(proyFromForm)}
-                    disabled={creandoOT}
-                    title="Crea una Orden de Trabajo con todos los datos del proyecto"
+                    onClick={() => quickCreateOT(proyFromForm)}
+                    disabled={quickCreating !== null}
+                    title="Crea una Orden de Trabajo vinculada a este proyecto"
                   >
                     <ClipboardList className="w-4 h-4 mr-1" />
-                    {creandoOT ? 'Creando...' : 'Crear OT'}
+                    {quickCreating === 'ot' ? 'Creando...' : 'Crear OT'}
                   </Button>
-                  {materiales.length > 0 && (
-                    <Button
-                      variant="secondary"
-                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                      onClick={() => void crearSCDesdeProyecto(proyFromForm)}
-                      disabled={creandoSC}
-                      title="Crea una Solicitud de Compra con los materiales del proyecto"
-                    >
-                      <ShoppingCart className="w-4 h-4 mr-1" />
-                      {creandoSC ? 'Creando...' : 'Crear SC'}
-                    </Button>
-                  )}
+                  <Button
+                    variant="secondary"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => quickCreateSC(proyFromForm)}
+                    disabled={quickCreating !== null}
+                    title="Crea una Solicitud de Compra vinculada a este proyecto"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1" />
+                    {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
+                  </Button>
                 </>
               )
             })()}
