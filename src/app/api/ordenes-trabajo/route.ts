@@ -367,12 +367,14 @@ export async function POST(request: NextRequest) {
     }
 
     // ─── Actualizar proyecto con la OT vinculada ───
-    if (origenTipo === 'Proyecto' && origenId) {
+    // Check both origenTipo/origenId AND proyectoId for linking
+    const proyectoIdForLink = (origenTipo === 'Proyecto' && origenId) ? origenId : (proyectoId || null)
+    if (proyectoIdForLink) {
       try {
         // Usar raw SQL para leer otsVinculadas (Prisma select puede fallar si columna no existe)
         const [proyectoRow] = await db.$queryRawUnsafe<{ otsVinculadas: string | null }[]>(
           `SELECT "otsVinculadas" FROM "Proyecto" WHERE "id" = $1`,
-          origenId
+          proyectoIdForLink
         )
         if (proyectoRow) {
           const existing: any[] = proyectoRow.otsVinculadas ? JSON.parse(proyectoRow.otsVinculadas) : []
@@ -387,9 +389,9 @@ export async function POST(request: NextRequest) {
             })
             await db.$executeRawUnsafe(
               `UPDATE "Proyecto" SET "otsVinculadas" = $1 WHERE "id" = $2`,
-              JSON.stringify(existing), origenId
+              JSON.stringify(existing), proyectoIdForLink
             )
-            console.log(`[OT POST] Proyecto ${origenCodigo} actualizado con OT ${orden.otNum}`)
+            console.log(`[OT POST] Proyecto actualizado con OT ${orden.otNum}`)
           }
         }
       } catch (proyErr: any) {

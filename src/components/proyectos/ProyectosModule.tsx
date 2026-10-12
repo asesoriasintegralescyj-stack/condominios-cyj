@@ -2127,6 +2127,9 @@ export function ProyectosModule() {
         descripcion: `Orden de Trabajo generada desde el Proyecto ${proy.nombre}. ${proy.descripcion || ''}`.slice(0, 500),
         centroCostoId: proy.centroCostoId || null,
         proyectoId: proy.id,
+        origenTipo: 'Proyecto',
+        origenId: proy.id,
+        origenCodigo: codigoProy,
         _clientIdempotency: `quick-ot-proy-${proy.id}-${Date.now()}`,
       }
 
@@ -2867,93 +2870,96 @@ export function ProyectosModule() {
                 </div>
               </div>
 
-              {/* ─── Botones de navegación directa a OT/SC ─── */}
-              {(() => {
-                const ots: any[] = selectedProy.otsVinculadas ? JSON.parse(selectedProy.otsVinculadas) : []
-                const scs: any[] = selectedProy.scsVinculadas ? JSON.parse(selectedProy.scsVinculadas) : []
-                if (ots.length === 0 && scs.length === 0) return null
-                return (
-                  <div className="space-y-3">
-                    {/* ── Botones prominentes "Ir a OT" / "Ir a SC" ── */}
-                    <div className="flex flex-wrap gap-2">
-                      {ots.map((ot: any) => (
-                        <a
-                          key={ot.id}
-                          href={`/ordenes-trabajo?ot=${ot.id}`}
-                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
-                        >
-                          <ClipboardList className="w-4 h-4" />
-                          Ir a OT {ot.otNum}
-                          <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-blue-700 text-blue-100 border-blue-800">{ot.estado || 'Pendiente'}</Badge>
-                        </a>
-                      ))}
-                      {scs.map((sc: any) => (
-                        <a
-                          key={sc.id}
-                          href={`/solicitudes-compra?sc=${sc.id}`}
-                          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
-                        >
-                          <ShoppingCart className="w-4 h-4" />
-                          Ir a SC {sc.codigo}
-                          <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-700 text-emerald-100 border-emerald-800">{sc.estado || 'Borrador'}</Badge>
-                        </a>
-                      ))}
+              {/* ─── Navegación directa: Ir a OT / Ir a SC ─── */}
+              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <Label className="text-sm font-semibold text-slate-700 mb-3 block flex items-center gap-2">
+                  <Link2 className="w-4 h-4" /> Registros vinculados a este Proyecto
+                </Label>
+                {(() => {
+                  // Merge otsVinculadas/scsVinculadas (from proyecto JSON) with relatedOTs/relatedSCs (from API)
+                  const jsonOts: any[] = selectedProy.otsVinculadas ? JSON.parse(selectedProy.otsVinculadas) : []
+                  const jsonScs: any[] = selectedProy.scsVinculadas ? JSON.parse(selectedProy.scsVinculadas) : []
+                  // Use Map to deduplicate by id
+                  const allOts = new Map<string, any>()
+                  jsonOts.forEach((ot: any) => allOts.set(ot.id, ot))
+                  relatedOTs.forEach((ot) => allOts.set(ot.id, ot))
+                  const allScs = new Map<string, any>()
+                  jsonScs.forEach((sc: any) => allScs.set(sc.id, sc))
+                  relatedSCs.forEach((sc) => allScs.set(sc.id, sc))
+                  const ots = Array.from(allOts.values())
+                  const scs = Array.from(allScs.values())
+                  const hasAny = ots.length > 0 || scs.length > 0
+
+                  if (loadingRelated) {
+                    return (
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <div className="animate-spin w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full" />
+                        <span className="text-sm">Cargando registros vinculados...</span>
+                      </div>
+                    )
+                  }
+
+                  if (!hasAny) {
+                    return (
+                      <div className="text-center py-3 space-y-2">
+                        <p className="text-sm text-slate-500">No hay OT ni SC vinculadas a este proyecto.</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                            onClick={() => quickCreateOT(selectedProy)}
+                            disabled={quickCreating !== null}
+                          >
+                            <ClipboardList className="w-4 h-4 mr-1" />
+                            {quickCreating === 'ot' ? 'Creando...' : 'Crear OT'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => quickCreateSC(selectedProy)}
+                            disabled={quickCreating !== null}
+                          >
+                            <ShoppingCart className="w-4 h-4 mr-1" />
+                            {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {/* ── Botones prominentes "Ir a OT" / "Ir a SC" ── */}
+                      <div className="flex flex-wrap gap-2">
+                        {ots.map((ot: any) => (
+                          <a
+                            key={ot.id}
+                            href={`/sistema?modulo=ot`}
+                            onClick={(e) => { e.preventDefault(); setCurrentModule('ot'); }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                          >
+                            <ClipboardList className="w-4 h-4" />
+                            Ir a OT {ot.otNum || ot.otNum}
+                            <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-blue-700 text-blue-100 border-blue-800">{ot.estado || 'Pendiente'}</Badge>
+                          </a>
+                        ))}
+                        {scs.map((sc: any) => (
+                          <a
+                            key={sc.id}
+                            href={`/sistema?modulo=solicitudescompra`}
+                            onClick={(e) => { e.preventDefault(); setCurrentModule('solicitudescompra'); }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                            Ir a SC {sc.codigo}
+                            <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-700 text-emerald-100 border-emerald-800">{sc.estado || 'Borrador'}</Badge>
+                          </a>
+                        ))}
+                      </div>
                     </div>
-                    {/* ── Detalle de OTs vinculadas (tarjetas expandibles) ── */}
-                    {ots.length > 0 && (
-                      <div>
-                        <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
-                          <ClipboardList className="w-3 h-3" /> Órdenes de Trabajo vinculadas
-                        </Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {ots.map((ot: any) => (
-                            <a
-                              key={ot.id}
-                              href={`/ordenes-trabajo?ot=${ot.id}`}
-                              className="flex items-center gap-3 p-3 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer group no-underline"
-                            >
-                              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center shrink-0">
-                                <ClipboardList className="w-5 h-5 text-white" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-bold text-blue-800 group-hover:underline truncate">{ot.otNum}</div>
-                                <div className="text-xs text-blue-600 truncate">{ot.titulo}</div>
-                                <Badge className="mt-1 text-[10px] px-1.5 py-0 h-4 bg-blue-100 text-blue-700 border-blue-200">{ot.estado || 'Pendiente'}</Badge>
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {/* ── Detalle de SCs vinculadas ── */}
-                    {scs.length > 0 && (
-                      <div>
-                        <Label className="text-xs text-slate-500 mb-2 block flex items-center gap-1">
-                          <ShoppingCart className="w-3 h-3" /> Solicitudes de Compra vinculadas
-                        </Label>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {scs.map((sc: any) => (
-                            <a
-                              key={sc.id}
-                              href={`/solicitudes-compra?sc=${sc.id}`}
-                              className="flex items-center gap-3 p-3 rounded-lg border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-colors cursor-pointer group no-underline"
-                            >
-                              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-                                <ShoppingCart className="w-5 h-5 text-white" />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-bold text-emerald-800 group-hover:underline truncate">{sc.codigo}</div>
-                                <div className="text-xs text-emerald-600 truncate">{sc.titulo}</div>
-                                <Badge className="mt-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 border-emerald-200">{sc.estado || 'Borrador'}</Badge>
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
+                  )
+                })()}
+              </div>
 
               {/* Documentos adjuntos */}
               {selectedProy.documentos && selectedProy.documentos.length > 0 && (
@@ -2980,80 +2986,6 @@ export function ProyectosModule() {
 
               <Separator />
 
-              {/* Órdenes de Trabajo y Solicitudes de Compra relacionadas */}
-              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                <Label className="text-sm font-semibold text-slate-700 mb-3 block flex items-center gap-2">
-                  <Link2 className="w-4 h-4" /> Registros vinculados a este Proyecto
-                </Label>
-                {loadingRelated ? (
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <div className="animate-spin w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full" />
-                    <span className="text-sm">Cargando registros vinculados...</span>
-                  </div>
-                ) : relatedOTs.length === 0 && relatedSCs.length === 0 ? (
-                  <div className="text-center py-3">
-                    <p className="text-sm text-slate-500">No hay OT ni SC vinculadas a este proyecto aún.</p>
-                    <p className="text-xs text-slate-400 mt-1">Usa los botones "Crear OT" o "Crear SC" abajo para vincular registros.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {relatedOTs.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-blue-700 mb-2 flex items-center gap-1">
-                          <ClipboardList className="w-4 h-4" /> Órdenes de Trabajo ({relatedOTs.length})
-                        </p>
-                        <div className="space-y-1.5">
-                          {relatedOTs.map((ot) => (
-                            <a
-                              key={ot.id}
-                              href={`/sistema?modulo=ot&otId=${ot.id}`}
-                              onClick={(e) => { e.preventDefault(); setCurrentModule('ot'); }}
-                              className="w-full flex items-center justify-between bg-white hover:bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm no-underline"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <ClipboardList className="w-4 h-4 text-blue-500 shrink-0" />
-                                <span className="text-sm font-bold text-blue-800 shrink-0">{ot.otNum}</span>
-                                <span className="text-xs text-slate-600 truncate">{ot.titulo}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge className={`text-[10px] ${estadoColors[ot.estado] || 'bg-slate-100 text-slate-600'}`}>{ot.estado}</Badge>
-                                <ExternalLink className="w-3 h-3 text-blue-400 group-hover:translate-x-0.5 transition-transform" />
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {relatedSCs.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium text-emerald-700 mb-2 flex items-center gap-1">
-                          <ShoppingCart className="w-4 h-4" /> Solicitudes de Compra ({relatedSCs.length})
-                        </p>
-                        <div className="space-y-1.5">
-                          {relatedSCs.map((sc) => (
-                            <a
-                              key={sc.id}
-                              href={`/sistema?modulo=solicitudescompra&scId=${sc.id}`}
-                              onClick={(e) => { e.preventDefault(); setCurrentModule('solicitudescompra'); }}
-                              className="w-full flex items-center justify-between bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm no-underline"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <ShoppingCart className="w-4 h-4 text-emerald-500 shrink-0" />
-                                <span className="text-sm font-bold text-emerald-800 shrink-0">{sc.codigo}</span>
-                                <span className="text-xs text-slate-600 truncate">{sc.titulo}</span>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Badge className={`text-[10px] ${estadoColors[sc.estado] || 'bg-slate-100 text-slate-600'}`}>{sc.estado}</Badge>
-                                <ExternalLink className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
             </div>
           )}
           <DialogFooter className="flex gap-2 flex-wrap">
