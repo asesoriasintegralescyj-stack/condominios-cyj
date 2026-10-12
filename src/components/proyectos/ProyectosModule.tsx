@@ -2623,14 +2623,15 @@ export function ProyectosModule() {
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaInicio')}>Inicio <SortIcon field="fechaInicio" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase cursor-pointer hover:bg-[#1a3155]" style={{ width: '80px' }} onClick={() => toggleSort('fechaFin')}>Término <SortIcon field="fechaFin" /></th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '60px' }}>Adj.</th>
+                  <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '80px' }}>OT/SC</th>
                   <th className="text-center p-2 text-[10px] font-bold uppercase" style={{ width: '120px' }}>Acc.</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={16} className="p-8 text-center text-slate-400">Cargando...</td></tr>
                 ) : !proyectosFiltrados || proyectosFiltrados.length === 0 ? (
-                  <tr><td colSpan={15} className="p-8 text-center text-slate-400">
+                  <tr><td colSpan={16} className="p-8 text-center text-slate-400">
                     {vistaActiva === 'completados'
                       ? 'No hay proyectos completados en el histórico'
                       : vistaActiva === 'activos'
@@ -3003,20 +3004,22 @@ export function ProyectosModule() {
                         </p>
                         <div className="space-y-1.5">
                           {relatedOTs.map((ot) => (
-                            <button
+                            <a
                               key={ot.id}
-                              onClick={() => setCurrentModule('ot')}
-                              className="w-full flex items-center justify-between bg-white hover:bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm"
+                              href={`/sistema?modulo=ot&otId=${ot.id}`}
+                              onClick={(e) => { e.preventDefault(); setCurrentModule('ot'); }}
+                              className="w-full flex items-center justify-between bg-white hover:bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm no-underline"
                             >
                               <div className="flex items-center gap-2 min-w-0">
+                                <ClipboardList className="w-4 h-4 text-blue-500 shrink-0" />
                                 <span className="text-sm font-bold text-blue-800 shrink-0">{ot.otNum}</span>
                                 <span className="text-xs text-slate-600 truncate">{ot.titulo}</span>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <Badge className={`text-[10px] ${estadoColors[ot.estado] || 'bg-slate-100 text-slate-600'}`}>{ot.estado}</Badge>
-                                <ExternalLink className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                <ExternalLink className="w-3 h-3 text-blue-400 group-hover:translate-x-0.5 transition-transform" />
                               </div>
-                            </button>
+                            </a>
                           ))}
                         </div>
                       </div>
@@ -3028,12 +3031,14 @@ export function ProyectosModule() {
                         </p>
                         <div className="space-y-1.5">
                           {relatedSCs.map((sc) => (
-                            <button
+                            <a
                               key={sc.id}
-                              onClick={() => setCurrentModule('solicitudescompra')}
-                              className="w-full flex items-center justify-between bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm"
+                              href={`/sistema?modulo=solicitudescompra&scId=${sc.id}`}
+                              onClick={(e) => { e.preventDefault(); setCurrentModule('solicitudescompra'); }}
+                              className="w-full flex items-center justify-between bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-left transition-colors group shadow-sm no-underline"
                             >
                               <div className="flex items-center gap-2 min-w-0">
+                                <ShoppingCart className="w-4 h-4 text-emerald-500 shrink-0" />
                                 <span className="text-sm font-bold text-emerald-800 shrink-0">{sc.codigo}</span>
                                 <span className="text-xs text-slate-600 truncate">{sc.titulo}</span>
                               </div>
@@ -3041,7 +3046,7 @@ export function ProyectosModule() {
                                 <Badge className={`text-[10px] ${estadoColors[sc.estado] || 'bg-slate-100 text-slate-600'}`}>{sc.estado}</Badge>
                                 <ExternalLink className="w-3 h-3 text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                               </div>
-                            </button>
+                            </a>
                           ))}
                         </div>
                       </div>
@@ -3055,40 +3060,6 @@ export function ProyectosModule() {
             <Button variant="outline" onClick={() => setDetailDialogOpen(false)}>Cerrar</Button>
             {selectedProy && (
               <Button
-                variant="outline"
-                className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                onClick={() => quickCreateOT(selectedProy)}
-                disabled={quickCreating !== null}
-                title="Crea una Orden de Trabajo vinculada a este proyecto"
-              >
-                <ClipboardList className="w-4 h-4 mr-1" />
-                {quickCreating === 'ot' ? 'Creando...' : 'Crear OT'}
-              </Button>
-            )}
-            {selectedProy && (
-              <Button
-                variant="secondary"
-                className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => quickCreateSC(selectedProy)}
-                disabled={quickCreating !== null}
-                title="Crea una Solicitud de Compra vinculada a este proyecto"
-              >
-                <ShoppingCart className="w-4 h-4 mr-1" />
-                {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
-              </Button>
-            )}
-            {selectedProy && (
-              <Button
-                variant="outline"
-                onClick={() => void exportProyectoToPdf(selectedProy)}
-                title="Exportar este proyecto a PDF con todos los datos"
-              >
-                <FileDown className="w-4 h-4 mr-1" /> Exportar PDF
-              </Button>
-            )}
-            {selectedProy && (
-              <Button
-                variant="secondary"
                 onClick={() => quickCreateOT(selectedProy)}
                 disabled={quickCreating !== null}
                 title="Crea una Orden de Trabajo vinculada a este proyecto"
@@ -3100,7 +3071,6 @@ export function ProyectosModule() {
             )}
             {selectedProy && (
               <Button
-                variant="secondary"
                 onClick={() => quickCreateSC(selectedProy)}
                 disabled={quickCreating !== null}
                 title="Crea una Solicitud de Compra vinculada a este proyecto"
@@ -3108,6 +3078,15 @@ export function ProyectosModule() {
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
                 {quickCreating === 'sc' ? 'Creando...' : 'Crear SC'}
+              </Button>
+            )}
+            {selectedProy && (
+              <Button
+                variant="outline"
+                onClick={() => void exportProyectoToPdf(selectedProy)}
+                title="Exportar este proyecto a PDF con todos los datos"
+              >
+                <FileDown className="w-4 h-4 mr-1" /> PDF
               </Button>
             )}
             {hasPermission('proyectos.editar') && (
