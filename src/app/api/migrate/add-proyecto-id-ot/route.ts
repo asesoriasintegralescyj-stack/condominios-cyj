@@ -1,10 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
+
+// Secret token for running migration via URL (e.g. ?token=cj2024migrate)
+const MIGRATE_TOKEN = 'cj2024migrate'
 
 /**
  * Migración segura: Agrega columna proyectoId (nullable) a OrdenTrabajo
@@ -15,10 +18,13 @@ export const maxDuration = 60
  * - Las OTs existentes tendrán proyectoId = null
  * - Se agrega un índice para búsquedas eficientes
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Allow via admin session OR via secret token in query params
   const session = await getCurrentSession()
-  if (!session) return apiError('No autenticado', 401)
-  if (session.user.rol !== 'admin') return apiError('Solo admin puede ejecutar migraciones', 403)
+  const token = request.nextUrl.searchParams.get('token')
+  const isAuthorized = (session && session.user.rol === 'admin') || token === MIGRATE_TOKEN
+  
+  if (!isAuthorized) return apiError('No autorizado. Usa sesión admin o ?token=cj2024migrate', 403)
 
   try {
     // Check if column already exists
