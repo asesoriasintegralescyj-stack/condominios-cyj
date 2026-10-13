@@ -37,54 +37,8 @@ import {
   Plus, Pencil, Trash2, Search, Printer, Clock, Users,
   Wrench, Package, CheckSquare, Database, RefreshCw, Building2,
   Calendar, Lock, Download, Camera, Image, X, ShoppingCart,
-  AlertTriangle, CheckCircle, FileText, Eye, UserCircle
+  AlertTriangle, CheckCircle, FileText, Eye
 } from 'lucide-react'
-
-// ─── Utilidad: comprimir imagen antes de enviar al servidor ───
-const MAX_PHOTO_DIMENSION = 1280
-const MAX_PHOTO_SIZE_BYTES = 300_000 // ~300 KB por foto
-
-async function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const img = new Image()
-      img.onload = () => {
-        const canvas = document.createElement('canvas')
-        let { width, height } = img
-
-        // Reducir dimensiones si exceden el máximo
-        if (width > MAX_PHOTO_DIMENSION || height > MAX_PHOTO_DIMENSION) {
-          if (width > height) {
-            height = Math.round((height * MAX_PHOTO_DIMENSION) / width)
-            width = MAX_PHOTO_DIMENSION
-          } else {
-            width = Math.round((width * MAX_PHOTO_DIMENSION) / height)
-            height = MAX_PHOTO_DIMENSION
-          }
-        }
-        canvas.width = width
-        canvas.height = height
-
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, width, height)
-
-        // Comprimir con calidad decreciente hasta que quede bajo el límite
-        let quality = 0.7
-        let dataUrl = canvas.toDataURL('image/jpeg', quality)
-        while (dataUrl.length > MAX_PHOTO_SIZE_BYTES * 1.37 && quality > 0.2) {
-          quality -= 0.1
-          dataUrl = canvas.toDataURL('image/jpeg', quality)
-        }
-        resolve(dataUrl)
-      }
-      img.onerror = reject
-      img.src = reader.result as string
-    }
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
 
 // Interfaces
 interface OTMaterial {
@@ -158,10 +112,6 @@ interface OrdenTrabajo {
   propiedad: { id: string; nombre: string } | null
   fotosAntes?: string[]
   fotosDespues?: string[]
-  creadoPorNombre?: string | null
-  origenTipo?: string | null
-  origenId?: string | null
-  origenCodigo?: string | null
 }
 
 interface Personal {
@@ -267,7 +217,7 @@ const estadoColors: Record<string, string> = {
 }
 
 export function OrdenesTrabajoModule() {
-  const { isPersonal, canEditProgress, hasPermission, isReadOnly } = useSession()
+  const { isPersonal, canEditProgress } = useSession()
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([])
   const [personal, setPersonal] = useState<Personal[]>([])
   // Personal filtrado para asignación de OT: excluye conserjes, guardias y encargados de cámaras
@@ -366,14 +316,9 @@ export function OrdenesTrabajoModule() {
   const seedCatalogs = async () => {
     try {
       const result = await apiPost<{centrosCosto?: number; tareas?: number; herramientas?: number; materiales?: number}>(
-        '/api/seed-catalogos',
-        null,
-        { method: 'POST' }
+        '/api/seed-catalogos', null, { method: 'POST' }
       )
-      if (!result.ok) {
-        toast.error(result.error || 'Error al cargar catálogos')
-        return
-      }
+      if (!result.ok) { toast.error(result.error || 'Error al cargar catálogos'); return }
       const data = result.data!
       toast.success(`Catálogos cargados: ${data.centrosCosto || 0} centros de costo, ${data.tareas} tareas, ${data.herramientas} herramientas, ${data.materiales} materiales`)
       fetchCatalogs()
@@ -524,35 +469,16 @@ export function OrdenesTrabajoModule() {
   }
 
   const openDetailDialog = async (ot: OrdenTrabajo) => {
-    // Cargar detalle completo (con relaciones y fotos) para mostrar en el dialog
+    // Cargar detalle completo (con relaciones) para mostrar en el dialog
     try {
-      const res = await fetch(`/api/ordenes-trabajo/${ot.id}?fotos=true`)
-      if (res.status === 401) { window.location.href = '/login?expired=true'; return }
+      const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
       if (res.ok) {
-        const data = await res.json()
-        setSelectedOT({
-          ...data,
-          materiales: Array.isArray(data.materiales) ? data.materiales : [],
-          herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
-          tareas: Array.isArray(data.tareas) ? data.tareas : [],
-          personalOT: Array.isArray(data.personalOT) ? data.personalOT : [],
-          fotosAntes: Array.isArray(data.fotosAntes) ? data.fotosAntes : [],
-          fotosDespues: Array.isArray(data.fotosDespues) ? data.fotosDespues : [],
-        })
+        setSelectedOT(await res.json())
       } else {
-        // Fallback: asegurar que todas las relaciones tengan arrays vacíos
-        setSelectedOT({
-          ...ot,
-          materiales: [], herramientas: [], tareas: [], personalOT: [],
-          fotosAntes: [], fotosDespues: [],
-        })
+        setSelectedOT(ot)
       }
     } catch (e) {
-      setSelectedOT({
-        ...ot,
-        materiales: [], herramientas: [], tareas: [], personalOT: [],
-        fotosAntes: [], fotosDespues: [],
-      })
+      setSelectedOT(ot)
     }
     setDetailDialogOpen(true)
   }
@@ -566,13 +492,7 @@ export function OrdenesTrabajoModule() {
         if (res.status === 401) { window.location.href = '/login?expired=true'; return }
         if (res.ok) {
           const data = await res.json()
-          otFull = {
-            ...data,
-            materiales: Array.isArray(data.materiales) ? data.materiales : [],
-            herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
-            tareas: Array.isArray(data.tareas) ? data.tareas : [],
-            personalOT: Array.isArray(data.personalOT) ? data.personalOT : [],
-          }
+          otFull = { ...data, materiales: Array.isArray(data.materiales) ? data.materiales : [], herramientas: Array.isArray(data.herramientas) ? data.herramientas : [], tareas: Array.isArray(data.tareas) ? data.tareas : [], personalOT: Array.isArray(data.personalOT) ? data.personalOT : [] }
         }
       } catch (e) {
         console.error('Error cargando detalle OT para progreso:', e)
@@ -604,7 +524,10 @@ export function OrdenesTrabajoModule() {
     if (!progressOT) return
 
     try {
-      const result = await apiPost(`/api/ordenes-trabajo/${progressOT.id}`, {
+      await fetch(`/api/ordenes-trabajo/${progressOT.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           progreso: progressFormData.progreso,
           tiempoReal: progressFormData.tiempoReal,
           estado: progressFormData.estado,
@@ -613,11 +536,8 @@ export function OrdenesTrabajoModule() {
             estado: t.estado,
             cumple: t.cumple,
           })),
-      }, { method: 'PUT' })
-      if (!result.ok) {
-        toast.error(result.error || 'Error al guardar progreso')
-        return
-      }
+        }),
+      })
       setProgressDialogOpen(false)
       fetchOrdenes(search)
     } catch (error) {
@@ -663,16 +583,6 @@ export function OrdenesTrabajoModule() {
       fotosDespues,
     }
 
-    // Verificar tamaño del payload antes de enviar (Vercel Hobby límite ~4.5 MB)
-    const payloadSize = new Blob([JSON.stringify(dataToSend)]).size
-    const MAX_PAYLOAD = 4 * 1024 * 1024 // 4 MB con margen
-    if (payloadSize > MAX_PAYLOAD) {
-      const mb = (payloadSize / 1024 / 1024).toFixed(1)
-      toast.error(`Las fotos son muy grandes (${mb} MB). Reduce la cantidad o usa imágenes más pequeñas.`)
-      setSavingOT(false)
-      return
-    }
-
     try {
       if (editingOT) {
         const res = await fetch(`/api/ordenes-trabajo/${editingOT.id}`, {
@@ -681,10 +591,7 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify(dataToSend),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => {
-            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
-            return {}
-          })
+          const err = await res.json().catch(() => ({}))
           throw new Error(err.details || err.error || 'Error al guardar OT')
         }
       } else {
@@ -694,10 +601,7 @@ export function OrdenesTrabajoModule() {
           body: JSON.stringify({ ...dataToSend, _clientIdempotency: idempotencyToken }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => {
-            if (payloadSize > 2 * 1024 * 1024) return { details: 'Payload demasiado grande para el servidor' }
-            return {}
-          })
+          const err = await res.json().catch(() => ({}))
           throw new Error(err.details || err.error || 'Error al crear OT')
         }
         const result = await res.json()
@@ -721,10 +625,7 @@ export function OrdenesTrabajoModule() {
     if (!window.confirm('¿Eliminar esta orden de trabajo?')) return
     try {
       const result = await apiPost(`/api/ordenes-trabajo/${id}`, null, { method: 'DELETE' })
-      if (!result.ok) {
-        toast.error(result.error || 'Error al eliminar OT')
-        return
-      }
+      if (!result.ok) { toast.error(result.error || 'Error al eliminar OT'); return }
       fetchOrdenes(search)
     } catch (error) {
       console.error('Error deleting OT:', error)
@@ -1168,11 +1069,9 @@ export function OrdenesTrabajoModule() {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualizar OTs
         </Button>
-        {hasPermission('ots.crear') && (
-          <Button onClick={() => openDialog()}>
-            <Plus className="w-4 h-4 mr-1" /> Nueva OT
-          </Button>
-        )}
+        <Button onClick={() => openDialog()}>
+          <Plus className="w-4 h-4 mr-1" /> Nueva OT
+        </Button>
       </div>
 
       {/* Catalog status */}
@@ -1198,11 +1097,9 @@ export function OrdenesTrabajoModule() {
                 <tr className="border-b bg-slate-50">
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">N° OT</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Título</th>
-                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Creado por</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tipo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Prioridad</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Estado</th>
-                  <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Proyecto</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Centro Costo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Tiempo</th>
                   <th className="text-left p-3 text-xs font-bold text-slate-500 uppercase">Costo Real</th>
@@ -1212,9 +1109,9 @@ export function OrdenesTrabajoModule() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Cargando...</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Cargando...</td></tr>
                 ) : ordenes.length === 0 ? (
-                  <tr><td colSpan={11} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">Sin órdenes de trabajo</td></tr>
                 ) : (
                   ordenes.map((ot) => (
                     <tr key={ot.id} className="border-b last:border-0 hover:bg-slate-50 cursor-pointer" onClick={() => openDetailDialog(ot)}>
@@ -1223,9 +1120,6 @@ export function OrdenesTrabajoModule() {
                         {ot.esRecurrente && <RefreshCw className="w-3 h-3 inline ml-1 text-blue-500" />}
                       </td>
                       <td className="p-3 font-semibold">{ot.titulo}</td>
-                      <td className="p-3 text-xs text-slate-600" title={ot.creadoPorNombre || undefined}>
-                        {ot.creadoPorNombre ? <span className="flex items-center gap-1"><UserCircle className="w-3 h-3 shrink-0" />{ot.creadoPorNombre.length > 15 ? ot.creadoPorNombre.slice(0, 15) + '…' : ot.creadoPorNombre}</span> : <span className="text-slate-400">–</span>}
-                      </td>
                       <td className="p-3">
                         <Badge className={tipoColors[ot.tipo] || 'bg-slate-100'}>{ot.tipo}</Badge>
                       </td>
@@ -1234,11 +1128,6 @@ export function OrdenesTrabajoModule() {
                       </td>
                       <td className="p-3">
                         <Badge className={estadoColors[ot.estado] || 'bg-slate-100'}>{ot.estado}</Badge>
-                      </td>
-                      <td className="p-3 text-xs text-slate-600">
-                        {(ot as any).proyecto ? (
-                          <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] cursor-pointer" title={`Proyecto: ${(ot as any).proyecto.nombre}`} onClick={(e: any) => { e.stopPropagation(); }}>{(ot as any).proyecto.codigo || 'PROY'}</Badge>
-                        ) : '–'}
                       </td>
                       <td className="p-3 text-xs font-mono">
                         {ot.centroCosto ? (
@@ -1274,7 +1163,7 @@ export function OrdenesTrabajoModule() {
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </Button>
-                          {hasPermission('ots.progreso') && (
+                          {isPersonal() ? (
                             <Button 
                               size="icon" 
                               variant="ghost" 
@@ -1285,16 +1174,15 @@ export function OrdenesTrabajoModule() {
                             >
                               <CheckSquare className="w-3.5 h-3.5" />
                             </Button>
-                          )}
-                          {hasPermission('ots.editar') && (
-                            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                          {hasPermission('ots.eliminar') && (
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                          ) : (
+                            <>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Editar orden" onClick={() => openDialog(ot)}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700" aria-label="Eliminar orden" onClick={() => handleDelete(ot.id)}>
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -2028,11 +1916,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              compressImage(file).then(compressed => {
-                                setFotosAntes(prev => [...prev, compressed])
-                              }).catch(() => {
-                                toast.error('Error al comprimir imagen')
-                              })
+                              const reader = new FileReader()
+                              reader.onloadend = () => {
+                                setFotosAntes(prev => [...prev, reader.result as string])
+                              }
+                              reader.readAsDataURL(file)
                             })
                           }
                           e.target.value = ''
@@ -2104,11 +1992,11 @@ export function OrdenesTrabajoModule() {
                           const files = e.target.files
                           if (files) {
                             Array.from(files).forEach(file => {
-                              compressImage(file).then(compressed => {
-                                setFotosDespues(prev => [...prev, compressed])
-                              }).catch(() => {
-                                toast.error('Error al comprimir imagen')
-                              })
+                              const reader = new FileReader()
+                              reader.onloadend = () => {
+                                setFotosDespues(prev => [...prev, reader.result as string])
+                              }
+                              reader.readAsDataURL(file)
                             })
                           }
                           e.target.value = ''
@@ -2283,14 +2171,6 @@ export function OrdenesTrabajoModule() {
               </DialogHeader>
               
               <div className="space-y-4">
-                {/* Creador */}
-                {selectedOT.creadoPorNombre && (
-                  <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">
-                    <UserCircle className="w-4 h-4" />
-                    <span className="text-xs text-slate-500">Creado por:</span>
-                    <span className="font-medium">{selectedOT.creadoPorNombre}</span>
-                  </div>
-                )}
                 {/* General info */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                   <div className="min-w-0"><span className="text-slate-500 text-xs">Tipo:</span> <Badge className={tipoColors[selectedOT.tipo]}>{selectedOT.tipo}</Badge></div>
@@ -2535,11 +2415,9 @@ export function OrdenesTrabajoModule() {
                 <Button variant="outline" onClick={() => imprimirChecklist(selectedOT)}>
                   <Printer className="w-4 h-4 mr-1" /> Imprimir Checklist
                 </Button>
-                {hasPermission('ots.editar') && (
-                  <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
-                    <Pencil className="w-4 h-4 mr-1" /> Editar
-                  </Button>
-                )}
+                <Button onClick={() => { setDetailDialogOpen(false); openDialog(selectedOT); }}>
+                  <Pencil className="w-4 h-4 mr-1" /> Editar
+                </Button>
               </DialogFooter>
             </>
           )}
