@@ -30,6 +30,7 @@ import { Separator } from '@/components/ui/separator'
 import { useSession } from '@/hooks/use-session'
 import { formatCLP, HORAS_OPTIONS } from '@/lib/utils'
 import { filtrarPersonalAsignableOT } from '@/lib/personal-cargos'
+import { apiFetch, apiPost } from '@/lib/api-client'
 import { toast } from 'sonner'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import {
@@ -331,8 +332,7 @@ export function OrdenesTrabajoModule() {
     setLoading(true)
     try {
       const url = searchTerm ? `/api/ordenes-trabajo?search=${encodeURIComponent(searchTerm)}` : '/api/ordenes-trabajo'
-      const res = await fetch(url)
-      const data = await res.json()
+      const data = await apiFetch<OrdenTrabajo[]>(url, [])
       setOrdenes(data)
     } catch (error) {
       console.error('Error fetching ordenes:', error)
@@ -347,8 +347,10 @@ export function OrdenesTrabajoModule() {
 
   const fetchCatalogs = async () => {
     try {
-      const res = await fetch('/api/seed-catalogos')
-      const data = await res.json()
+      const data = await apiFetch<{herramientas?: CatHerramienta[]; tareas?: CatTarea[]; materiales?: CatMaterial[]; centrosCosto?: CentroCosto[]}>(
+        '/api/seed-catalogos',
+        {}
+      )
       if (data.herramientas && data.tareas && data.materiales && data.centrosCosto) {
         setCentrosCosto(data.centrosCosto)
         setCatHerramientas(data.herramientas)
@@ -363,8 +365,16 @@ export function OrdenesTrabajoModule() {
 
   const seedCatalogs = async () => {
     try {
-      const res = await fetch('/api/seed-catalogos', { method: 'POST' })
-      const data = await res.json()
+      const result = await apiPost<{centrosCosto?: number; tareas?: number; herramientas?: number; materiales?: number}>(
+        '/api/seed-catalogos',
+        null,
+        { method: 'POST' }
+      )
+      if (!result.ok) {
+        toast.error(result.error || 'Error al cargar catálogos')
+        return
+      }
+      const data = result.data!
       toast.success(`Catálogos cargados: ${data.centrosCosto || 0} centros de costo, ${data.tareas} tareas, ${data.herramientas} herramientas, ${data.materiales} materiales`)
       fetchCatalogs()
     } catch (error) {
@@ -377,8 +387,8 @@ export function OrdenesTrabajoModule() {
     void (async () => {
       await fetchOrdenes()
     })()
-    fetch('/api/personal').then(res => res.json()).then(setPersonal)
-    fetch('/api/propiedades').then(res => res.json()).then(setPropiedades)
+    apiFetch<Personal[]>('/api/personal', []).then(setPersonal)
+    apiFetch<{ id: string; nombre: string }[]>('/api/propiedades', []).then(setPropiedades)
     void (async () => {
       await fetchCatalogs()
     })()
@@ -411,8 +421,16 @@ export function OrdenesTrabajoModule() {
       try {
         // 1. Cargar detalle sin fotos
         const res = await fetch(`/api/ordenes-trabajo/${otParam.id}`)
+        if (res.status === 401) { window.location.href = '/login?expired=true'; return }
         if (res.ok) {
-          ot = await res.json()
+          const data = await res.json()
+          ot = {
+            ...data,
+            materiales: Array.isArray(data.materiales) ? data.materiales : [],
+            herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
+            tareas: Array.isArray(data.tareas) ? data.tareas : [],
+            personalOT: Array.isArray(data.personalOT) ? data.personalOT : [],
+          }
           fotosAntesCount = (ot as any).fotosAntesCount || 0
           fotosDespuesCount = (ot as any).fotosDespuesCount || 0
         }
@@ -509,8 +527,18 @@ export function OrdenesTrabajoModule() {
     // Cargar detalle completo (con relaciones y fotos) para mostrar en el dialog
     try {
       const res = await fetch(`/api/ordenes-trabajo/${ot.id}?fotos=true`)
+      if (res.status === 401) { window.location.href = '/login?expired=true'; return }
       if (res.ok) {
-        setSelectedOT(await res.json())
+        const data = await res.json()
+        setSelectedOT({
+          ...data,
+          materiales: Array.isArray(data.materiales) ? data.materiales : [],
+          herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
+          tareas: Array.isArray(data.tareas) ? data.tareas : [],
+          personalOT: Array.isArray(data.personalOT) ? data.personalOT : [],
+          fotosAntes: Array.isArray(data.fotosAntes) ? data.fotosAntes : [],
+          fotosDespues: Array.isArray(data.fotosDespues) ? data.fotosDespues : [],
+        })
       } else {
         // Fallback: asegurar que todas las relaciones tengan arrays vacíos
         setSelectedOT({
@@ -535,7 +563,17 @@ export function OrdenesTrabajoModule() {
     if (!ot.tareas || ot.tareas.length === 0) {
       try {
         const res = await fetch(`/api/ordenes-trabajo/${ot.id}`)
-        if (res.ok) otFull = await res.json()
+        if (res.status === 401) { window.location.href = '/login?expired=true'; return }
+        if (res.ok) {
+          const data = await res.json()
+          otFull = {
+            ...data,
+            materiales: Array.isArray(data.materiales) ? data.materiales : [],
+            herramientas: Array.isArray(data.herramientas) ? data.herramientas : [],
+            tareas: Array.isArray(data.tareas) ? data.tareas : [],
+            personalOT: Array.isArray(data.personalOT) ? data.personalOT : [],
+          }
+        }
       } catch (e) {
         console.error('Error cargando detalle OT para progreso:', e)
       }
@@ -566,10 +604,7 @@ export function OrdenesTrabajoModule() {
     if (!progressOT) return
 
     try {
-      await fetch(`/api/ordenes-trabajo/${progressOT.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const result = await apiPost(`/api/ordenes-trabajo/${progressOT.id}`, {
           progreso: progressFormData.progreso,
           tiempoReal: progressFormData.tiempoReal,
           estado: progressFormData.estado,
@@ -578,8 +613,11 @@ export function OrdenesTrabajoModule() {
             estado: t.estado,
             cumple: t.cumple,
           })),
-        }),
-      })
+      }, { method: 'PUT' })
+      if (!result.ok) {
+        toast.error(result.error || 'Error al guardar progreso')
+        return
+      }
       setProgressDialogOpen(false)
       fetchOrdenes(search)
     } catch (error) {
@@ -682,7 +720,11 @@ export function OrdenesTrabajoModule() {
   const handleDelete = async (id: string) => {
     if (!window.confirm('¿Eliminar esta orden de trabajo?')) return
     try {
-      await fetch(`/api/ordenes-trabajo/${id}`, { method: 'DELETE' })
+      const result = await apiPost(`/api/ordenes-trabajo/${id}`, null, { method: 'DELETE' })
+      if (!result.ok) {
+        toast.error(result.error || 'Error al eliminar OT')
+        return
+      }
       fetchOrdenes(search)
     } catch (error) {
       console.error('Error deleting OT:', error)
@@ -857,10 +899,11 @@ export function OrdenesTrabajoModule() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const data = await res.json()
       if (!res.ok) {
-        throw new Error(data?.error || 'Error al crear la solicitud de compra')
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData?.error || 'Error al crear la solicitud de compra')
       }
+      const data = await res.json()
       const emailMsg = data?.emailSkipped
         ? ' (SMTP no configurado, email no enviado)'
         : data?.emailEnviado
