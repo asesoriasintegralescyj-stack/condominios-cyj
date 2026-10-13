@@ -2261,21 +2261,31 @@ export function ProyectosModule() {
     setRelatedOTs([])
     setRelatedSCs([])
     try {
-      // Fetch OTs related to this project using API filter
-      const otRes = await fetch(`/api/ordenes-trabajo?proyectoId=${encodeURIComponent(proyectoId)}`)
-      if (otRes.ok) {
-        const otData = await otRes.json()
-        const ots = Array.isArray(otData) ? otData : []
-        setRelatedOTs(ots.map((ot: any) => ({
-          id: ot.id,
-          otNum: ot.otNum,
-          titulo: ot.titulo,
-          estado: ot.estado,
-          prioridad: ot.prioridad,
-        })))
-      } else {
-        console.warn('Error fetching OTs:', otRes.status)
+      // Fetch OTs using BOTH filters (proyectoId for newer, origenTipo/origenId for older)
+      const [otRes1, otRes2] = await Promise.all([
+        fetch(`/api/ordenes-trabajo?proyectoId=${encodeURIComponent(proyectoId)}`).catch(() => null),
+        fetch(`/api/ordenes-trabajo?origenTipo=Proyecto&origenId=${encodeURIComponent(proyectoId)}`).catch(() => null),
+      ])
+      const otSet = new Map<string, any>()
+      // OTs linked via proyectoId (newer OTs)
+      if (otRes1?.ok) {
+        const otData1 = await otRes1.json()
+        const ots1 = Array.isArray(otData1) ? otData1 : []
+        ots1.forEach((ot: any) => otSet.set(ot.id, ot))
       }
+      // OTs linked via origenTipo=Proyecto + origenId (older OTs)
+      if (otRes2?.ok) {
+        const otData2 = await otRes2.json()
+        const ots2 = Array.isArray(otData2) ? otData2 : []
+        ots2.forEach((ot: any) => otSet.set(ot.id, ot))
+      }
+      setRelatedOTs(Array.from(otSet.values()).map((ot: any) => ({
+        id: ot.id,
+        otNum: ot.otNum,
+        titulo: ot.titulo,
+        estado: ot.estado,
+        prioridad: ot.prioridad,
+      })))
 
       // Fetch SCs related to this project using both filters
       // Try proyectoId first (newer SCs), then origenId (older SCs created via origenTipo)

@@ -55,6 +55,17 @@ async function ensureColumns() {
   } catch (e) {
     console.warn(`[ensureColumns] Error con índice origen:`, e)
   }
+  // Backfill: OTs con origenTipo='Proyecto' pero sin proyectoId → copiar origenId a proyectoId
+  try {
+    const result = await db.$executeRawUnsafe(
+      `UPDATE "OrdenTrabajo" SET "proyectoId" = "origenId" WHERE "origenTipo" = 'Proyecto' AND "origenId" IS NOT NULL AND "proyectoId" IS NULL`
+    )
+    if (result > 0) {
+      console.log(`[ensureColumns] Backfill: ${result} OT(s) actualizadas con proyectoId desde origenId`)
+    }
+  } catch (e) {
+    console.warn(`[ensureColumns] Error en backfill proyectoId:`, e)
+  }
 }
 
 /**
@@ -92,6 +103,8 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
     const proyectoId = searchParams.get('proyectoId') || ''
+    const origenTipo = searchParams.get('origenTipo') || ''
+    const origenId = searchParams.get('origenId') || ''
 
     // Para rol personal, buscar el registro de Personal por email y filtrar OT
     let personalFilter: any = undefined
@@ -127,6 +140,12 @@ export async function GET(request: NextRequest) {
     if (proyectoId) {
       where.proyectoId = proyectoId
     }
+    if (origenTipo) {
+      where.origenTipo = origenTipo
+    }
+    if (origenId) {
+      where.origenId = origenId
+    }
     if (personalFilter) {
       if (search) {
         where.AND = [personalFilter]
@@ -145,6 +164,9 @@ export async function GET(request: NextRequest) {
         tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
         creadoPorNombre: true,
         proyectoId: true,
+        origenTipo: true,
+        origenId: true,
+        origenCodigo: true,
         proyecto: { select: { id: true, codigo: true, nombre: true } },
         propiedad: { select: { id: true, nombre: true } },
         asignado: { select: { id: true, nombre: true, cargo: true } },
