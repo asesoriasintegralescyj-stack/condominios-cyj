@@ -2289,10 +2289,10 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Materials */}
-                {(selectedOT.materiales?.length ?? 0) > 0 && (
+                {(selectedOT.materiales ?? []).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                      <Package className="w-4 h-4" /> Materiales ({selectedOT.materiales.length})
+                      <Package className="w-4 h-4" /> Materiales ({(selectedOT.materiales ?? []).length})
                     </h4>
                     <table className="w-full text-xs border">
                       <thead className="bg-slate-50">
@@ -2305,7 +2305,7 @@ export function OrdenesTrabajoModule() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedOT.materiales.map(m => (
+                        {(selectedOT.materiales ?? []).map(m => (
                           <tr key={m.id} className="border-t">
                             <td className="p-2">{m.descripcion}</td>
                             <td className="p-2 text-center">{m.cantidad}</td>
@@ -2319,7 +2319,7 @@ export function OrdenesTrabajoModule() {
                         <tr>
                           <td colSpan={4} className="p-2 text-right font-semibold">Total Materiales:</td>
                           <td className="p-2 text-right font-bold text-red-600">
-                            {formatCLP(selectedOT.materiales.reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0))}
+                            {formatCLP((selectedOT.materiales ?? []).reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0))}
                           </td>
                         </tr>
                       </tfoot>
@@ -2328,13 +2328,13 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tools */}
-                {(selectedOT.herramientas?.length ?? 0) > 0 && (
+                {(selectedOT.herramientas ?? []).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                      <Wrench className="w-4 h-4" /> Herramientas ({selectedOT.herramientas.length})
+                      <Wrench className="w-4 h-4" /> Herramientas ({(selectedOT.herramientas ?? []).length})
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      {selectedOT.herramientas.map(h => (
+                      {(selectedOT.herramientas ?? []).map(h => (
                         <Badge key={h.id} variant="outline">{h.nombre} ({h.cantidad})</Badge>
                       ))}
                     </div>
@@ -2342,10 +2342,10 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Tasks */}
-                {(selectedOT.tareas?.length ?? 0) > 0 && (
+                {(selectedOT.tareas ?? []).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                      <CheckSquare className="w-4 h-4" /> Tareas ({selectedOT.tareas.length})
+                      <CheckSquare className="w-4 h-4" /> Tareas ({(selectedOT.tareas ?? []).length})
                     </h4>
                     <table className="w-full text-xs border">
                       <thead className="bg-slate-50">
@@ -2359,7 +2359,7 @@ export function OrdenesTrabajoModule() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedOT.tareas.map(t => (
+                        {(selectedOT.tareas ?? []).map(t => (
                           <tr key={t.id} className="border-t">
                             <td className="p-2">{t.descripcion}</td>
                             <td className="p-2 text-center">{t.cantidad}</td>
@@ -2391,10 +2391,10 @@ export function OrdenesTrabajoModule() {
                 )}
                 
                 {/* Personnel */}
-                {(selectedOT.personalOT?.length ?? 0) > 0 && (
+                {(selectedOT.personalOT ?? []).length > 0 && (
                   <div>
                     <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                      <Users className="w-4 h-4" /> Personal ({selectedOT.personalOT.length})
+                      <Users className="w-4 h-4" /> Personal ({(selectedOT.personalOT ?? []).length})
                     </h4>
                     <table className="w-full text-xs border">
                       <thead className="bg-slate-50">
@@ -2408,7 +2408,7 @@ export function OrdenesTrabajoModule() {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedOT.personalOT.map(p => (
+                        {(selectedOT.personalOT ?? []).map(p => (
                           <tr key={p.id} className="border-t">
                             <td className="p-2">{p.nombre}</td>
                             <td className="p-2 text-center">{p.tipo}</td>
@@ -2423,7 +2423,7 @@ export function OrdenesTrabajoModule() {
                         <tr>
                           <td colSpan={5} className="p-2 text-right font-semibold">Total Mano de Obra:</td>
                           <td className="p-2 text-right font-bold text-red-600">
-                            {formatCLP(selectedOT.personalOT.reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0))}
+                            {formatCLP((selectedOT.personalOT ?? []).reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0))}
                           </td>
                         </tr>
                       </tfoot>
@@ -2473,8 +2473,8 @@ export function OrdenesTrabajoModule() {
                   <span className="text-lg font-bold">TOTAL OT: </span>
                   <span className="text-xl font-bold text-red-600">
                     {formatCLP(selectedOT.costoReal || 
-                      (selectedOT.materiales || []).reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
-                      (selectedOT.personalOT || []).reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
+                      (selectedOT.materiales ?? []).reduce((sum, m) => sum + (m.total || m.cantidad * m.precioUnit), 0) +
+                      (selectedOT.personalOT ?? []).reduce((sum, p) => sum + (p.total || p.precioUnit * p.horasTrabajadas * p.cantidad), 0)
                     )}
                   </span>
                 </div>
