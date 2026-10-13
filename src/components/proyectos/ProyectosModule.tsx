@@ -443,7 +443,7 @@ export function ProyectosModule() {
   const [relatedSCs, setRelatedSCs] = useState<{ id: string; codigo: string; titulo: string; estado: string; prioridad: string }[]>([])
   const [loadingRelated, setLoadingRelated] = useState(false)
 
-  const { setCurrentModule } = useAppStore()
+  const { setCurrentModule, navigateToModuleRecord, navigateToRecord, clearNavigateToRecord } = useAppStore()
 
   // ============================================
   // Fetchers
@@ -909,6 +909,29 @@ export function ProyectosModule() {
     const timeout = setTimeout(() => fetchProyectos(search), 300)
     return () => clearTimeout(timeout)
   }, [search, fetchProyectos])
+
+  // Consumir navigateToRecord: si alguien navegó desde otro módulo, abrir el detalle automáticamente
+  useEffect(() => {
+    if (!navigateToRecord || !navigateToRecord.recordId) return
+    const { recordId, recordCode } = navigateToRecord
+    clearNavigateToRecord()
+    const found = proyectos.find((p) => p.id === recordId)
+    if (found) {
+      openDetailDialog(found)
+    } else {
+      fetch(`/api/proyectos/${recordId}`)
+        .then((res) => res.json())
+        .then((proy) => {
+          if (proy && proy.id) {
+            openDetailDialog(proy)
+          } else {
+            toast.error(`No se encontró el Proyecto ${recordCode || recordId}`)
+          }
+        })
+        .catch(() => toast.error(`Error al cargar Proyecto ${recordCode || recordId}`))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigateToRecord])
 
   // ============================================
   // Dialog openers
@@ -2683,18 +2706,20 @@ export function ProyectosModule() {
                               return (
                                 <>
                                   {ots.map((ot: any) => (
-                                    <a key={ot.id} href={`/ordenes-trabajo?ot=${ot.id}`}
-                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 no-underline transition-colors"
-                                       title={`OT: ${ot.titulo}`}>
+                                    <button key={ot.id}
+                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-200 transition-colors cursor-pointer"
+                                       title={`OT: ${ot.titulo}`}
+                                       onClick={() => { navigateToModuleRecord('ot', { recordId: ot.id, recordCode: ot.otNum }); toast.info(`Navegando a ${ot.otNum}`); }}>
                                       <ClipboardList className="w-3 h-3" />{ot.otNum}
-                                    </a>
+                                    </button>
                                   ))}
                                   {scs.map((sc: any) => (
-                                    <a key={sc.id} href={`/solicitudes-compra?sc=${sc.id}`}
-                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 no-underline transition-colors"
-                                       title={`SC: ${sc.titulo}`}>
+                                    <button key={sc.id}
+                                       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-200 transition-colors cursor-pointer"
+                                       title={`SC: ${sc.titulo}`}
+                                       onClick={() => { navigateToModuleRecord('solicitudescompra', { recordId: sc.id, recordCode: sc.codigo }); toast.info(`Navegando a ${sc.codigo}`); }}>
                                       <ShoppingCart className="w-3 h-3" />{sc.codigo}
-                                    </a>
+                                    </button>
                                   ))}
                                 </>
                               )
@@ -2932,28 +2957,26 @@ export function ProyectosModule() {
                       {/* ── Botones prominentes "Ir a OT" / "Ir a SC" ── */}
                       <div className="flex flex-wrap gap-2">
                         {ots.map((ot: any) => (
-                          <a
+                          <button
                             key={ot.id}
-                            href={`/sistema?modulo=ot`}
-                            onClick={(e) => { e.preventDefault(); setCurrentModule('ot'); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                            onClick={() => { setDetailDialogOpen(false); navigateToModuleRecord('ot', { recordId: ot.id, recordCode: ot.otNum }); toast.info(`Navegando a ${ot.otNum}`); }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-md font-semibold text-sm"
                           >
                             <ClipboardList className="w-4 h-4" />
-                            Ir a OT {ot.otNum || ot.otNum}
+                            Ir a OT {ot.otNum}
                             <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-blue-700 text-blue-100 border-blue-800">{ot.estado || 'Pendiente'}</Badge>
-                          </a>
+                          </button>
                         ))}
                         {scs.map((sc: any) => (
-                          <a
+                          <button
                             key={sc.id}
-                            href={`/sistema?modulo=solicitudescompra`}
-                            onClick={(e) => { e.preventDefault(); setCurrentModule('solicitudescompra'); }}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-sm"
+                            onClick={() => { setDetailDialogOpen(false); navigateToModuleRecord('solicitudescompra', { recordId: sc.id, recordCode: sc.codigo }); toast.info(`Navegando a ${sc.codigo}`); }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-md font-semibold text-sm"
                           >
                             <ShoppingCart className="w-4 h-4" />
                             Ir a SC {sc.codigo}
                             <Badge className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-700 text-emerald-100 border-emerald-800">{sc.estado || 'Borrador'}</Badge>
-                          </a>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -3837,26 +3860,26 @@ export function ProyectosModule() {
                     return (
                       <div className="flex flex-wrap gap-1.5 mr-auto">
                         {ots.map((ot: any) => (
-                          <a
+                          <button
                             key={ot.id}
-                            href={`/ordenes-trabajo?ot=${ot.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-xs"
+                            onClick={() => { setDialogOpen(false); navigateToModuleRecord('ot', { recordId: ot.id, recordCode: ot.otNum }); toast.info(`Navegando a ${ot.otNum}`); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-blue-400 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-500 transition-all cursor-pointer shadow-sm hover:shadow-md font-semibold text-xs"
                             title={`Ir a OT ${ot.otNum}: ${ot.titulo}`}
                           >
                             <ClipboardList className="w-3.5 h-3.5" />
                             Ir a OT {ot.otNum}
-                          </a>
+                          </button>
                         ))}
                         {scs.map((sc: any) => (
-                          <a
+                          <button
                             key={sc.id}
-                            href={`/solicitudes-compra?sc=${sc.id}`}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer no-underline shadow-sm hover:shadow-md font-semibold text-xs"
+                            onClick={() => { setDialogOpen(false); navigateToModuleRecord('solicitudescompra', { recordId: sc.id, recordCode: sc.codigo }); toast.info(`Navegando a ${sc.codigo}`); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-emerald-400 bg-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-500 transition-all cursor-pointer shadow-sm hover:shadow-md font-semibold text-xs"
                             title={`Ir a SC ${sc.codigo}: ${sc.titulo}`}
                           >
                             <ShoppingCart className="w-3.5 h-3.5" />
                             Ir a SC {sc.codigo}
-                          </a>
+                          </button>
                         ))}
                       </div>
                     )
