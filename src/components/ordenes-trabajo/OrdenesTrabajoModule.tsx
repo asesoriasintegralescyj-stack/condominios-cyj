@@ -282,10 +282,16 @@ export function OrdenesTrabajoModule() {
     setLoading(true)
     try {
       const url = searchTerm ? `/api/ordenes-trabajo?search=${encodeURIComponent(searchTerm)}` : '/api/ordenes-trabajo'
-      const data = await apiFetch<OrdenTrabajo[]>(url, [])
-      setOrdenes(data)
+      const res = await fetch(url)
+      if (res.status === 401) { window.location.href = '/login?expired=true'; return }
+      if (res.status === 403) { setOrdenes([]); toast.error('Sin permisos para ver OTs'); setLoading(false); return }
+      if (!res.ok) { setOrdenes([]); toast.error(`Error al cargar OTs (HTTP ${res.status})`); setLoading(false); return }
+      const data = await res.json()
+      setOrdenes(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching ordenes:', error)
+      setOrdenes([])
+      toast.error('Error de conexión al cargar OTs')
     }
     setLoading(false)
   }
