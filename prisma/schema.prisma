@@ -367,6 +367,12 @@ model OrdenTrabajo {
   fechaAprobacion   String?  // Fecha de aprobación/rechazo
   aprobadoPor       String?  // ID del usuario que aprobó/rechazó
   observacionesAprob String? // Observaciones del supervisor
+  // Aprobación supervisor - Flujo 2 etapas
+  etapaAprobacionSupervisor String? // Pendiente, Aprobada, Rechazada (etapa 1: Jefe de Operaciones)
+  supervisorAprobadorId     String? // ID del supervisor que aprobó/rechazó
+  supervisorAprobadorNombre String? // Nombre legible del supervisor
+  supervisorFechaAprobacion String? // Fecha de aprobación del supervisor
+  supervisorObservaciones   String? // Observaciones del supervisor
   creadoPor         String?  // ID del usuario que creó la OT
   creadoPorNombre   String?  // nombre legible del creador
   perfilMovilId     String?  // ID del MovilProfile que creó la OT desde la app móvil

@@ -26,20 +26,43 @@ export async function GET(
     const { searchParams } = new URL(request.url)
     const incluirFotos = searchParams.get('fotos') === 'true'
 
-    const orden = await db.ordenTrabajo.findUnique({
-      where: { id },
-      include: {
-        propiedad: true,
-        asignado: true,
-        activo: true,
-        centroCosto: true,
-        materiales: true,
-        herramientas: true,
-        tareas: true,
-        personalOT: true,
-        documentos: true,
+    let orden: any
+    try {
+      orden = await db.ordenTrabajo.findUnique({
+        where: { id },
+        include: {
+          propiedad: true,
+          asignado: true,
+          activo: true,
+          centroCosto: true,
+          materiales: true,
+          herramientas: true,
+          tareas: true,
+          personalOT: true,
+          documentos: true,
+        }
+      })
+    } catch (prismaErr: any) {
+      // Si falla por columnas faltantes (schema drift), intentar con raw SQL
+      console.warn('[OT GET by ID] Prisma findUnique falló, intentando raw SQL:', prismaErr?.message)
+      const rows = await db.$queryRawUnsafe<any[]>(
+        `SELECT * FROM "OrdenTrabajo" WHERE "id" = $1`,
+        id
+      )
+      orden = rows[0] || null
+      // Agregar relaciones vacías para compatibilidad
+      if (orden) {
+        orden.propiedad = null
+        orden.asignado = null
+        orden.activo = null
+        orden.centroCosto = null
+        orden.materiales = []
+        orden.herramientas = []
+        orden.tareas = []
+        orden.personalOT = []
+        orden.documentos = []
       }
-    })
+    }
 
     if (!orden) {
       return NextResponse.json({ error: 'Orden not found' }, { status: 404 })

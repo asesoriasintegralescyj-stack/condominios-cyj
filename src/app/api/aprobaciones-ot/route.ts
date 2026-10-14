@@ -6,6 +6,34 @@ import { apiError } from '@/lib/api-helpers'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
+/**
+ * Auto-migra columnas de aprobación en OrdenTrabajo (igual que ensureColumns en ordenes-trabajo/route.ts)
+ */
+async function ensureApprovalColumns() {
+  const cols: { name: string; type: string }[] = [
+    { name: 'etapaAprobacionSupervisor', type: 'TEXT' },
+    { name: 'supervisorAprobadorId', type: 'TEXT' },
+    { name: 'supervisorAprobadorNombre', type: 'TEXT' },
+    { name: 'supervisorFechaAprobacion', type: 'TEXT' },
+    { name: 'supervisorObservaciones', type: 'TEXT' },
+  ]
+  for (const col of cols) {
+    try {
+      const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+        `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='OrdenTrabajo' AND column_name='${col.name}')`
+      )
+      if (!r[0]?.exists) {
+        await db.$executeRawUnsafe(
+          `ALTER TABLE "OrdenTrabajo" ADD COLUMN "${col.name}" ${col.type}`
+        )
+        console.log(`[ensureApprovalColumns] Columna ${col.name} agregada a OrdenTrabajo`)
+      }
+    } catch (e) {
+      console.warn(`[ensureApprovalColumns] Error con ${col.name}:`, e)
+    }
+  }
+}
+
 // GET - Obtener OTs pendientes de aprobación
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
@@ -14,6 +42,9 @@ export async function GET(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas de aprobación
+    await ensureApprovalColumns()
+
     const searchParams = request.nextUrl.searchParams
     const estadoFiltro = searchParams.get('estado') || 'all' // Pendiente, Aprobada, Rechazada, all
     const search = searchParams.get('search') || ''
@@ -91,6 +122,9 @@ export async function POST(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
+    // Auto-migrar columnas de aprobación
+    await ensureApprovalColumns()
+
     const data = await request.json()
     const { otId, accion, observaciones } = data
     const aprobadoPor = session.userId

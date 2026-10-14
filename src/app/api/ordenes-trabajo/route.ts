@@ -9,6 +9,8 @@ export const maxDuration = 30
 
 /**
  * Auto-migra la tabla OrdenTrabajo agregando columnas faltantes.
+ * Incluye: driveFolderId, origenTipo, origenId, origenCodigo, proyectoId,
+ * y columnas de aprobación de supervisor (etapaAprobacionSupervisor, etc.)
  */
 async function ensureColumns() {
   const cols: { name: string; type: string }[] = [
@@ -16,6 +18,12 @@ async function ensureColumns() {
     { name: 'origenTipo', type: 'TEXT' },
     { name: 'origenId', type: 'TEXT' },
     { name: 'origenCodigo', type: 'TEXT' },
+    { name: 'proyectoId', type: 'TEXT' },
+    { name: 'etapaAprobacionSupervisor', type: 'TEXT' },
+    { name: 'supervisorAprobadorId', type: 'TEXT' },
+    { name: 'supervisorAprobadorNombre', type: 'TEXT' },
+    { name: 'supervisorFechaAprobacion', type: 'TEXT' },
+    { name: 'supervisorObservaciones', type: 'TEXT' },
   ]
   for (const col of cols) {
     try {
@@ -39,40 +47,45 @@ async function ensureColumns() {
     )
     if (!r[0]?.exists) {
       await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_driveFolderId_idx" ON "OrdenTrabajo"("driveFolderId")`)
-      console.log(`[ensureColumns] Índice OrdenTrabajo_driveFolderId_idx creado`)
     }
-  } catch (e) {
-    console.warn(`[ensureColumns] Error con índice driveFolderId:`, e)
-  }
+  } catch (e) { /* ignore */ }
   try {
     const r = await db.$queryRawUnsafe<[{ exists: boolean }]>(
       `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='OrdenTrabajo_origen_idx')`
     )
     if (!r[0]?.exists) {
       await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_origen_idx" ON "OrdenTrabajo"("origenTipo","origenId")`)
-      console.log(`[ensureColumns] Índice OrdenTrabajo_origen_idx creado`)
     }
-  } catch (e) {
-    console.warn(`[ensureColumns] Error con índice origen:`, e)
-  }
-  // Backfill: OTs con origenTipo='Proyecto' pero sin proyectoId → copiar origenId a proyectoId
+  } catch (e) { /* ignore */ }
   try {
-    const result = await db.$executeRawUnsafe(
+    const fkExists = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name='OrdenTrabajo_proyectoId_fkey' AND table_name='OrdenTrabajo')`
+    )
+    if (!fkExists[0]?.exists) {
+      await db.$executeRawUnsafe(
+        `ALTER TABLE "OrdenTrabajo" ADD CONSTRAINT "OrdenTrabajo_proyectoId_fkey" FOREIGN KEY ("proyectoId") REFERENCES "Proyecto"("id") ON DELETE SET NULL`
+      )
+      console.log(`[ensureColumns] FK OrdenTrabajo_proyectoId_fkey creada`)
+    }
+  } catch (e) { /* ignore - FK may already exist or proyectoId may not exist yet */ }
+  try {
+    const idxExists = await db.$queryRawUnsafe<[{ exists: boolean }]>(
+      `SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname='OrdenTrabajo_proyectoId_idx')`
+    )
+    if (!idxExists[0]?.exists) {
+      await db.$executeRawUnsafe(`CREATE INDEX "OrdenTrabajo_proyectoId_idx" ON "OrdenTrabajo"("proyectoId")`)
+    }
+  } catch (e) { /* ignore */ }
+  // Backfill
+  try {
+    await db.$executeRawUnsafe(
       `UPDATE "OrdenTrabajo" SET "proyectoId" = "origenId" WHERE "origenTipo" = 'Proyecto' AND "origenId" IS NOT NULL AND "proyectoId" IS NULL`
     )
-    if (result > 0) {
-      console.log(`[ensureColumns] Backfill: ${result} OT(s) actualizadas con proyectoId desde origenId`)
-    }
-  } catch (e) {
-    console.warn(`[ensureColumns] Error en backfill proyectoId:`, e)
-  }
+  } catch (e) { /* ignore */ }
 }
 
 /**
  * Valida que un ID de FK exista en la tabla correspondiente.
- * Si no existe, devuelve null (graceful fallback).
- * Esto evita errores de FK constraint cuando se crean OTs desde proyectos
- * que tienen IDs huérfanos (centroCosto eliminado, etc.)
  */
 async function validateFK(table: string, id: string | null | undefined): Promise<string | null> {
   if (!id || id === 'none' || id === 'null' || id === 'undefined') return null
@@ -84,12 +97,39 @@ async function validateFK(table: string, id: string | null | undefined): Promise
     return result[0]?.exists ? id : null
   } catch (e) {
     console.warn(`[validateFK] Error validando FK ${table}/${id}:`, e)
-    return null // Graceful fallback
+    return null
+  }
+}
+
+/**
+ * Detecta qué columnas opcionales existen realmente en la tabla OrdenTrabajo.
+ * Esto permite construir queries SQL dinámicos que no fallen si faltan columnas.
+ */
+async function detectExistingColumns(): Promise<Set<string>> {
+  try {
+    const rows = await db.$queryRawUnsafe<{ column_name: string }[]>(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'OrdenTrabajo'`
+    )
+    return new Set(rows.map(r => r.column_name))
+  } catch (e) {
+    console.warn('[detectExistingColumns] Error:', e)
+    // Fallback: asumir columnas base del schema original
+    return new Set([
+      'id', 'otNum', 'titulo', 'tipo', 'prioridad', 'estado', 'ubicacion',
+      'fechaInicio', 'fechaLimite', 'fechaInicioReal', 'fechaFinReal',
+      'costoEstimado', 'costoReal', 'progreso', 'descripcion', 'tiempoEst',
+      'tiempoReal', 'valorHora', 'notas', 'esRecurrente', 'tareaOrigenId',
+      'proximaEjecucion', 'formaPago', 'estadoAprobacion', 'fechaSolicitudAprob',
+      'fechaAprobacion', 'aprobadoPor', 'observacionesAprob', 'creadoPor',
+      'creadoPorNombre', 'perfilMovilId', 'fotosAntes', 'fotosDespues',
+      'condominioId', 'propiedadId', 'asignadoId', 'activoId', 'centroCostoId',
+      'createdAt', 'updatedAt',
+    ])
   }
 }
 
 // GET - List all ordenes de trabajo
-// Para rol 'personal': solo devuelve las OT asignadas al trabajador (vía email → Personal.id)
+// Usa raw SQL como método principal para ser 100% resiliente a schema drift.
 export async function GET(request: NextRequest) {
   const session = await getCurrentSession()
   if (!session) return apiError('No autenticado', 401)
@@ -97,97 +137,216 @@ export async function GET(request: NextRequest) {
     return apiError('Sin permisos', 403)
   }
   try {
-    // Auto-migrar columnas faltantes (idempotente)
+    // Auto-migrar columnas faltantes (idempotente, errores ignorados)
     await ensureColumns()
+
+    // Detectar qué columnas existen realmente en la BD
+    const existingCols = await detectExistingColumns()
 
     const searchParams = request.nextUrl.searchParams
     const search = searchParams.get('search') || ''
-    const proyectoId = searchParams.get('proyectoId') || ''
-    const origenTipo = searchParams.get('origenTipo') || ''
-    const origenId = searchParams.get('origenId') || ''
+    const filterProyectoId = searchParams.get('proyectoId') || ''
+    const filterOrigenTipo = searchParams.get('origenTipo') || ''
+    const filterOrigenId = searchParams.get('origenId') || ''
 
     // Para rol personal, buscar el registro de Personal por email y filtrar OT
-    let personalFilter: any = undefined
+    let personalId: string | null = null
+    let personalNombre: string | null = null
     if (session.user.rol === 'personal') {
       const allPersonal = await db.personal.findMany({ select: { id: true, email: true, nombre: true } })
       const userEmail = session.user.email.toLowerCase()
       const matched = allPersonal.find((p) => {
         if (!p.email) return false
-        const dec = decrypt(p.email).toLowerCase()
-        return dec === userEmail
+        try {
+          const dec = decrypt(p.email).toLowerCase()
+          return dec === userEmail
+        } catch { return false }
       })
-
-      if (matched) {
-        personalFilter = {
-          OR: [
-            { asignadoId: matched.id },
-            { personalOT: { some: { nombre: { contains: matched.nombre } } } },
-          ],
-        }
-      } else {
-        return NextResponse.json([])
-      }
+      if (!matched) return NextResponse.json([])
+      personalId = matched.id
+      personalNombre = matched.nombre
     }
 
-    const where: any = {}
+    // Construir WHERE dinámico con parámetros posicionales (previene SQL injection)
+    const conditions: string[] = []
+    const params: any[] = []
+    let paramIdx = 1
+
     if (search) {
-      where.OR = [
-        { otNum: { contains: search } },
-        { titulo: { contains: search } },
-        { estado: { contains: search } },
-      ]
+      const likeVal = `%${search}%`
+      conditions.push(`("ot"."otNum" ILIKE $${paramIdx} OR "ot"."titulo" ILIKE $${paramIdx} OR "ot"."estado" ILIKE $${paramIdx})`)
+      params.push(likeVal)
+      paramIdx++
     }
-    if (proyectoId) {
-      where.proyectoId = proyectoId
+    if (filterProyectoId && existingCols.has('proyectoId')) {
+      conditions.push(`"ot"."proyectoId" = $${paramIdx}`)
+      params.push(filterProyectoId)
+      paramIdx++
     }
-    if (origenTipo) {
-      where.origenTipo = origenTipo
+    if (filterOrigenTipo && existingCols.has('origenTipo')) {
+      conditions.push(`"ot"."origenTipo" = $${paramIdx}`)
+      params.push(filterOrigenTipo)
+      paramIdx++
     }
-    if (origenId) {
-      where.origenId = origenId
+    if (filterOrigenId && existingCols.has('origenId')) {
+      conditions.push(`"ot"."origenId" = $${paramIdx}`)
+      params.push(filterOrigenId)
+      paramIdx++
     }
-    if (personalFilter) {
-      if (search) {
-        where.AND = [personalFilter]
-      } else {
-        Object.assign(where, personalFilter)
-      }
+    if (personalId) {
+      conditions.push(`("ot"."asignadoId" = $${paramIdx} OR EXISTS (SELECT 1 FROM "OTPersonal" "op" WHERE "op"."ordenId" = "ot"."id" AND "op"."nombre" ILIKE $${paramIdx + 1}))`)
+      params.push(personalId)
+      params.push(`%${personalNombre}%`)
+      paramIdx += 2
     }
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    const ordenes = await db.ordenTrabajo.findMany({
-      where: Object.keys(where).length > 0 ? where : undefined,
-      select: {
-        id: true, otNum: true, titulo: true, tipo: true, prioridad: true,
-        estado: true, ubicacion: true, fechaInicio: true, fechaLimite: true,
-        fechaInicioReal: true, fechaFinReal: true, costoEstimado: true,
-        costoReal: true, progreso: true, descripcion: true, tiempoEst: true,
-        tiempoReal: true, estadoAprobacion: true, formaPago: true, createdAt: true,
-        creadoPorNombre: true,
-        proyectoId: true,
-        origenTipo: true,
-        origenId: true,
-        origenCodigo: true,
-        proyecto: { select: { id: true, codigo: true, nombre: true } },
-        propiedad: { select: { id: true, nombre: true } },
-        asignado: { select: { id: true, nombre: true, cargo: true } },
-        centroCosto: { select: { id: true, codigo: true, nombre: true } },
+    // Construir SELECT dinámico - solo columnas que existen
+    const selectCols: string[] = [
+      '"ot"."id"', '"ot"."otNum"', '"ot"."titulo"', '"ot"."tipo"', '"ot"."prioridad"',
+      '"ot"."estado"', '"ot"."ubicacion"', '"ot"."fechaInicio"', '"ot"."fechaLimite"',
+      '"ot"."fechaInicioReal"', '"ot"."fechaFinReal"', '"ot"."costoEstimado"',
+      '"ot"."costoReal"', '"ot"."progreso"', '"ot"."descripcion"', '"ot"."tiempoEst"',
+      '"ot"."tiempoReal"', '"ot"."estadoAprobacion"', '"ot"."formaPago"', '"ot"."createdAt"',
+      '"ot"."creadoPorNombre"',
+    ]
+    if (existingCols.has('origenTipo')) selectCols.push('"ot"."origenTipo"')
+    if (existingCols.has('origenId')) selectCols.push('"ot"."origenId"')
+    if (existingCols.has('origenCodigo')) selectCols.push('"ot"."origenCodigo"')
+    if (existingCols.has('proyectoId')) selectCols.push('"ot"."proyectoId"')
+
+    // JOINs opcionales
+    const propJoin = `LEFT JOIN "Propiedad" "prop" ON "ot"."propiedadId" = "prop"."id"`
+    const asigJoin = `LEFT JOIN "Personal" "asig" ON "ot"."asignadoId" = "asig"."id"`
+    const ccJoin = `LEFT JOIN "CentroCostoMaster" "cc" ON "ot"."centroCostoId" = "cc"."id"`
+    const proyJoin = existingCols.has('proyectoId')
+      ? `LEFT JOIN "Proyecto" "proy" ON "ot"."proyectoId" = "proy"."id"`
+      : ''
+
+    // Subqueries para _count
+    const matCount = `(SELECT COUNT(*) FROM "OTMaterial" "m" WHERE "m"."ordenId" = "ot"."id")::int AS "materialesCount"`
+    const herrCount = `(SELECT COUNT(*) FROM "OTHerramienta" "h" WHERE "h"."ordenId" = "ot"."id")::int AS "herramientasCount"`
+    const tarCount = `(SELECT COUNT(*) FROM "OTTarea" "t" WHERE "t"."ordenId" = "ot"."id")::int AS "tareasCount"`
+    const perCount = `(SELECT COUNT(*) FROM "OTPersonal" "p" WHERE "p"."ordenId" = "ot"."id")::int AS "personalOTCount"`
+    const docCount = `(SELECT COUNT(*) FROM "OTDocumento" "d" WHERE "d"."ordenId" = "ot"."id")::int AS "documentosCount"`
+
+    const sql = `
+      SELECT
+        ${selectCols.join(', ')},
+        ${matCount}, ${herrCount}, ${tarCount}, ${perCount}, ${docCount},
+        "prop"."id" AS "propiedad_id", "prop"."nombre" AS "propiedad_nombre",
+        "asig"."id" AS "asignado_id", "asig"."nombre" AS "asignado_nombre", "asig"."cargo" AS "asignado_cargo",
+        "cc"."id" AS "centroCosto_id", "cc"."codigo" AS "centroCosto_codigo", "cc"."nombre" AS "centroCosto_nombre"
+        ${existingCols.has('proyectoId') ? ', "proy"."id" AS "proyecto_id", "proy"."codigo" AS "proyecto_codigo", "proy"."nombre" AS "proyecto_nombre"' : ''}
+      FROM "OrdenTrabajo" "ot"
+      ${propJoin}
+      ${asigJoin}
+      ${ccJoin}
+      ${proyJoin}
+      ${whereClause}
+      ORDER BY "ot"."createdAt" DESC
+    `
+
+    console.log('[OT GET] Ejecutando query raw SQL con params:', params.length)
+    const rows = await db.$queryRawUnsafe<any[]>(sql, ...params)
+
+    // Mapear resultados al formato esperado por el frontend
+    const ordenes = rows.map((r: any) => {
+      const ot: any = {
+        id: r.id,
+        otNum: r.otNum,
+        titulo: r.titulo,
+        tipo: r.tipo,
+        prioridad: r.prioridad,
+        estado: r.estado,
+        ubicacion: r.ubicacion,
+        fechaInicio: r.fechaInicio,
+        fechaLimite: r.fechaLimite,
+        fechaInicioReal: r.fechaInicioReal,
+        fechaFinReal: r.fechaFinReal,
+        costoEstimado: Number(r.costoEstimado) || 0,
+        costoReal: Number(r.costoReal) || 0,
+        progreso: Number(r.progreso) || 0,
+        descripcion: r.descripcion,
+        tiempoEst: Number(r.tiempoEst) || 0,
+        tiempoReal: Number(r.tiempoReal) || 0,
+        estadoAprobacion: r.estadoAprobacion,
+        formaPago: r.formaPago,
+        createdAt: r.createdAt,
+        creadoPorNombre: r.creadoPorNombre,
+        origenTipo: r.origenTipo || null,
+        origenId: r.origenId || null,
+        origenCodigo: r.origenCodigo || null,
+        proyectoId: r.proyectoId || null,
+        propiedad: r.propiedad_id ? { id: r.propiedad_id, nombre: r.propiedad_nombre } : null,
+        asignado: r.asignado_id ? { id: r.asignado_id, nombre: r.asignado_nombre, cargo: r.asignado_cargo } : null,
+        centroCosto: r.centroCosto_id ? { id: r.centroCosto_id, codigo: r.centroCosto_codigo, nombre: r.centroCosto_nombre } : null,
+        proyecto: r.proyecto_id ? { id: r.proyecto_id, codigo: r.proyecto_codigo, nombre: r.proyecto_nombre } : null,
         _count: {
-          select: { materiales: true, herramientas: true, tareas: true, personalOT: true, documentos: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
+          materiales: Number(r.materialesCount) || 0,
+          herramientas: Number(r.herramientasCount) || 0,
+          tareas: Number(r.tareasCount) || 0,
+          personalOT: Number(r.personalOTCount) || 0,
+          documentos: Number(r.documentosCount) || 0,
+        },
+        fotosAntes: [],
+        fotosDespues: [],
+      }
+      return ot
     })
 
-    const ordenesWithCC = ordenes.map(ot => ({
-      ...ot,
-      fotosAntes: [],
-      fotosDespues: [],
-    }))
+    console.log(`[OT GET] ${ordenes.length} OTs cargadas exitosamente`)
+    return NextResponse.json(ordenes)
+  } catch (error: any) {
+    console.error('[OT GET] Error fetching ordenes:', error)
+    const errMsg = error?.message || error?.meta?.message || String(error)
 
-    return NextResponse.json(ordenesWithCC)
-  } catch (error) {
-    console.error('Error fetching ordenes:', error)
-    return NextResponse.json({ error: 'Error fetching ordenes' }, { status: 500 })
+    // Último recurso: intentar query mínima con solo columnas base
+    try {
+      console.log('[OT GET] Intentando query mínima de emergencia...')
+      const rows = await db.$queryRawUnsafe<any[]>(
+        `SELECT "id", "otNum", "titulo", "tipo", "prioridad", "estado", "ubicacion", "fechaInicio", "fechaLimite", "costoEstimado", "costoReal", "progreso", "createdAt" FROM "OrdenTrabajo" ORDER BY "createdAt" DESC LIMIT 500`
+      )
+      const ordenes = rows.map((r: any) => ({
+        id: r.id,
+        otNum: r.otNum,
+        titulo: r.titulo,
+        tipo: r.tipo || 'Correctivo',
+        prioridad: r.prioridad || 'Media',
+        estado: r.estado || 'Pendiente',
+        ubicacion: r.ubicacion,
+        fechaInicio: r.fechaInicio,
+        fechaLimite: r.fechaLimite,
+        fechaInicioReal: null,
+        fechaFinReal: null,
+        costoEstimado: Number(r.costoEstimado) || 0,
+        costoReal: Number(r.costoReal) || 0,
+        progreso: Number(r.progreso) || 0,
+        descripcion: null,
+        tiempoEst: 0,
+        tiempoReal: 0,
+        estadoAprobacion: 'Pendiente',
+        formaPago: null,
+        createdAt: r.createdAt,
+        creadoPorNombre: null,
+        origenTipo: null,
+        origenId: null,
+        origenCodigo: null,
+        proyectoId: null,
+        propiedad: null,
+        asignado: null,
+        centroCosto: null,
+        proyecto: null,
+        _count: { materiales: 0, herramientas: 0, tareas: 0, personalOT: 0, documentos: 0 },
+        fotosAntes: [],
+        fotosDespues: [],
+      }))
+      console.log(`[OT GET] Query de emergencia: ${ordenes.length} OTs`)
+      return NextResponse.json(ordenes)
+    } catch (emergencyErr) {
+      console.error('[OT GET] Query de emergencia también falló:', emergencyErr)
+      return NextResponse.json({ error: 'Error fetching ordenes', details: errMsg }, { status: 500 })
+    }
   }
 }
 
@@ -265,7 +424,6 @@ export async function POST(request: NextRequest) {
     const { materiales, herramientas, tareas, personalOT, centroCostoId, proyectoId, origenTipo, origenId, origenCodigo, _clientIdempotency: _idem, ...otData } = data
 
     // ─── VALIDAR FKs: Asegurar que los IDs referenciados existan en la BD ───
-    // Si un ID no existe (ej: centroCostoMaster eliminado), se setea a null en vez de fallar
     const validatedCentroCostoId = await validateFK('CentroCostoMaster', centroCostoId)
     const validatedPropiedadId = await validateFK('Propiedad', otData.propiedadId)
     const validatedAsignadoId = await validateFK('Personal', otData.asignadoId)
@@ -315,7 +473,7 @@ export async function POST(request: NextRequest) {
       asignadoId: validatedAsignadoId,
       activoId: validatedActivoId,
       centroCostoId: validatedCentroCostoId,
-      proyectoId: proyectoId || null,  // Referencia al Proyecto origen
+      proyectoId: proyectoId || null,
       esRecurrente: otData.esRecurrente || false,
       formaPago: otData.formaPago || null,
       creadoPor: session.user.id,
@@ -382,25 +540,20 @@ export async function POST(request: NextRequest) {
         )
         console.log(`[OT POST] Campos de origen seteados: tipo=${origenTipo}, id=${origenId}, codigo=${origenCodigo}`)
       } catch (origenErr: any) {
-        // Column might not exist yet — ensureColumns should have added it,
-        // but if not, this is non-critical and the OT was already created
         console.warn(`[OT POST] No se pudieron setear campos de origen: ${origenErr?.message || origenErr}`)
       }
     }
 
     // ─── Actualizar proyecto con la OT vinculada ───
-    // Check both origenTipo/origenId AND proyectoId for linking
     const proyectoIdForLink = (origenTipo === 'Proyecto' && origenId) ? origenId : (proyectoId || null)
     if (proyectoIdForLink) {
       try {
-        // Usar raw SQL para leer otsVinculadas (Prisma select puede fallar si columna no existe)
         const [proyectoRow] = await db.$queryRawUnsafe<{ otsVinculadas: string | null }[]>(
           `SELECT "otsVinculadas" FROM "Proyecto" WHERE "id" = $1`,
           proyectoIdForLink
         )
         if (proyectoRow) {
           const existing: any[] = proyectoRow.otsVinculadas ? JSON.parse(proyectoRow.otsVinculadas) : []
-          // Evitar duplicados
           if (!existing.find((o: any) => o.id === orden.id)) {
             existing.push({
               id: orden.id,
@@ -417,7 +570,6 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (proyErr: any) {
-        // Non-critical: la OT ya fue creada, esto es solo vinculación
         console.warn(`[OT POST] No se pudo actualizar proyecto con OT vinculada: ${proyErr?.message || proyErr}`)
       }
     }
@@ -430,14 +582,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(orden)
   } catch (error: any) {
     console.error('[OT POST] Error creating orden:', error)
-    // Build a comprehensive error message
     const errMsg = error instanceof Error
       ? error.message
       : typeof error === 'string'
         ? error
         : (error?.message || error?.meta?.message || JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
 
-    // Detect specific error types for user-friendly messages
     if (errMsg.includes('Unique') && errMsg.includes('otNum')) {
       return NextResponse.json({
         error: 'Error de concurrencia: numero de OT duplicado. Intente nuevamente.',
@@ -445,7 +595,6 @@ export async function POST(request: NextRequest) {
       }, { status: 409 })
     }
 
-    // FK constraint violation
     if (errMsg.includes('foreign key') || errMsg.includes('ForeignKeyConstraint') || errMsg.includes('violates foreign key constraint')) {
       const match = errMsg.match(/Key \((\w+)\)=\(([^)]+)\)/)
       const field = match ? match[1] : 'desconocido'
@@ -456,7 +605,6 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Prisma validation error
     if (errMsg.includes('PrismaClientValidationError') || errMsg.includes('Unknown arg')) {
       return NextResponse.json({
         error: 'Error de validación en los datos enviados. Verifique los campos.',

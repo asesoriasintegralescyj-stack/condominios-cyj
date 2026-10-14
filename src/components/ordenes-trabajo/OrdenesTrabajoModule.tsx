@@ -285,7 +285,19 @@ export function OrdenesTrabajoModule() {
       const res = await fetch(url)
       if (res.status === 401) { window.location.href = '/login?expired=true'; return }
       if (res.status === 403) { setOrdenes([]); toast.error('Sin permisos para ver OTs'); setLoading(false); return }
-      if (!res.ok) { setOrdenes([]); toast.error(`Error al cargar OTs (HTTP ${res.status})`); setLoading(false); return }
+      if (!res.ok) {
+        setOrdenes([])
+        // Intentar obtener detalles del error del backend
+        try {
+          const errData = await res.json()
+          const detail = errData?.details || errData?.error || ''
+          toast.error(`Error al cargar OTs (HTTP ${res.status})${detail ? ': ' + String(detail).substring(0, 120) : ''}`)
+        } catch {
+          toast.error(`Error al cargar OTs (HTTP ${res.status})`)
+        }
+        setLoading(false)
+        return
+      }
       const data = await res.json()
       setOrdenes(Array.isArray(data) ? data : [])
     } catch (error) {
