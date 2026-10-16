@@ -50,6 +50,9 @@ export function middleware(request: NextRequest) {
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
   // CORS: Restringir Access-Control-Allow-Origin al mismo dominio
+  // Primero eliminar cualquier wildcard que Next.js/Vercel pueda agregar por defecto
+  response.headers.delete('Access-Control-Allow-Origin')
+
   if (request.nextUrl.pathname.startsWith('/api/')) {
     const origin = request.headers.get('origin')
     const allowedOrigins = [
@@ -63,8 +66,6 @@ export function middleware(request: NextRequest) {
       response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
       response.headers.set('Access-Control-Allow-Credentials', 'true')
       response.headers.set('Access-Control-Max-Age', '86400')
-    } else {
-      response.headers.delete('Access-Control-Allow-Origin')
     }
 
     if (request.method === 'OPTIONS') {
