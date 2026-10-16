@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Download, FileArchive, FileText, CheckCircle, AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import Image from 'next/image';
 
 export default function DescargasPage() {
   return (
@@ -12,7 +13,7 @@ export default function DescargasPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <img src="/logo.png" alt="CyJ Logo" className="h-16 w-auto" />
+            <Image src="/logo.webp" alt="CyJ Logo" width={64} height={64} className="h-16 w-auto" priority />
           </div>
           <h1 className="text-3xl font-bold text-emerald-800 mb-2">
             📦 Descargas - Sistema CyJ

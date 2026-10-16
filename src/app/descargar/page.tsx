@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Download, CheckCircle } from 'lucide-react'
+import Image from 'next/image'
 
 // Página de descarga del sistema
 export default function DescargarPage() {
@@ -10,7 +11,7 @@ export default function DescargarPage() {
       <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 text-center">
 
         {/* Logo */}
-        <img src="/logo.png" alt="CyJ Logo" className="h-20 w-auto mx-auto mb-6" />
+        <Image src="/logo.webp" alt="CyJ Logo" width={80} height={80} className="h-20 w-auto mx-auto mb-6" priority />
 
         {/* Título */}
         <h1 className="text-2xl font-bold text-gray-900 mb-2">

@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Lock, User, Eye, EyeOff, AlertCircle, Loader2, KeyRound } from 'lucide-react';
 import { ForcePasswordChangeDialog } from '@/components/auth/ForcePasswordChangeDialog';
 import Link from 'next/link';
+import Image from 'next/image';
 
 function LoginForm() {
   const router = useRouter();
@@ -216,12 +217,13 @@ export default function LoginPage() {
         {/* Logo y Título */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#0A1172] to-[#080d54] rounded-2xl mb-4 overflow-hidden shadow-xl">
-            <img 
-              src="/logo.jpg" 
+            <Image 
+              src="/logo.webp" 
               alt="Asesorías Integrales CyJ" 
               width={64} 
               height={64}
               className="w-16 h-16 object-cover"
+              priority
             />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">

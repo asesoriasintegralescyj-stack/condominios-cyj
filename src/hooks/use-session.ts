@@ -30,7 +30,9 @@ export function useSession() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const response = await fetch('/api/auth/session');
+      const response = await fetch('/api/auth/session', {
+        priority: 'low' as RequestInit['priority'],
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -56,7 +58,20 @@ export function useSession() {
   }, []);
 
   useEffect(() => {
-    fetchSession();
+    if (typeof window !== 'undefined') {
+      const scheduleFetch = () => {
+        if ('requestIdleCallback' in window) {
+          (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
+            fetchSession();
+          }, { timeout: 2000 });
+        } else {
+          setTimeout(fetchSession, 0);
+        }
+      };
+      scheduleFetch();
+    } else {
+      fetchSession();
+    }
   }, [fetchSession]);
 
   const login = async (email: string, password: string) => {

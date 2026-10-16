@@ -16,6 +16,7 @@ import {
   RefreshCw, LogOut, Clock, Shield, UserCog, User as UserIcon, Wrench, Eye, QrCode
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Image from 'next/image'
 
 interface Documento {
   tipo: 'manual' | 'capacitacion'
@@ -177,7 +178,7 @@ export default function ManualesGuardiaPage() {
       {/* Header */}
       <header className="bg-black/30 backdrop-blur-sm border-b border-white/10 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <img src="/logo.jpg" alt="Logo" className="w-10 h-10 rounded-lg shrink-0" />
+          <Image src="/logo.webp" alt="Logo" width={40} height={40} className="w-10 h-10 rounded-lg shrink-0" priority />
           <div className="min-w-0">
             <div className="text-sm font-bold truncate">Laguna Norte</div>
             <div className="text-[10px] text-blue-300 truncate">Manuales y Capacitaciones</div>

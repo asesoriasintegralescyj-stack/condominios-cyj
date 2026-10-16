@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Mail, ArrowLeft, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function RecuperarPasswordPage() {
   const [email, setEmail] = useState('')
@@ -57,12 +58,13 @@ export default function RecuperarPasswordPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#0A1172] to-[#080d54] rounded-2xl mb-4 overflow-hidden shadow-xl">
-            <img
-              src="/logo.jpg"
+            <Image
+              src="/logo.webp"
               alt="Asesorías Integrales CyJ"
               width={64}
               height={64}
               className="w-16 h-16 object-cover"
+              priority
             />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Recuperar Contraseña</h1>

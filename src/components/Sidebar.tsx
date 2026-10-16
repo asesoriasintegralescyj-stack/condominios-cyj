@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import Image from 'next/image'
 
 // Definir permisos necesarios para cada módulo
 const modulePermissions: Partial<Record<Module, string>> = {
@@ -276,9 +277,11 @@ export function Sidebar() {
       {/* Logo */}
       <div className="p-4 border-b border-white/10 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <img
-            src="/logo.jpg"
+          <Image
+            src="/logo.webp"
             alt="Asesorías Integrales CyJ"
+            width={40}
+            height={40}
             className="w-10 h-10 rounded-lg object-cover shrink-0"
           />
           <div className="min-w-0 flex-1">

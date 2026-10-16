@@ -28,6 +28,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -40,10 +41,14 @@ export function LandingPage() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <img 
-                src="/logo.jpg" 
+              <Image 
+                src="/logo.webp" 
                 alt="Asesorías Integrales CyJ" 
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-lg object-cover"
+                fetchPriority="high"
+                priority
               />
               <div>
                 <span className="text-lg font-bold text-gray-900">Asesorías Integrales CyJ</span>
@@ -160,9 +165,11 @@ export function LandingPage() {
             <div className="relative">
               <div className="bg-gradient-to-br from-[#0A1172] to-[#080d54] rounded-2xl p-8 text-white shadow-2xl">
                 <div className="flex items-center gap-4 mb-6">
-                  <img 
-                    src="/logo.jpg" 
+                  <Image 
+                    src="/logo.webp" 
                     alt="Asesorías Integrales CyJ" 
+                    width={64}
+                    height={64}
                     className="w-16 h-16 rounded-xl object-cover bg-white/20"
                   />
                   <div>
@@ -239,10 +246,12 @@ export function LandingPage() {
             {/* Service 1 - Administración */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/administracion.jpg" 
+                <Image 
+                  src="/services/administracion.webp" 
                   alt="Administración de Condominios" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -276,10 +285,12 @@ export function LandingPage() {
             {/* Service 2 - Mantención */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/mantencion.jpg" 
+                <Image 
+                  src="/services/mantencion.webp" 
                   alt="Mantención y Reparaciones" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -313,10 +324,12 @@ export function LandingPage() {
             {/* Service 3 - Gestión Financiera */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/finanzas.jpg" 
+                <Image 
+                  src="/services/finanzas.webp" 
                   alt="Gestión Financiera" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -350,10 +363,12 @@ export function LandingPage() {
             {/* Service 4 - Atención a Residentes */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/atencion.jpg" 
+                <Image 
+                  src="/services/atencion.webp" 
                   alt="Atención a Residentes" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -387,10 +402,12 @@ export function LandingPage() {
             {/* Service 5 - Documentación Legal */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/legal.jpg" 
+                <Image 
+                  src="/services/legal.webp" 
                   alt="Documentación Legal" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -424,10 +441,12 @@ export function LandingPage() {
             {/* Service 6 - Reportes y Análisis */}
             <Card className="group hover:shadow-2xl transition-all duration-500 border border-gray-100 hover:border-[#0A1172]/30 overflow-hidden">
               <div className="relative h-48 overflow-hidden">
-                <img 
-                  src="/services/reportes.jpg" 
+                <Image 
+                  src="/services/reportes.webp" 
                   alt="Reportes y Análisis" 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  className="object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0A1172]/80 to-transparent" />
                 <div className="absolute bottom-4 left-4 right-4">
@@ -754,9 +773,11 @@ export function LandingPage() {
             {/* Company Info */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
-                <img 
-                  src="/logo.jpg" 
+                <Image 
+                  src="/logo.webp" 
                   alt="Asesorías Integrales CyJ" 
+                  width={48}
+                  height={48}
                   className="w-12 h-12 rounded-lg object-cover"
                 />
                 <div>
@@ -769,14 +790,14 @@ export function LandingPage() {
                 Transparencia, eficiencia y compromiso con tu comunidad.
               </p>
               <div className="flex gap-4">
-                <a href="tel:+56964650643" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
-                  <Phone className="w-5 h-5" />
+                <a href="tel:+56964650643" aria-label="Llamar al +56 9 6465 0643" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
+                  <Phone className="w-5 h-5" aria-hidden="true" />
                 </a>
-                <a href="tel:+56974408794" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
-                  <Phone className="w-5 h-5" />
+                <a href="tel:+56974408794" aria-label="Llamar al +56 9 7440 8794" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
+                  <Phone className="w-5 h-5" aria-hidden="true" />
                 </a>
-                <a href="mailto:asesoriasintegralescyj@gmail.com" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
-                  <Mail className="w-5 h-5" />
+                <a href="mailto:asesoriasintegralescyj@gmail.com" aria-label="Enviar correo a asesoriasintegralescyj@gmail.com" className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center hover:bg-[#0A1172] transition-colors">
+                  <Mail className="w-5 h-5" aria-hidden="true" />
                 </a>
               </div>
             </div>
