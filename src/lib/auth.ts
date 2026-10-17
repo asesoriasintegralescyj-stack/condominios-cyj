@@ -216,6 +216,7 @@ export async function verifySession(token: string): Promise<{ userId: string; us
   
   // Usar queryRaw en vez de db.session.findUnique (que requiere relaciones)
   // Envuelto en withRetry para reintentar si el pool de conexiones está saturado
+  // FIX P4: Filtrar expiresAt > NOW() en SQL — sesiones expiradas nunca se retornan
   const sessions = await withRetry(() => db.$queryRawUnsafe(`
     SELECT s.*, u."id" as u_id, u."email" as u_email, u."nombre" as u_nombre, u."apellido" as u_apellido,
            u."rut" as u_rut, u."telefono" as u_telefono, u."direccion" as u_direccion, u."rol" as u_rol,
@@ -224,7 +225,8 @@ export async function verifySession(token: string): Promise<{ userId: string; us
            u."twoFactorEnabled" as u_twoFactorEnabled, u."createdAt" as u_createdAt, u."updatedAt" as u_updatedAt
     FROM "Session" s
     JOIN "User" u ON s."userId" = u."id"
-    WHERE s."token" = $1 LIMIT 1
+    WHERE s."token" = $1 AND s."expiresAt" > NOW()
+    LIMIT 1
   `, token) as any[])
 
   const sessionRow = sessions[0]
@@ -255,11 +257,7 @@ export async function verifySession(token: string): Promise<{ userId: string; us
   
   if (!session) return null;
   
-  // Verificar expiración
-  if (session.expiresAt < new Date()) {
-    await db.session.delete({ where: { token } });
-    return null;
-  }
+  // La expiración ya se filtró en SQL (AND s."expiresAt" > NOW())
   
   // Verificar si el usuario está activo
   if (!session.user.activo) {
@@ -267,11 +265,15 @@ export async function verifySession(token: string): Promise<{ userId: string; us
     return null;
   }
   
-  // Actualizar último acceso (sin bloquear el flujo)
-  db.user.update({
-    where: { id: session.userId },
-    data: { ultimoAcceso: new Date() },
-  }).catch((err) => console.error('Error actualizando ultimoAcceso:', err));
+  // Actualizar último acceso — throttle cada 5 min para reducir writes en DB
+  const lastAccess = session.user.ultimoAcceso ? new Date(session.user.ultimoAcceso) : null;
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  if (!lastAccess || lastAccess < fiveMinutesAgo) {
+    db.user.update({
+      where: { id: session.userId },
+      data: { ultimoAcceso: new Date() },
+    }).catch((err) => console.error('Error actualizando ultimoAcceso:', err));
+  }
   
   return {
     userId: session.userId,

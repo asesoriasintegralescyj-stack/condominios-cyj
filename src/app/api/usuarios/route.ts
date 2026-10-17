@@ -40,6 +40,8 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // Solo admin exacto recibe passwordTemp descifrado (no supervisor/auditor)
+    const isAdmin = session.user.rol === 'admin';
     const users = await withRetry(() => db.user.findMany({
       select: {
         id: true,
@@ -57,15 +59,15 @@ export async function GET(request: NextRequest) {
         cambiarPasswordProximoLogin: true,
         lastPasswordChange: true,
         lastPasswordChangeMotivo: true,
-        passwordTemp: true,
+        passwordTemp: isAdmin,
       },
       orderBy: { createdAt: 'desc' },
     }));
 
-    // Desencriptar passwordTemp para que el admin pueda verla
+    // Desencriptar passwordTemp solo para admin
     const usersWithDecrypted = users.map((u) => ({
       ...u,
-      passwordTemp: u.passwordTemp ? decrypt(u.passwordTemp) : null,
+      passwordTemp: isAdmin && u.passwordTemp ? decrypt(u.passwordTemp) : null,
     }));
     
     return NextResponse.json(usersWithDecrypted);

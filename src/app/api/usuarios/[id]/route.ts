@@ -53,8 +53,8 @@ export async function GET(
       );
     }
     
-    // Si es admin, devolver también info de contraseña
-    if (hasPermission(session.user.rol, 'usuarios.ver', session.userPermisos)) {
+    // Solo admin exacto puede ver info de contraseña temporal (no supervisor/auditor)
+    if (session.user.rol === 'admin') {
       const userExtra = await db.user.findUnique({
         where: { id },
         select: {

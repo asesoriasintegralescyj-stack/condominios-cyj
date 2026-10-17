@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession } from '@/lib/auth'
 
-const MIGRATE_TOKEN = 'MIGRATE_2026_ALFREDO'
+const MIGRATE_TOKEN = process.env.MIGRATE_SECRET_TOKEN || ''
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60

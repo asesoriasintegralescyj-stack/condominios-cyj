@@ -90,14 +90,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Intentar enviar email (opcional, no bloqueante)
+    // P9: Usar la lib compartida (SMTP_*) en vez de EMAIL_SERVER inexistente
     let emailSent = false
     try {
-      // Intento de envío con nodemailer si está configurado
-      const nodemailer = await import('nodemailer').catch(() => null)
-      if (nodemailer && process.env.EMAIL_SERVER && process.env.EMAIL_FROM) {
-        const transporter = nodemailer.createTransport(JSON.parse(process.env.EMAIL_SERVER))
-        await transporter.sendMail({
-          from: process.env.EMAIL_FROM,
+      const { sendEmail, hasSmtpConfig } = await import('@/lib/email')
+      if (hasSmtpConfig()) {
+        const result = await sendEmail({
           to: user.email,
           subject: 'Recuperación de Contraseña — Asesorías Integrales CyJ',
           html: `
@@ -117,7 +115,7 @@ export async function POST(request: NextRequest) {
             </div>
           `,
         })
-        emailSent = true
+        emailSent = result.ok
       }
     } catch (e) {
       console.error('Error enviando email:', e)
