@@ -41,7 +41,6 @@ import { db } from '@/lib/db'
 import { generateOrdenTrabajoPdfBuffer, type OTPdfInput } from '@/lib/pdf-orden-trabajo'
 import { generateProyectoPdfBuffer, type ProyectoPdfInput } from '@/lib/pdf-proyecto'
 import { generateSolicitudCompraPdfBuffer, type PdfSolicitudCompraInput } from '@/lib/pdf-solicitud-compra'
-import { jsPDF } from 'jspdf'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -340,7 +339,7 @@ export async function POST(request: Request) {
             estado: t.estado,
           })),
         }
-        const otPdf = generateOrdenTrabajoPdfBuffer(otInput)
+        const otPdf = await generateOrdenTrabajoPdfBuffer(otInput)
         // Solo añadir si no excede el tamaño objetivo
         const corteA = addedSize + otPdf.length
         if (corteA <= TARGET_ZIP_BYTES) {
@@ -374,7 +373,7 @@ export async function POST(request: Request) {
         const scsAsoc = scsPorOTId.get(ot.id) || []
         for (const sc of scsAsoc) {
           try {
-            const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
+            const scPdf = await generateSolicitudCompraPdfBuffer(scToInput(sc))
             if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
               trackAppend(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
             }
@@ -390,7 +389,7 @@ export async function POST(request: Request) {
           0
         )
         const totalSCs = scsAsoc.reduce((s, sc) => s + (sc.totalEstimado || 0), 0)
-        const resumenOtPdf = generarResumenCostosPdf({
+        const resumenOtPdf = await generarResumenCostosPdf({
           titulo: `Resumen de Costos — ${ot.otNum}`,
           subtitulo: ot.titulo,
           mesStr,
@@ -472,7 +471,7 @@ export async function POST(request: Request) {
             cantidad: h.cantidad,
           })),
         }
-        const proyPdf = generateProyectoPdfBuffer(proyInput)
+        const proyPdf = await generateProyectoPdfBuffer(proyInput)
         if (addedSize + proyPdf.length <= TARGET_ZIP_BYTES) {
           trackAppend(proyPdf, { name: `${folderName}/${codigo}.pdf` })
         } else {
@@ -502,7 +501,7 @@ export async function POST(request: Request) {
         const scsAsoc = scsPorProyectoId.get(proy.id) || []
         for (const sc of scsAsoc) {
           try {
-            const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
+            const scPdf = await generateSolicitudCompraPdfBuffer(scToInput(sc))
             if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
               trackAppend(scPdf, { name: `${folderName}/${sc.codigo}.pdf` })
             }
@@ -515,7 +514,7 @@ export async function POST(request: Request) {
         const totalMateriales = proy.materiales.reduce((s, m) => s + (m.total || m.cantidad * m.precioUnit || 0), 0)
         const totalPersonal = proy.personal.reduce((s, p) => s + (p.total || p.precioUnit * p.cantidad || 0), 0)
         const totalSCs = scsAsoc.reduce((s, sc) => s + (sc.totalEstimado || 0), 0)
-        const resumenProyPdf = generarResumenCostosPdf({
+        const resumenProyPdf = await generarResumenCostosPdf({
           titulo: `Resumen de Costos — ${codigo}`,
           subtitulo: proy.nombre,
           mesStr,
@@ -548,7 +547,7 @@ export async function POST(request: Request) {
     let scCount = 0
     for (const sc of scsNoAsociadas) {
       try {
-        const scPdf = generateSolicitudCompraPdfBuffer(scToInput(sc))
+        const scPdf = await generateSolicitudCompraPdfBuffer(scToInput(sc))
         if (addedSize + scPdf.length <= TARGET_ZIP_BYTES) {
           trackAppend(scPdf, { name: `03_Solicitudes_no_asociadas/${sc.codigo}.pdf` })
         }
@@ -559,7 +558,7 @@ export async function POST(request: Request) {
     }
 
     // Resumen de SCs no asociadas
-    const resumenSCPdf = generarResumenSCsPdf(scsNoAsociadas, mesStr)
+    const resumenSCPdf = await generarResumenSCsPdf(scsNoAsociadas, mesStr)
     trackAppend(resumenSCPdf, { name: `03_Solicitudes_no_asociadas/Resumen_SC_no_asociadas.pdf` })
 
     // ===== 3d. Rondas y Asistencia =====
@@ -569,7 +568,7 @@ export async function POST(request: Request) {
       include: { ronda: true },
       orderBy: { createdAt: 'desc' },
     })
-    const rondasPdf = generarRondasPdf(rondas, mesStr)
+    const rondasPdf = await generarRondasPdf(rondas, mesStr)
     trackAppend(rondasPdf, { name: `04_Rondas_${mesStr}.pdf` })
 
     const inasistencias = await db.inasistenciaAtraso.findMany({
@@ -577,7 +576,7 @@ export async function POST(request: Request) {
       include: { justificacion: true },
       orderBy: { fecha: 'desc' },
     })
-    const asistPdf = generarAsistenciaPdf(inasistencias, mesStr)
+    const asistPdf = await generarAsistenciaPdf(inasistencias, mesStr)
     trackAppend(asistPdf, { name: `05_Asistencia_${mesStr}.pdf` })
 
     // ===== 3e. Respaldo BD JSON =====
@@ -775,17 +774,23 @@ function scToInput(sc: any): PdfSolicitudCompraInput {
 }
 
 // ============================================================
-// PDF HELPERS
+// PDF HELPERS — lazy-load jspdf only when backup PDFs are generated
 // ============================================================
 
-function generarResumenCostosPdf(opts: {
+async function getJsPDFConstructor() {
+  const { jsPDF } = await import('jspdf')
+  return jsPDF
+}
+
+async function generarResumenCostosPdf(opts: {
   titulo: string
   subtitulo: string
   mesStr: string
   filas: Array<{ concepto: string; monto: number }>
   total: number
   extras?: string[]
-}): Buffer {
+}): Promise<Buffer> {
+  const jsPDF = await getJsPDFConstructor()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const margin = 14
@@ -872,7 +877,8 @@ function generarResumenCostosPdf(opts: {
   return Buffer.from(doc.output('arraybuffer'))
 }
 
-function generarResumenSCsPdf(scs: any[], mesStr: string): Buffer {
+async function generarResumenSCsPdf(scs: any[], mesStr: string): Promise<Buffer> {
+  const jsPDF = await getJsPDFConstructor()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -945,7 +951,8 @@ function generarResumenSCsPdf(scs: any[], mesStr: string): Buffer {
   return Buffer.from(doc.output('arraybuffer'))
 }
 
-function generarRondasPdf(rondas: any[], mesStr: string): Buffer {
+async function generarRondasPdf(rondas: any[], mesStr: string): Promise<Buffer> {
+  const jsPDF = await getJsPDFConstructor()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -1000,7 +1007,8 @@ function generarRondasPdf(rondas: any[], mesStr: string): Buffer {
   return Buffer.from(doc.output('arraybuffer'))
 }
 
-function generarAsistenciaPdf(inasistencias: any[], mesStr: string): Buffer {
+async function generarAsistenciaPdf(inasistencias: any[], mesStr: string): Promise<Buffer> {
+  const jsPDF = await getJsPDFConstructor()
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()

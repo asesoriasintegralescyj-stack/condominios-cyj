@@ -100,7 +100,7 @@ export async function POST(
           tieneDocumento: !!b.documento,
         }))
 
-        const pdfBuffer = generateRendicionGastoPdfBuffer({
+        const pdfBuffer = await generateRendicionGastoPdfBuffer({
           codigo: updated.codigo,
           periodo: updated.periodo,
           concepto: updated.concepto,

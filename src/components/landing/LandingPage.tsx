@@ -82,6 +82,8 @@ export function LandingPage() {
             <button 
               className="md:hidden p-2"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -109,6 +111,7 @@ export function LandingPage() {
         )}
       </nav>
 
+      <main>
       {/* Hero Section */}
       <section className="pt-24 lg:pt-32 pb-16 lg:pb-24 bg-gradient-to-br from-slate-50 via-white to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -173,20 +176,20 @@ export function LandingPage() {
                     className="w-16 h-16 rounded-xl object-cover bg-white/20"
                   />
                   <div>
-                    <h3 className="text-xl font-bold">Asesorías Integrales CyJ</h3>
+                    <h2 className="text-xl font-bold">Asesorías Integrales CyJ</h2>
                     <p className="text-blue-200 text-sm">Administración de Condominios</p>
-                    <p className="text-blue-100 text-xs">Tu tranquilidad es nuestra prioridad</p>
+                    <p className="text-blue-200 text-xs">Tu tranquilidad es nuestra prioridad</p>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div className="bg-white/10 rounded-xl p-4">
                     <div className="text-3xl font-bold">200+</div>
-                    <div className="text-blue-100 text-sm">Unidades administradas</div>
+                    <div className="text-blue-200 text-sm">Unidades administradas</div>
                   </div>
                   <div className="bg-white/10 rounded-xl p-4">
                     <div className="text-3xl font-bold">500+</div>
-                    <div className="text-blue-100 text-sm">Clientes satisfechos</div>
+                    <div className="text-blue-200 text-sm">Clientes satisfechos</div>
                   </div>
                 </div>
 
@@ -579,7 +582,7 @@ export function LandingPage() {
                     </div>
                     <div>
                       <div className="text-2xl font-bold">4.9/5</div>
-                      <div className="text-blue-100">Calificación de nuestros clientes</div>
+                      <div className="text-blue-200">Calificación de nuestros clientes</div>
                     </div>
                   </div>
                 </div>
@@ -597,7 +600,7 @@ export function LandingPage() {
             <h2 className="text-3xl sm:text-4xl font-bold text-white mt-2 mb-4">
               Beneficios de Nuestro Servicio
             </h2>
-            <p className="text-blue-100 max-w-2xl mx-auto text-lg">
+            <p className="text-blue-200 max-w-2xl mx-auto text-lg">
               Transformamos la administración de tu condominio en una experiencia sencilla, transparente y profesional
             </p>
           </div>
@@ -608,7 +611,7 @@ export function LandingPage() {
                 <CheckCircle2 className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">100% Transparencia</h3>
-              <p className="text-blue-100">Acceso completo a estados financieros, rendiciones mensuales y todos los movimientos de tu condominio en tiempo real</p>
+              <p className="text-blue-200">Acceso completo a estados financieros, rendiciones mensuales y todos los movimientos de tu condominio en tiempo real</p>
             </div>
 
             <div className="text-center p-6 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors">
@@ -616,7 +619,7 @@ export function LandingPage() {
                 <Clock className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Respuesta Inmediata</h3>
-              <p className="text-blue-100">Atención de emergencias en menos de 24 horas y respuesta a consultas en máximo 48 horas hábiles</p>
+              <p className="text-blue-200">Atención de emergencias en menos de 24 horas y respuesta a consultas en máximo 48 horas hábiles</p>
             </div>
 
             <div className="text-center p-6 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors">
@@ -624,7 +627,7 @@ export function LandingPage() {
                 <Shield className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Seguridad Garantizada</h3>
-              <p className="text-blue-100">Respaldo de seguros, garantía en todos nuestros servicios y protección de datos personales</p>
+              <p className="text-blue-200">Respaldo de seguros, garantía en todos nuestros servicios y protección de datos personales</p>
             </div>
 
             <div className="text-center p-6 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors">
@@ -632,7 +635,7 @@ export function LandingPage() {
                 <DollarSign className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Sin Costos Ocultos</h3>
-              <p className="text-blue-100">Precios claros, competitivos y detallados desde el inicio. Sin sorpresas ni cobros adicionales</p>
+              <p className="text-blue-200">Precios claros, competitivos y detallados desde el inicio. Sin sorpresas ni cobros adicionales</p>
             </div>
 
             <div className="text-center p-6 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors">
@@ -640,7 +643,7 @@ export function LandingPage() {
                 <Users className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Equipo Profesional</h3>
-              <p className="text-blue-100">Personal capacitado y comprometido con más de 8 años de experiencia en administración de condominios</p>
+              <p className="text-blue-200">Personal capacitado y comprometido con más de 8 años de experiencia en administración de condominios</p>
             </div>
 
             <div className="text-center p-6 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors">
@@ -648,7 +651,7 @@ export function LandingPage() {
                 <BarChart3 className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl font-semibold text-white mb-3">Tecnología Avanzada</h3>
-              <p className="text-blue-100">Portal en línea para residentes, notificaciones digitales y reportes automatizados en tiempo real</p>
+              <p className="text-blue-200">Portal en línea para residentes, notificaciones digitales y reportes automatizados en tiempo real</p>
             </div>
           </div>
 
@@ -837,6 +840,7 @@ export function LandingPage() {
           </div>
         </div>
       </footer>
+      </main>
     </div>
   )
 }

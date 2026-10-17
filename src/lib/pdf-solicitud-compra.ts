@@ -15,8 +15,20 @@
  * Works in the Node.js runtime (server-side) since jspdf v4 supports it.
  */
 
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// Dynamic imports — jspdf + autotable are loaded only when a PDF is actually generated
+// This defers ~1,535 KB until runtime, keeping the server cold-start fast
+let _jsPDF: typeof import('jspdf')['jsPDF'] | null = null
+let _autoTable: typeof import('jspdf-autotable')['default'] | null = null
+
+async function loadJsPdf() {
+  if (!_jsPDF || !_autoTable) {
+    const jspdfModule = await import('jspdf')
+    const autotableModule = await import('jspdf-autotable')
+    _jsPDF = jspdfModule.jsPDF
+    _autoTable = autotableModule.default
+  }
+  return { jsPDF: _jsPDF, autoTable: _autoTable! }
+}
 
 // Re-export the same interface so callers can import everything from one place
 export interface MaterialSolicitud {
@@ -113,9 +125,10 @@ function mimeToImageFormat(mime: string): 'PNG' | 'JPEG' | 'JPG' {
  * Generates a PDF for a Solicitud de Compra and returns it as a Node Buffer
  * suitable for use as a nodemailer attachment.
  */
-export function generateSolicitudCompraPdfBuffer(
+export async function generateSolicitudCompraPdfBuffer(
   input: PdfSolicitudCompraInput
-): Buffer {
+): Promise<Buffer> {
+  const { jsPDF, autoTable } = await loadJsPdf()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()

@@ -16,9 +16,14 @@ import {
 } from '@/components/ui/dialog'
 import { Plus, Edit, Trash2, Package, Search, Upload, Download, AlertCircle, CheckCircle2, FolderTree, AlertTriangle, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
-import * as XLSX from 'xlsx'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 import { apiFetch } from '@/lib/api-client'
+
+// Lazy-load xlsx — only ~200 KB, defer until user clicks "Carga Masiva"
+async function loadXLSX() {
+  const mod = await import('xlsx')
+  return mod
+}
 
 interface Material {
   id: string
@@ -162,7 +167,8 @@ export function MaterialesModule() {
   )
 
   // Bulk upload functions
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await loadXLSX()
     const template = [
       {
         Codigo: 'MAT-001',
@@ -190,6 +196,7 @@ export function MaterialesModule() {
     setBulkSuccess(false)
 
     try {
+      const XLSX = await loadXLSX()
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
       const sheet = workbook.Sheets[workbook.SheetNames[0]]

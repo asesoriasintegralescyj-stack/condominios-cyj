@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentSession, hasPermission } from '@/lib/auth'
 import { apiError } from '@/lib/api-helpers'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -71,7 +69,9 @@ export async function GET(
     const now = new Date()
     const fechaEmision = now.toLocaleDateString('es-CL')
 
-    // Crear PDF
+    // Crear PDF — dynamic import to defer jspdf (~1,535 KB)
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
     const pageWidth = doc.internal.pageSize.getWidth()
     let y = 10

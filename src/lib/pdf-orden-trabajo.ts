@@ -18,8 +18,19 @@
  * file inside a ZIP archive.
  */
 
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// Dynamic imports — defer ~1,535 KB until PDF is actually generated
+let _jsPDF: typeof import('jspdf')['jsPDF'] | null = null
+let _autoTable: typeof import('jspdf-autotable')['default'] | null = null
+
+async function loadJsPdf() {
+  if (!_jsPDF || !_autoTable) {
+    const jspdfModule = await import('jspdf')
+    const autotableModule = await import('jspdf-autotable')
+    _jsPDF = jspdfModule.jsPDF
+    _autoTable = autotableModule.default
+  }
+  return { jsPDF: _jsPDF, autoTable: _autoTable! }
+}
 
 const EMPRESA = {
   nombre: 'Asesorías Integrales CyJ',
@@ -82,7 +93,8 @@ export interface OTPdfInput {
   tareas?: Array<{ descripcion: string; cantidad: number; estado?: string }>
 }
 
-export function generateOrdenTrabajoPdfBuffer(input: OTPdfInput): Buffer {
+export async function generateOrdenTrabajoPdfBuffer(input: OTPdfInput): Promise<Buffer> {
+  const { jsPDF, autoTable } = await loadJsPdf()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()

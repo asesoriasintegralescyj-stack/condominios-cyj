@@ -275,7 +275,7 @@ export async function sendSolicitudCompraEmail(
   // Generate the PDF attachment
   let pdfBuffer: Buffer | null = null
   try {
-    pdfBuffer = generateSolicitudCompraPdfBuffer({
+    pdfBuffer = await generateSolicitudCompraPdfBuffer({
       codigo: payload.codigo,
       titulo: payload.titulo,
       descripcion: payload.descripcion,

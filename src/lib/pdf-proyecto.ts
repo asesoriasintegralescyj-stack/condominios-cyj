@@ -18,8 +18,19 @@
  * file inside a ZIP archive.
  */
 
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+// Dynamic imports — defer ~1,535 KB until PDF is actually generated
+let _jsPDF: typeof import('jspdf')['jsPDF'] | null = null
+let _autoTable: typeof import('jspdf-autotable')['default'] | null = null
+
+async function loadJsPdf() {
+  if (!_jsPDF || !_autoTable) {
+    const jspdfModule = await import('jspdf')
+    const autotableModule = await import('jspdf-autotable')
+    _jsPDF = jspdfModule.jsPDF
+    _autoTable = autotableModule.default
+  }
+  return { jsPDF: _jsPDF, autoTable: _autoTable! }
+}
 
 const EMPRESA = {
   condominio: 'Condominio LAGUNA NORTE',
@@ -73,7 +84,8 @@ export interface ProyectoPdfInput {
   herramientas?: Array<{ nombre: string; cantidad: number }>
 }
 
-export function generateProyectoPdfBuffer(input: ProyectoPdfInput): Buffer {
+export async function generateProyectoPdfBuffer(input: ProyectoPdfInput): Promise<Buffer> {
+  const { jsPDF, autoTable } = await loadJsPdf()
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
