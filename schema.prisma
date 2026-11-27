@@ -1769,3 +1769,36 @@ model GoogleAccount {
   @@index([email])
 }
 
+
+// ============================================
+// LAGUNA NORTE - GESTOR DE TAREAS
+// ============================================
+model LagunaTask {
+  id        String   @id
+  mes       String
+  data      Json
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mes])
+  @@index([updatedAt])
+}
+
+model LagunaCompra {
+  id        String   @id
+  mes       String
+  data      Json
+  deleted   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mes])
+  @@index([updatedAt])
+}
+
+model LagunaRutina {
+  id        String   @id
+  data      Json
+  updatedAt DateTime @updatedAt
+}
