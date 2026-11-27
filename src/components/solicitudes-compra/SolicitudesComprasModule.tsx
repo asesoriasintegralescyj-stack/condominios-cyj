@@ -49,6 +49,8 @@ import {
   Send,
   ShieldAlert,
   Filter,
+  FileArchive,
+  Loader2,
 } from 'lucide-react'
 import { TableroIndicadores } from '@/components/ui/tablero-indicadores'
 
@@ -209,6 +211,7 @@ export function SolicitudesComprasModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<SolicitudCompra | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+  const [exportandoPdfs, setExportandoPdfs] = useState(false)
 
   // Diálogo de aprobación/rechazo
   const [aprobDialogOpen, setAprobDialogOpen] = useState(false)
@@ -640,6 +643,38 @@ export function SolicitudesComprasModule() {
     URL.revokeObjectURL(link.href)
   }
 
+  // Exporta todos los PDFs (respaldos/adjuntos de email) de las solicitudes filtradas en un ZIP
+  const exportarPDFs = async () => {
+    setExportandoPdfs(true)
+    toast.loading('Generando PDFs y preparando el ZIP... Esto puede tardar un momento.', { id: 'exportar-pdfs', duration: Infinity })
+    try {
+      const params = new URLSearchParams()
+      if (search) params.set('search', search)
+      if (filterEstado !== 'all') params.set('estado', filterEstado)
+      if (filterPrioridad !== 'all') params.set('prioridad', filterPrioridad)
+      if (filterFechaDesde) params.set('fechaDesde', filterFechaDesde)
+      if (filterFechaHasta) params.set('fechaHasta', filterFechaHasta)
+      const res = await fetch(`/api/solicitudes-compra/exportar-pdfs?${params.toString()}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        throw new Error(j?.error || 'Error al exportar los PDFs')
+      }
+      const blob = await res.blob()
+      const count = res.headers.get('X-Solicitudes-Exportadas')
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `Solicitudes_Compra_PDFs_${new Date().toISOString().split('T')[0]}.zip`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      toast.success(`ZIP descargado${count ? `: ${count} solicitud(es)` : ''}`, { id: 'exportar-pdfs' })
+    } catch (error) {
+      console.error(error)
+      toast.error(error instanceof Error ? error.message : 'Error al exportar los PDFs', { id: 'exportar-pdfs' })
+    } finally {
+      setExportandoPdfs(false)
+    }
+  }
+
   const formatMonto = (monto: number, moneda?: string) => {
     if ((moneda || formData.moneda) === 'USD') return `$${(monto || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
     return formatCLP(monto)
@@ -688,6 +723,9 @@ export function SolicitudesComprasModule() {
         </Button>
         <Button variant="outline" onClick={exportToCSV}>
           <Download className="w-4 h-4 mr-1" /> CSV
+        </Button>
+        <Button variant="outline" onClick={exportarPDFs} disabled={exportandoPdfs}>
+          {exportandoPdfs ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FileArchive className="w-4 h-4 mr-1" />} PDFs (ZIP)
         </Button>
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-1" /> Nueva Solicitud
