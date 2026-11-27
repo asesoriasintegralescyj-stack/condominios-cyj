@@ -1781,6 +1781,7 @@ model LagunaTask {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@map("tasks")
   @@index([mes])
   @@index([updatedAt])
 }
@@ -1793,6 +1794,7 @@ model LagunaCompra {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@map("compras")
   @@index([mes])
   @@index([updatedAt])
 }
@@ -1801,4 +1803,6 @@ model LagunaRutina {
   id        String   @id
   data      Json
   updatedAt DateTime @updatedAt
+
+  @@map("rutinas")
 }
